@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Lyudmila/.claude/projects/D--drone-project/memory//**)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(awk '{printf \"%s %d\\\\n\",$NF,$5}')",
+      "Bash(python generate_world.py)",
+      "Bash(python -c ' *)"
+    ]
+  }
+}

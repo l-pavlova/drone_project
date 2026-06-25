@@ -1,0 +1,576 @@
+#VRML_SIM R2023b utf8
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/robots/dji/mavic/protos/Mavic2Pro.proto"
+WorldInfo { basicTimeStep 8 }
+Viewpoint { orientation -0.30 0.30 0.90 1.7 position 0 -90 90 }
+Background { skyColor [ 0.5 0.7 1 ] }
+DirectionalLight { direction 0.4 0.5 -1 intensity 2.5 castShadows TRUE }
+Solid {
+  name "ground"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.32 0.33 0.34 roughness 1 metalness 0 }
+    geometry Plane { size 600 600 }
+  } ]
+  boundingObject Plane { size 600 600 }
+}
+Solid {
+  translation 7.964 20.839 0.020
+  rotation 0 0 1 1.6197
+  name "bay_14796"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 74.080 66.738 0.020
+  rotation 0 0 1 1.3142
+  name "bay_14797"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -7.805 70.602 0.020
+  rotation 0 0 1 1.9687
+  name "bay_17570"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 4.157 45.145 0.020
+  rotation 0 0 1 1.9897
+  name "bay_17571"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 4.157 45.145 0.750
+  rotation 0 0 1 1.9897
+  name "car_17571"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.3 }
+    geometry Box { size 4.500 1.800 1.450 }
+  } ]
+}
+Solid {
+  translation 1.027 51.204 0.020
+  rotation 0 0 1 1.9897
+  name "bay_17572"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 1.027 51.204 0.750
+  rotation 0 0 1 1.9897
+  name "car_17572"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.3 }
+    geometry Box { size 4.500 1.800 1.450 }
+  } ]
+}
+Solid {
+  translation -2.438 57.685 0.020
+  rotation 0 0 1 1.9897
+  name "bay_17573"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -2.438 57.685 0.750
+  rotation 0 0 1 1.9897
+  name "car_17573"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.2 0.5 0.2 roughness 0.4 metalness 0.3 }
+    geometry Box { size 4.500 1.800 1.450 }
+  } ]
+}
+Solid {
+  translation -36.667 12.197 0.020
+  rotation 0 0 1 1.4364
+  name "bay_17582"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -31.691 14.554 0.020
+  rotation 0 0 1 1.1764
+  name "bay_17583"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -26.303 17.200 0.020
+  rotation 0 0 1 -2.6878
+  name "bay_17584"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -21.199 19.677 0.020
+  rotation 0 0 1 -2.6878
+  name "bay_17585"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -21.199 19.677 0.750
+  rotation 0 0 1 -2.6878
+  name "car_17585"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.2 0.5 0.2 roughness 0.4 metalness 0.3 }
+    geometry Box { size 4.500 1.800 1.450 }
+  } ]
+}
+Solid {
+  translation -16.069 22.167 0.020
+  rotation 0 0 1 -2.6896
+  name "bay_17586"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -16.069 22.167 0.750
+  rotation 0 0 1 -2.6896
+  name "car_17586"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.8 0.1 0.1 roughness 0.4 metalness 0.3 }
+    geometry Box { size 4.500 1.800 1.450 }
+  } ]
+}
+Solid {
+  translation -10.813 24.714 0.020
+  rotation 0 0 1 -2.6738
+  name "bay_17587"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -10.813 24.714 0.750
+  rotation 0 0 1 -2.6738
+  name "car_17587"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.1 0.1 0.8 roughness 0.4 metalness 0.3 }
+    geometry Box { size 4.500 1.800 1.450 }
+  } ]
+}
+Solid {
+  translation -5.709 27.192 0.020
+  rotation 0 0 1 2.8990
+  name "bay_17588"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -5.709 27.192 0.750
+  rotation 0 0 1 2.8990
+  name "car_17588"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.9 0.9 0.9 roughness 0.4 metalness 0.3 }
+    geometry Box { size 4.500 1.800 1.450 }
+  } ]
+}
+Solid {
+  translation -0.579 29.682 0.020
+  rotation 0 0 1 2.6337
+  name "bay_17589"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 3.753 18.763 0.020
+  rotation 0 0 1 1.6197
+  name "bay_17594"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 3.753 18.763 0.750
+  rotation 0 0 1 1.6197
+  name "car_17594"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.9 0.9 0.9 roughness 0.4 metalness 0.3 }
+    geometry Box { size 4.500 1.800 1.450 }
+  } ]
+}
+Solid {
+  translation -1.115 16.363 0.020
+  rotation 0 0 1 -2.6354
+  name "bay_17595"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -1.115 16.363 0.750
+  rotation 0 0 1 -2.6354
+  name "car_17595"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.3 }
+    geometry Box { size 4.500 1.800 1.450 }
+  } ]
+}
+Solid {
+  translation -6.029 13.941 0.020
+  rotation 0 0 1 -2.6564
+  name "bay_17596"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -10.873 11.553 0.020
+  rotation 0 0 1 -2.6721
+  name "bay_17597"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -16.051 9.001 0.020
+  rotation 0 0 1 -2.6791
+  name "bay_17598"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -16.051 9.001 0.750
+  rotation 0 0 1 -2.6791
+  name "car_17598"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.8 0.1 0.1 roughness 0.4 metalness 0.3 }
+    geometry Box { size 4.500 1.800 1.450 }
+  } ]
+}
+Solid {
+  translation -21.234 6.446 0.020
+  rotation 0 0 1 -2.6930
+  name "bay_17599"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -25.993 4.100 0.020
+  rotation 0 0 1 -2.7437
+  name "bay_17600"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -30.275 1.989 0.020
+  rotation 0 0 1 -2.7733
+  name "bay_17601"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -30.275 1.989 0.750
+  rotation 0 0 1 -2.7733
+  name "car_17601"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.3 }
+    geometry Box { size 4.500 1.800 1.450 }
+  } ]
+}
+Solid {
+  translation -34.924 -0.171 0.020
+  rotation 0 0 1 -2.4592
+  name "bay_17602"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -39.650 -2.496 0.020
+  rotation 0 0 1 -2.3562
+  name "bay_17603"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -44.425 -4.847 0.020
+  rotation 0 0 1 -2.6878
+  name "bay_17604"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -44.425 -4.847 0.750
+  rotation 0 0 1 -2.6878
+  name "car_17604"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.8 0.1 0.1 roughness 0.4 metalness 0.3 }
+    geometry Box { size 4.500 1.800 1.450 }
+  } ]
+}
+Solid {
+  translation -49.385 -7.288 0.020
+  rotation 0 0 1 -2.6843
+  name "bay_17605"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -49.385 -7.288 0.750
+  rotation 0 0 1 -2.6843
+  name "car_17605"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.1 0.1 0.8 roughness 0.4 metalness 0.3 }
+    geometry Box { size 4.500 1.800 1.450 }
+  } ]
+}
+Solid {
+  translation -54.575 -9.842 0.020
+  rotation 0 0 1 -2.6843
+  name "bay_17606"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -60.260 -12.640 0.020
+  rotation 0 0 1 -2.9723
+  name "bay_17607"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -60.260 -12.640 0.750
+  rotation 0 0 1 -2.9723
+  name "car_17607"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.3 }
+    geometry Box { size 4.500 1.800 1.450 }
+  } ]
+}
+Solid {
+  translation 73.946 53.422 0.020
+  rotation 0 0 1 -2.4382
+  name "bay_17676"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 73.946 53.422 0.750
+  rotation 0 0 1 -2.4382
+  name "car_17676"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.8 0.1 0.1 roughness 0.4 metalness 0.3 }
+    geometry Box { size 4.500 1.800 1.450 }
+  } ]
+}
+Solid {
+  translation 68.819 50.904 0.020
+  rotation 0 0 1 -2.9967
+  name "bay_17677"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 68.819 50.904 0.750
+  rotation 0 0 1 -2.9967
+  name "car_17677"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.1 0.1 0.8 roughness 0.4 metalness 0.3 }
+    geometry Box { size 4.500 1.800 1.450 }
+  } ]
+}
+Solid {
+  translation 63.540 48.312 0.020
+  rotation 0 0 1 -2.9112
+  name "bay_17678"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 58.853 46.010 0.020
+  rotation 0 0 1 -2.6616
+  name "bay_17679"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 54.368 43.807 0.020
+  rotation 0 0 1 -2.7402
+  name "bay_17680"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 49.944 41.635 0.020
+  rotation 0 0 1 -2.7960
+  name "bay_17681"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 45.178 39.294 0.020
+  rotation 0 0 1 -2.8239
+  name "bay_17682"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 40.411 36.953 0.020
+  rotation 0 0 1 -2.5325
+  name "bay_17683"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 35.415 34.499 0.020
+  rotation 0 0 1 -2.6058
+  name "bay_17684"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 35.415 34.499 0.750
+  rotation 0 0 1 -2.6058
+  name "car_17684"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.9 0.9 0.9 roughness 0.4 metalness 0.3 }
+    geometry Box { size 4.500 1.800 1.450 }
+  } ]
+}
+Solid {
+  translation 30.284 31.979 0.020
+  rotation 0 0 1 1.0996
+  name "bay_17685"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 24.580 29.121 0.020
+  rotation 0 0 1 1.0996
+  name "bay_17686"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 25.234 42.707 0.020
+  rotation 0 0 1 1.1711
+  name "bay_17735"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 31.413 45.758 0.020
+  rotation 0 0 1 0.8919
+  name "bay_17736"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 37.660 48.907 0.020
+  rotation 0 0 1 1.0699
+  name "bay_17737"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 42.979 51.568 0.020
+  rotation 0 0 1 1.1153
+  name "bay_17738"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 48.418 54.138 0.020
+  rotation 0 0 1 2.9548
+  name "bay_17739"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 54.193 56.984 0.020
+  rotation 0 0 1 2.7297
+  name "bay_17740"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Mavic2Pro {
+  translation 0 0 0.15
+  controller "parkdrone"
+}
