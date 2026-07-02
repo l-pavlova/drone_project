@@ -20,7 +20,15 @@ WORLDS = os.path.join(HERE, "..", "..", "worlds")
 os.makedirs(OUT, exist_ok=True)
 
 TARGET_ALT = 30.0          # metres
-WP_REACH = 6.0             # metres tolerance to consider a waypoint reached
+WP_REACH = 6.0             # arrival basin (m); must stay generous or the drone
+#   orbits waypoints it can't converge into. The frame is NOT taken on entering
+#   the basin but at closest approach, so captures stay tight to the route:
+#   arrive when really close (WP_CAPTURE), when receding 1 m past the closest
+#   pass, or after WP_TIMEOUT near the waypoint. The timeout matters: at cruise
+#   speed the turn radius is ~4 m, so the drone can settle into a stable ORBIT
+#   inside the basin with constant distance - no distance-based test ever fires.
+WP_CAPTURE = 2.5           # capture immediately once this close to the waypoint
+WP_TIMEOUT = 8.0           # s near the waypoint before capturing anyway (orbit)
 LANE_STEP = 25.0           # spacing between lawnmower lanes (fallback only)
 HALF = 65.0                # window half-size to cover (fallback only)
 
@@ -101,11 +109,14 @@ K_VD = 2.0                                  # vertical-velocity damping (kills o
 # drone decelerates into the target instead of orbiting it (the old bug).
 K_POS = 0.6; K_VEL = 0.4; TILT_MAX = 1.0     # TILT_MAX>~1.0 dips lift -> crash
 V_MAX = 2.5                                   # cruise-speed cap (m/s); lower = tighter turns
+#   (tried 2.0 hoping tighter waypoint captures -> no coverage gain, just slower)
 ROLL_SIGN = 1.0                             # +roll_in -> +body-left; flip if it diverges
 
 dt_s = dt / 1000.0
 prev_xy = None
 prev_alt = None
+wp_min = float("inf")     # closest approach to the current waypoint so far
+wp_steps = 0              # steps spent near the current waypoint
 wps = load_route()
 idx = 0
 poses = []
@@ -185,7 +196,18 @@ while robot.step(dt) != -1:
             tx, ty = wps[idx]
             dx, dy = tx - x, ty - y
             dist = math.hypot(dx, dy)
-            if dist < WP_REACH:
+            # capture at CLOSEST APPROACH, not on first basin entry (which put
+            # the capture up to WP_REACH metres off-route and skipped edge bays)
+            near = dist < WP_REACH
+            if near or wp_min < float("inf"):
+                wp_steps += 1
+                if near:
+                    wp_min = min(wp_min, dist)
+            arrived = (near and (dist < WP_CAPTURE or dist > wp_min + 1.0)) or \
+                      (wp_min < float("inf") and wp_steps * dt_s > WP_TIMEOUT)
+            if arrived:
+                wp_min = float("inf")
+                wp_steps = 0
                 capture(os.path.join(OUT, f"frame_{idx:03d}.png"))
                 poses.append({"i": idx, "x": x, "y": y, "alt": alt, "yaw": yaw,
                               "wp": [tx, ty]})

@@ -2,9 +2,11 @@
 """
 Turn parking-space POINTS into oriented BAY RECTANGLES.
 
-Each space in block_spaces.geojson is a single point. We estimate the local
-street bearing from the nearest spaces on the SAME street (PCA on their
-positions), then draw a ~2.5x5 m rectangle oriented by `park_txt`:
+Each space in block_spaces.geojson is a single point. We take the local street
+bearing from the nearest OSM centerline segment in block_roads.geojson
+(name-matched to the space's street when possible; falls back to PCA on
+same-street neighbour points if the roads file is missing), then draw a
+~2.5x5 m rectangle oriented by `park_txt`:
   - Надлъжн (parallel)      -> car long axis ALONG the street
   - Напречн (perpendicular) -> car long axis ACROSS the street
   - Косо (angled)           -> 45 deg to the street
@@ -43,8 +45,57 @@ by_street = collections.defaultdict(list)
 for i, s in enumerate(streets):
     by_street[s].append(i)
 
+# ---- street bearings from OSM centerlines (block_roads.geojson) ----
+def _norm_street(s):
+    s = (s or "").lower()
+    for pre in ("бул.", "ул.", "пл."):
+        s = s.replace(pre, " ")
+    return " ".join(s.split())
+
+road_segs = []   # (a_m, b_m, normalized name)
+roads_path = os.path.join(DATA, "block_roads.geojson")
+if os.path.exists(roads_path):
+    rj = json.load(open(roads_path, encoding="utf-8"))
+    for f in rj["features"]:
+        nm = _norm_street(f["properties"].get("name"))
+        cs = f["geometry"]["coordinates"]
+        for a, b in zip(cs, cs[1:]):
+            am, bm = to_m(*a), to_m(*b)
+            if np.linalg.norm(bm - am) > 0.5:
+                road_segs.append((am, bm, nm))
+
+def _seg_dist_dir(p, a, b):
+    """(distance from p to segment ab, unit direction of ab)."""
+    ab = b - a
+    t = np.clip(np.dot(p - a, ab) / np.dot(ab, ab), 0.0, 1.0)
+    return np.linalg.norm(p - (a + t * ab)), ab / np.linalg.norm(ab)
+
+MAX_SNAP = 40.0   # m: a space further than this from a centerline isn't on it
+
+def bearing_from_roads(i):
+    """Unit vector along the nearest road centerline; None if no roads nearby.
+    Prefer segments of the space's own street so bays near a corner don't
+    snap to the cross street."""
+    p, sn = P[i], _norm_street(streets[i])
+    best = {"named": (1e9, None), "any": (1e9, None)}
+    for a, b, nm in road_segs:
+        d, u = _seg_dist_dir(p, a, b)
+        if d < best["any"][0]:
+            best["any"] = (d, u)
+        if nm and sn and (nm in sn or sn in nm) and d < best["named"][0]:
+            best["named"] = (d, u)
+    for key in ("named", "any"):
+        d, u = best[key]
+        if d <= MAX_SNAP:
+            return u
+    return None
+
 def bearing_for(i):
-    """Unit vector along the street at point i, from same-street neighbours."""
+    """Unit vector along the street at point i."""
+    u = bearing_from_roads(i)
+    if u is not None:
+        return u
+    # fallback: PCA on same-street neighbour points
     idx = by_street[streets[i]]
     pts = P[idx]
     if len(idx) >= 3:
