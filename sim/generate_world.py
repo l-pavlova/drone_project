@@ -8,8 +8,14 @@ keeps a square window around the centre, and writes:
   worlds/ground_truth.json    - bay_id -> occupied (for detection evaluation)
 
 Usage:
-    python generate_world.py [window_half_m] [occupied_fraction]
-    python generate_world.py 75 0.5      # 150x150 m window, ~50% occupied
+    python generate_world.py [window_half_m] [occupied_fraction] [world_name]
+    python generate_world.py 75 0.5                    # default fmi_block.wbt
+    python generate_world.py 500 0.5 fmi_block_1km     # separate big world:
+        writes fmi_block_1km.wbt + fmi_block_1km.route.json +
+        fmi_block_1km.ground_truth.json alongside the default world; the .wbt
+        hands its route file to the controller via controllerArgs, so both
+        worlds coexist and stay runnable (default keeps legacy route.json /
+        ground_truth.json names).
 
 NOTE: not run/verified here — needs Webots installed to open. The Mavic2Pro proto
 is pulled via EXTERNPROTO pinned to R2023b; if your Webots differs, change WEBOTS_VER.
@@ -24,19 +30,28 @@ os.makedirs(WORLDS, exist_ok=True)
 
 WINDOW = float(sys.argv[1]) if len(sys.argv) > 1 else 75.0       # half-size, metres
 OCC = float(sys.argv[2]) if len(sys.argv) > 2 else 0.5
+NAME = sys.argv[3] if len(sys.argv) > 3 else "fmi_block"
+# the default world keeps the legacy file names (controller falls back to them)
+ROUTE_FILE = "route.json" if NAME == "fmi_block" else f"{NAME}.route.json"
+GT_FILE = "ground_truth.json" if NAME == "fmi_block" else f"{NAME}.ground_truth.json"
 WEBOTS_VER = "R2023b"
 random.seed(42)
 
 feats = json.load(open(BAYS, encoding="utf-8"))["features"]
 
-# bay centres in lon/lat, then local metres about centroid
+# The project's shared georeference origin: every world, route, pose and
+# ground truth uses ENU metres about THIS lat/lon. Pinned (= the bay centroid
+# of the original 250 m FMI-block cut) so re-cutting the data at a bigger
+# half-size doesn't shift the frame of already-flown worlds; change it
+# deliberately only if the study area moves.
+ORIGIN = (42.6747105, 23.3298956)   # lat, lon
+
 def ring_center(f):
     r = f["geometry"]["coordinates"][0][:-1]
     return sum(p[0] for p in r) / len(r), sum(p[1] for p in r) / len(r)
 
 centers = [ring_center(f) for f in feats]
-lon0 = sum(c[0] for c in centers) / len(centers)
-lat0 = sum(c[1] for c in centers) / len(centers)
+lat0, lon0 = ORIGIN
 mlat = 111320.0
 mlon = 111320.0 * math.cos(math.radians(lat0))
 
@@ -112,16 +127,22 @@ for b in bays:
     gt[str(b["id"])] = b["occupied"]
 
 # ---------------------------------------------------------------------------
-# Flight route: DEPTH-FIRST walk of the street network. The coverage graph is
-# the OSM centerlines (block_roads.geojson, projected with the same lon0/lat0)
-# of every street that has bays; DFS starts at the westernmost street end and
-# explores the shortest branch first at each junction, so side streets are
-# covered and backtracked at their intersection before continuing along the
-# main street (e.g. Bourchier west end -> intersection -> Sveta Gora and back
-# -> Bourchier east end). Backtracks and transits stay on the roads. Streets
-# matching no OSM road fall back to a PCA line fit through their bay row.
-# Route is written in the SAME local metres as the world so poses.json /
-# ground_truth.json all share one coordinate frame.
+# Flight route: POSTMAN (route-inspection) walk of the street network. The
+# coverage graph is the OSM centerlines (block_roads.geojson, projected with
+# the same lon0/lat0) of every street that has bays. Rural-postman recipe:
+#   1. connect disconnected coverage components with their shortest road
+#      transits (MST over components, Dijkstra on the full road graph);
+#   2. every node of odd degree forces a repeat somewhere - pair the odd nodes
+#      up with a minimum-weight matching (shortest road paths as pair costs)
+#      and duplicate the matched paths; two virtual zero-cost endpoints let
+#      the cheapest two odd nodes stay unmatched and become start/finish, so
+#      the result is an OPEN path (no return to start);
+#   3. the multigraph is now Eulerian: a Hierholzer walk flies every coverage
+#      edge exactly once and deadheads only along the matched repeats.
+# Deadheads and transits stay on the roads. Streets matching no OSM road fall
+# back to a PCA line fit through their bay row. Route is written in the SAME
+# local metres as the world so poses.json / ground_truth.json all share one
+# coordinate frame.
 ROUTE_STEP = 10.0     # waypoint spacing (m); camera footprint at 30 m alt is only
                       # ~15 m along-track, and captures scatter a few m around
                       # each waypoint (orbit-timeout arrivals), so keep overlap
@@ -172,8 +193,11 @@ def graph_add(adj, run):
             adj.setdefault(b, {})[a] = d
 
 
-def dijkstra(adj, src):
-    dist, prev, pq = {src: 0.0}, {}, [(0.0, src)]
+def dijkstra(adj, srcs):
+    """Multi-source Dijkstra; srcs is an iterable of nodes."""
+    dist = {s: 0.0 for s in srcs if s in adj}
+    prev, pq = {}, [(0.0, s) for s in dist]
+    heapq.heapify(pq)
     while pq:
         d, u = heapq.heappop(pq)
         if d > dist.get(u, 1e18):
@@ -187,6 +211,71 @@ def dijkstra(adj, src):
     return dist, prev
 
 
+def min_matching(C):
+    """Indices 0..n-1 (n even) paired to minimise sum of C[i][j]: exact
+    blossom via networkx when installed, else exact bitmask DP for small n,
+    else greedy + pair-swap refinement."""
+    n = len(C)
+    if n == 0:
+        return []
+    try:
+        import networkx as nx
+        G = nx.Graph()
+        G.add_nodes_from(range(n))
+        for i in range(n):
+            for j in range(i + 1, n):
+                G.add_edge(i, j, weight=C[i][j])
+        return [tuple(e) for e in nx.min_weight_matching(G)]
+    except ImportError:
+        pass
+    if n <= 14:
+        INF = float("inf")
+        dp = [INF] * (1 << n)
+        dp[0] = 0.0
+        choice = [None] * (1 << n)
+        for m in range(1 << n):
+            if dp[m] == INF:
+                continue
+            i = next(b for b in range(n) if not m & (1 << b))
+            for j in range(i + 1, n):
+                if m & (1 << j):
+                    continue
+                m2 = m | (1 << i) | (1 << j)
+                nd = dp[m] + C[i][j]
+                if nd < dp[m2]:
+                    dp[m2] = nd
+                    choice[m2] = (i, j)
+        pairs, m = [], (1 << n) - 1
+        while m:
+            i, j = choice[m]
+            pairs.append((i, j))
+            m &= ~(1 << i) & ~(1 << j)
+        return pairs
+    # greedy: cheapest available pair first
+    order = sorted((C[i][j], i, j) for i in range(n) for j in range(i + 1, n))
+    free, pairs = set(range(n)), []
+    for c, i, j in order:
+        if i in free and j in free:
+            pairs.append((i, j))
+            free -= {i, j}
+    # refinement: re-pair any two pairs if a swap is cheaper
+    improved = True
+    while improved:
+        improved = False
+        for a in range(len(pairs)):
+            for b in range(a + 1, len(pairs)):
+                i, j = pairs[a]
+                k, l = pairs[b]
+                cur = C[i][j] + C[k][l]
+                for p, q in (((i, k), (j, l)), ((i, l), (j, k))):
+                    alt = C[p[0]][p[1]] + C[q[0]][q[1]]
+                    if alt < cur - 1e-9:
+                        pairs[a], pairs[b] = p, q
+                        cur = alt
+                        improved = True
+    return pairs
+
+
 def path_back(prev, v):
     out = [v]
     while v in prev:
@@ -196,8 +285,9 @@ def path_back(prev, v):
 
 
 def build_route(bays, road_runs):
-    """Depth-first walk of the bay-streets' centerline graph, starting at the
-    westernmost street end. road_runs: (osm_name, polyline) in local metres."""
+    """Open postman walk of the bay-streets' centerline graph: every coverage
+    edge flown once, minimum-matched deadheads along the roads.
+    road_runs: (osm_name, polyline) in local metres."""
     streets = {}
     for b in bays:
         streets.setdefault(b["street"], []).append((b["x"], b["y"]))
@@ -226,55 +316,105 @@ def build_route(bays, road_runs):
     for t in targets:
         graph_add(full, t)
 
-    unvisited = {(min(a, b), max(a, b)) for a in cov for b in cov[a]}
+    # ---- multigraph the drone will traverse: list of (u, v, node path u->v)
+    walk_edges = [(a, b, [a, b]) for a in cov for b in cov[a] if a < b]
+    cover_len = sum(cov[a][b] for a, b, _ in walk_edges)
 
-    def subtree_len(u, v, seen):
-        """Total unvisited coverage length reachable by entering edge u->v."""
-        e = (min(u, v), max(u, v))
-        if e in seen or e not in unvisited:
-            return 0.0
-        seen.add(e)
-        return cov[u][v] + sum(subtree_len(v, w, seen) for w in cov[v])
+    # ---- 1. connect coverage components with shortest road transits (MST)
+    comps, seen = [], set()
+    for n in cov:
+        if n in seen:
+            continue
+        comp, stack = set(), [n]
+        while stack:
+            u = stack.pop()
+            if u not in comp:
+                comp.add(u)
+                stack.extend(cov[u])
+        seen |= comp
+        comps.append(comp)
+    tree = comps[0]
+    rest = comps[1:]
+    while rest:
+        dist, prev = dijkstra(full, tree)
+        best = min(((min((dist.get(v, 1e18), v) for v in comp), ci)
+                    for ci, comp in enumerate(rest)))
+        (d, node), ci = best
+        if d < 1e17:
+            path = path_back(prev, node)
+        else:   # roads don't reach it: straight hop as a last resort
+            path = [min(tree, key=lambda t: math.hypot(t[0] - node[0],
+                                                       t[1] - node[1])), node]
+            graph_add(full, path)
+        walk_edges.append((path[0], path[-1], path))
+        tree = tree | rest.pop(ci) | set(path)
 
-    route = []
-    last_new = [0]   # route index right after the most recent NEW edge
+    # ---- 2. even out odd-degree nodes: min-weight matching, open-path style
+    deg = {}
+    for u, v, _ in walk_edges:
+        deg[u] = deg.get(u, 0) + 1
+        deg[v] = deg.get(v, 0) + 1
+    odd = [n for n, d in deg.items() if d % 2]
+    sp = {n: dijkstra(full, [n]) for n in odd}     # dist+prev per odd node
+    BIG = 1e15
+    n_odd = len(odd)
+    # two virtual endpoints (indices n_odd, n_odd+1): free to pair with any
+    # odd node (those become start/finish), forbidden to pair with each other
+    C = [[BIG] * (n_odd + 2) for _ in range(n_odd + 2)]
+    for i in range(n_odd):
+        for j in range(i + 1, n_odd):
+            C[i][j] = C[j][i] = sp[odd[i]][0].get(odd[j], BIG)
+        C[i][n_odd] = C[n_odd][i] = 0.0
+        C[i][n_odd + 1] = C[n_odd + 1][i] = 0.0
+    ends = []
+    for i, j in min_matching(C):
+        if i > j:
+            i, j = j, i
+        if j >= n_odd:                             # matched to a virtual
+            ends.append(odd[i])
+            continue
+        dist_i, prev_i = sp[odd[i]]
+        path = path_back(prev_i, odd[j])           # duplicated deadhead
+        walk_edges.append((path[0], path[-1], path))
 
-    def dfs(u):
-        while True:
-            nbrs = [v for v in cov[u] if (min(u, v), max(u, v)) in unvisited]
-            if not nbrs:
-                return
-            # shortest branch first: dead-end side streets get covered and
-            # backtracked before we continue down the main street
-            v = min(nbrs, key=lambda w: subtree_len(u, w, set()))
-            unvisited.discard((min(u, v), max(u, v)))
-            route.append(v)
-            last_new[0] = len(route)
-            dfs(v)
-            route.append(u)   # backtrack along the street
-
-    def endpoints(adjacency, edges):
-        nodes = {n for e in edges for n in e}
-        return [n for n in nodes
-                if sum((min(n, v), max(n, v)) in edges for v in adjacency[n]) <= 1] or list(nodes)
-
-    root = min(endpoints(cov, unvisited))          # westernmost street end
-    route.append(root)
-    dfs(root)
-    while unvisited:                               # disconnected street group
-        cur = route[last_new[0] - 1]
-        dist, prev = dijkstra(full, cur) if cur in full else ({}, {})
-        nxt = min(endpoints(cov, unvisited),
-                  key=lambda n: dist.get(n, 3.0 * math.hypot(n[0] - cur[0],
-                                                             n[1] - cur[1])))
-        del route[last_new[0]:]                    # drop the trailing backtrack
-        if nxt in dist:
-            route.extend(path_back(prev, nxt)[1:]) # transit along the streets
+    # ---- 3. Hierholzer Euler walk over the multigraph
+    incid = {}
+    for ei, (u, v, _) in enumerate(walk_edges):
+        incid.setdefault(u, []).append(ei)
+        incid.setdefault(v, []).append(ei)
+    # fly from whichever endpoint is nearer the drone's takeoff at the origin
+    cands = ends if ends else list(incid)
+    start = min(cands, key=lambda p: math.hypot(p[0], p[1]))
+    used = [False] * len(walk_edges)
+    trail, stack = [], [(start, None)]             # (node, edge arrived by)
+    while stack:
+        u, ein = stack[-1]
+        nxt = None
+        while incid.get(u):
+            ei = incid[u][-1]
+            if used[ei]:
+                incid[u].pop()
+                continue
+            nxt = ei
+            break
+        if nxt is None:
+            stack.pop()
+            trail.append((u, ein))
         else:
-            route.append(nxt)
-        last_new[0] = len(route)
-        dfs(nxt)
-    del route[last_new[0]:]                        # don't backtrack at the end
+            used[nxt] = True
+            eu, ev, _ = walk_edges[nxt]
+            stack.append((ev if u == eu else eu, nxt))
+    trail.reverse()
+
+    # expand each edge into its node path, oriented from the current node
+    route = [trail[0][0]]
+    for node, ein in trail[1:]:
+        p = walk_edges[ein][2]
+        route.extend(p[1:] if p[-1] == node else p[-2::-1])
+    route_len = sum(math.hypot(b[0] - a[0], b[1] - a[1])
+                    for a, b in zip(route, route[1:]))
+    print(f"route: cover {cover_len:.0f} m + deadhead {route_len - cover_len:.0f} m "
+          f"= {route_len:.0f} m")
 
     # drop near-duplicate consecutive points, then densify into waypoints
     pts = [route[0]]
@@ -314,15 +454,16 @@ Viewpoint {
   followType "Tracking Shot"
 }
 Background { skyColor [ 0.5 0.7 1 ] }
-DirectionalLight { direction 0.4 0.5 -1 intensity 2.5 castShadows FALSE }
-Solid {
+DirectionalLight { direction 0.4 0.5 -1 intensity 2.5 castShadows FALSE }""")
+GROUND = 2 * WINDOW + 200      # ground plane comfortably past the window
+parts.append(f"""Solid {{
   name "ground"
-  children [ Shape {
-    appearance PBRAppearance { baseColor 0.32 0.33 0.34 roughness 1 metalness 0 }
-    geometry Plane { size 600 600 }
-  } ]
-  boundingObject Plane { size 600 600 }
-}""")
+  children [ Shape {{
+    appearance PBRAppearance {{ baseColor 0.32 0.33 0.34 roughness 1 metalness 0 }}
+    geometry Plane {{ size {GROUND:.0f} {GROUND:.0f} }}
+  }} ]
+  boundingObject Plane {{ size {GROUND:.0f} {GROUND:.0f} }}
+}}""")
 
 # --- streets: OSM centerlines rendered as Road protos (asphalt + dashed line).
 # Same lon0/lat0 projection as the bays; no bounding objects, so physics is
@@ -445,19 +586,21 @@ for b in bays:
   name "car_{b['id']}"
 }}""")
 
-# drone at centre (Mavic2Pro ships a gimbal camera named "camera")
-parts.append("""Mavic2Pro {
+# drone at centre (Mavic2Pro ships a gimbal camera named "camera");
+# controllerArgs tells parkdrone which route file belongs to THIS world
+parts.append(f"""Mavic2Pro {{
   translation 0 0 0.15
   controller "parkdrone"
-}""")
+  controllerArgs [ "{ROUTE_FILE}" ]
+}}""")
 
 route = build_route(bays, road_runs)
 
-wbt = os.path.join(WORLDS, "fmi_block.wbt")
+wbt = os.path.join(WORLDS, f"{NAME}.wbt")
 open(wbt, "w", encoding="utf-8").write("\n".join(parts) + "\n")
-json.dump(gt, open(os.path.join(WORLDS, "ground_truth.json"), "w"), indent=0)
+json.dump(gt, open(os.path.join(WORLDS, GT_FILE), "w"), indent=0)
 json.dump([[round(x, 2), round(y, 2)] for x, y in route],
-          open(os.path.join(WORLDS, "route.json"), "w"), indent=0)
+          open(os.path.join(WORLDS, ROUTE_FILE), "w"), indent=0)
 
 occ = sum(1 for b in bays if b["occupied"])
 nstreets = len({b["street"] for b in bays})
@@ -465,5 +608,5 @@ print(f"window: {2*WINDOW:.0f}x{2*WINDOW:.0f} m   bays: {len(bays)}   "
       f"parked cars: {occ}   free public: {sum(1 for b in bays if b['public'] and not b['occupied'])}")
 print(f"route: {len(route)} waypoints along {nstreets} street(s)")
 print(f"wrote {wbt}")
-print(f"wrote {os.path.join(WORLDS, 'ground_truth.json')}")
-print(f"wrote {os.path.join(WORLDS, 'route.json')}")
+print(f"wrote {os.path.join(WORLDS, GT_FILE)}")
+print(f"wrote {os.path.join(WORLDS, ROUTE_FILE)}")

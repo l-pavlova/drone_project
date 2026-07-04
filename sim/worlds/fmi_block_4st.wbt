@@ -1,0 +1,1480 @@
+#VRML_SIM R2023b utf8
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/robots/dji/mavic/protos/Mavic2Pro.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/objects/road/protos/Road.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/objects/road/protos/RoadLine.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/vehicles/protos/tesla/TeslaModel3Simple.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/vehicles/protos/bmw/BmwX5Simple.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/vehicles/protos/citroen/CitroenCZeroSimple.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/vehicles/protos/toyota/ToyotaPriusSimple.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/vehicles/protos/lincoln/LincolnMKZSimple.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/vehicles/protos/range_rover/RangeRoverSportSVRSimple.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/vehicles/protos/mercedes_benz/MercedesBenzSprinterSimple.proto"
+WorldInfo { basicTimeStep 8 }
+Viewpoint {
+  orientation -0.35 0.35 0.87 1.75
+  position -8 -14 10
+  follow "Mavic 2 PRO"
+  followType "Tracking Shot"
+}
+Background { skyColor [ 0.5 0.7 1 ] }
+DirectionalLight { direction 0.4 0.5 -1 intensity 2.5 castShadows FALSE }
+Solid {
+  name "ground"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.32 0.33 0.34 roughness 1 metalness 0 }
+    geometry Plane { size 460 460 }
+  } ]
+  boundingObject Plane { size 460 460 }
+}
+Road {
+  translation 0 0 0.010
+  name "road_0 бул. Джеймс Баучер"
+  width 6.50
+  numberOfLanes 2
+  lines [ RoadLine { type "dashed" } ]
+  roadBorderHeight 0
+  rightBorder FALSE
+  leftBorder FALSE
+  wayPoints [ -145.00 -45.79 0, -134.30 -41.52 0, -129.26 -39.40 0, -113.30 -32.23 0, -95.78 -23.57 0, 14.96 31.06 0, 19.36 33.23 0, 129.11 87.35 0, 135.26 90.38 0, 145.00 95.19 0 ]
+}
+Road {
+  translation 0 0 0.013
+  name "road_1 Димитър Димов"
+  width 5.00
+  numberOfLanes 2
+  lines [ RoadLine { type "dashed" } ]
+  roadBorderHeight 0
+  rightBorder FALSE
+  leftBorder FALSE
+  wayPoints [ 45.37 145.00 0, 35.95 141.45 0, 11.67 132.31 0 ]
+}
+Road {
+  translation 0 0 0.016
+  name "road_2 Света гора"
+  width 5.00
+  numberOfLanes 2
+  lines [ RoadLine { type "dashed" } ]
+  roadBorderHeight 0
+  rightBorder FALSE
+  leftBorder FALSE
+  wayPoints [ -27.59 145.00 0, -20.83 120.11 0 ]
+}
+Road {
+  translation 0 0 0.019
+  name "road_3 Милин камък"
+  width 6.50
+  numberOfLanes 2
+  lines [ RoadLine { type "dashed" } ]
+  roadBorderHeight 0
+  rightBorder FALSE
+  leftBorder FALSE
+  wayPoints [ -145.00 -20.88 0, -140.07 -30.35 0, -138.56 -33.20 0 ]
+}
+Road {
+  translation 0 0 0.022
+  name "road_4 Света гора"
+  width 5.00
+  numberOfLanes 2
+  lines [ RoadLine { type "dashed" } ]
+  roadBorderHeight 0
+  rightBorder FALSE
+  leftBorder FALSE
+  wayPoints [ -20.83 120.11 0, -10.35 86.67 0, 11.47 38.12 0, 14.28 32.49 0, 14.96 31.06 0 ]
+}
+Road {
+  translation 0 0 0.025
+  name "road_5 Минзухар"
+  width 6.50
+  numberOfLanes 2
+  lines [ RoadLine { type "dashed" } ]
+  roadBorderHeight 0
+  rightBorder FALSE
+  leftBorder FALSE
+  wayPoints [ -96.76 -144.59 0, -98.30 -145.00 0 ]
+}
+Road {
+  translation 0 0 0.028
+  name "road_6 Димитър Димов"
+  width 5.00
+  numberOfLanes 2
+  lines [ RoadLine { type "dashed" } ]
+  roadBorderHeight 0
+  rightBorder FALSE
+  leftBorder FALSE
+  wayPoints [ 11.67 132.31 0, -2.67 126.92 0, -20.83 120.11 0, -28.95 116.83 0 ]
+}
+Road {
+  translation 0 0 0.031
+  name "road_7 Димитър Димов"
+  width 5.00
+  numberOfLanes 2
+  lines [ RoadLine { type "dashed" } ]
+  roadBorderHeight 0
+  rightBorder FALSE
+  leftBorder FALSE
+  wayPoints [ -28.95 116.83 0, -39.71 112.39 0 ]
+}
+Road {
+  translation 0 0 0.034
+  name "road_8 Димитър Димов"
+  width 5.00
+  numberOfLanes 2
+  lines [ RoadLine { type "dashed" } ]
+  roadBorderHeight 0
+  rightBorder FALSE
+  leftBorder FALSE
+  wayPoints [ -39.71 112.39 0, -70.99 99.46 0 ]
+}
+Road {
+  translation 0 0 0.037
+  name "road_9 Димитър Димов"
+  width 5.00
+  numberOfLanes 2
+  lines [ RoadLine { type "dashed" } ]
+  roadBorderHeight 0
+  rightBorder FALSE
+  leftBorder FALSE
+  wayPoints [ -70.99 99.46 0, -103.54 86.02 0 ]
+}
+Road {
+  translation 0 0 0.040
+  name "road_10 Димитър Димов"
+  width 5.00
+  numberOfLanes 2
+  lines [ RoadLine { type "dashed" } ]
+  roadBorderHeight 0
+  rightBorder FALSE
+  leftBorder FALSE
+  wayPoints [ -103.54 86.02 0, -145.00 68.88 0 ]
+}
+Road {
+  translation 0 0 0.043
+  name "road_11 Якубица"
+  width 6.50
+  numberOfLanes 2
+  lines [ RoadLine { type "dashed" } ]
+  roadBorderHeight 0
+  rightBorder FALSE
+  leftBorder FALSE
+  wayPoints [ -134.30 -41.52 0, -133.52 -43.11 0, -131.23 -49.59 0 ]
+}
+Road {
+  translation 0 0 0.046
+  name "road_12 Милин камък"
+  width 6.50
+  numberOfLanes 2
+  lines [ RoadLine { type "dashed" } ]
+  roadBorderHeight 0
+  rightBorder FALSE
+  leftBorder FALSE
+  wayPoints [ -138.56 -33.20 0, -135.07 -39.94 0, -134.30 -41.52 0 ]
+}
+Road {
+  translation 0 0 0.049
+  name "road_13 Якубица"
+  width 6.50
+  numberOfLanes 2
+  lines [ RoadLine { type "dashed" } ]
+  roadBorderHeight 0
+  rightBorder FALSE
+  leftBorder FALSE
+  wayPoints [ -131.23 -49.59 0, -130.52 -51.52 0, -115.82 -92.34 0, -112.19 -102.41 0, -109.34 -110.22 0, -96.76 -144.59 0, -96.63 -145.00 0 ]
+}
+Solid {
+  translation -125.481 -30.883 0.050
+  rotation 0 0 1 0.4224
+  name "bay_14771"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -25.996 127.872 0.050
+  rotation 0 0 1 -1.3055
+  name "bay_14795"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 7.963 20.836 0.050
+  rotation 0 0 1 0.4590
+  name "bay_14796"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 74.079 66.736 0.050
+  rotation 0 0 1 0.4590
+  name "bay_14797"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -125.015 84.809 0.050
+  rotation 0 0 1 -2.7489
+  name "bay_17548"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -119.221 86.949 0.050
+  rotation 0 0 1 -2.7489
+  name "bay_17549"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+BmwX5Simple {
+  translation -120.560 86.394 0.4
+  rotation 0 0 1 0.3927
+  color 0.1 0.1 0.1
+  name "car_17549"
+}
+Solid {
+  translation -105.667 91.954 0.050
+  rotation 0 0 1 -2.7506
+  name "bay_17550"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+MercedesBenzSprinterSimple {
+  translation -104.086 92.606 0.4
+  rotation 0 0 1 -2.7506
+  color 0.6 0.6 0.6
+  name "car_17550"
+}
+Solid {
+  translation -100.070 94.021 0.050
+  rotation 0 0 1 -2.7506
+  name "bay_17551"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+LincolnMKZSimple {
+  translation -98.831 94.532 0.4
+  rotation 0 0 1 -2.7506
+  color 0.1 0.1 0.8
+  name "car_17551"
+}
+Solid {
+  translation -93.957 96.279 0.050
+  rotation 0 0 1 -2.7506
+  name "bay_17552"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -80.220 101.353 0.050
+  rotation 0 0 1 -2.7506
+  name "bay_17553"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -74.810 103.351 0.050
+  rotation 0 0 1 -2.7506
+  name "bay_17554"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -69.482 105.318 0.050
+  rotation 0 0 1 -2.7506
+  name "bay_17555"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+TeslaModel3Simple {
+  translation -68.207 105.844 0.4
+  rotation 0 0 1 -2.7506
+  color 0.1 0.1 0.8
+  name "car_17555"
+}
+Solid {
+  translation -64.231 107.258 0.050
+  rotation 0 0 1 -2.7506
+  name "bay_17556"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+LincolnMKZSimple {
+  translation -65.470 106.747 0.4
+  rotation 0 0 1 0.3910
+  color 0.8 0.1 0.1
+  name "car_17556"
+}
+Solid {
+  translation -59.170 109.127 0.050
+  rotation 0 0 1 -2.7506
+  name "bay_17557"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+LincolnMKZSimple {
+  translation -60.409 108.616 0.4
+  rotation 0 0 1 0.3910
+  color 0.8 0.1 0.1
+  name "car_17557"
+}
+Solid {
+  translation -54.062 111.013 0.050
+  rotation 0 0 1 -2.7506
+  name "bay_17558"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+BmwX5Simple {
+  translation -55.402 110.461 0.4
+  rotation 0 0 1 0.3910
+  color 0.8 0.1 0.1
+  name "car_17558"
+}
+Solid {
+  translation -48.984 112.889 0.050
+  rotation 0 0 1 -2.7506
+  name "bay_17559"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -44.017 114.723 0.050
+  rotation 0 0 1 -2.7506
+  name "bay_17560"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+ToyotaPriusSimple {
+  translation -45.293 114.197 0.4
+  rotation 0 0 1 0.3910
+  color 0.1 0.1 0.8
+  name "car_17560"
+}
+Solid {
+  translation -38.635 116.711 0.050
+  rotation 0 0 1 -2.7506
+  name "bay_17561"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+LincolnMKZSimple {
+  translation -37.396 117.222 0.4
+  rotation 0 0 1 -2.7506
+  color 0.2 0.5 0.2
+  name "car_17561"
+}
+Solid {
+  translation -33.265 118.694 0.050
+  rotation 0 0 1 -2.7506
+  name "bay_17562"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -21.582 111.710 0.050
+  rotation 0 0 1 -1.2671
+  name "bay_17563"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -19.826 105.620 0.050
+  rotation 0 0 1 -1.2671
+  name "bay_17564"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+RangeRoverSportSVRSimple {
+  translation -20.245 106.956 0.4
+  rotation 0 0 1 -1.2671
+  color 0.1 0.1 0.8
+  name "car_17564"
+}
+Solid {
+  translation -18.175 99.890 0.050
+  rotation 0 0 1 -1.2671
+  name "bay_17565"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -16.444 93.888 0.050
+  rotation 0 0 1 -1.2671
+  name "bay_17566"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -14.597 88.075 0.050
+  rotation 0 0 1 -1.2671
+  name "bay_17567"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+TeslaModel3Simple {
+  translation -15.010 89.392 0.4
+  rotation 0 0 1 -1.2671
+  color 0.6 0.6 0.6
+  name "car_17567"
+}
+Solid {
+  translation -12.554 82.564 0.050
+  rotation 0 0 1 -1.1484
+  name "bay_17568"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -10.254 76.362 0.050
+  rotation 0 0 1 -1.1484
+  name "bay_17569"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -7.805 70.600 0.050
+  rotation 0 0 1 -1.1484
+  name "bay_17570"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+RangeRoverSportSVRSimple {
+  translation -8.379 71.877 0.4
+  rotation 0 0 1 -1.1484
+  color 0.6 0.6 0.6
+  name "car_17570"
+}
+Solid {
+  translation 4.156 45.143 0.050
+  rotation 0 0 1 -1.1484
+  name "bay_17571"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+LincolnMKZSimple {
+  translation 3.607 46.365 0.4
+  rotation 0 0 1 -1.1484
+  color 0.1 0.1 0.1
+  name "car_17571"
+}
+Solid {
+  translation 1.026 51.202 0.050
+  rotation 0 0 1 -1.1484
+  name "bay_17572"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -2.439 57.683 0.050
+  rotation 0 0 1 -1.1484
+  name "bay_17573"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+BmwX5Simple {
+  translation -1.844 56.361 0.4
+  rotation 0 0 1 1.9932
+  color 0.2 0.5 0.2
+  name "car_17573"
+}
+Solid {
+  translation -120.236 -28.354 0.050
+  rotation 0 0 1 0.4224
+  name "bay_17574"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+MercedesBenzSprinterSimple {
+  translation -118.677 -27.653 0.4
+  rotation 0 0 1 3.5640
+  color 0.9 0.9 0.9
+  name "car_17574"
+}
+Solid {
+  translation -115.261 -25.998 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17575"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+CitroenCZeroSimple {
+  translation -116.444 -26.582 0.4
+  rotation 0 0 1 0.4590
+  color 0.1 0.1 0.1
+  name "car_17575"
+}
+Solid {
+  translation -109.873 -23.352 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17576"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -104.769 -20.874 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17577"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -99.639 -18.384 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17578"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -90.600 -14.110 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17579"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -85.496 -11.633 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17580"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -80.366 -9.142 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17581"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -36.667 12.195 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17582"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+TeslaModel3Simple {
+  translation -37.905 11.584 0.4
+  rotation 0 0 1 0.4590
+  color 0.6 0.6 0.6
+  name "car_17582"
+}
+Solid {
+  translation -31.692 14.552 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17583"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -26.303 17.198 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17584"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -21.200 19.675 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17585"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -16.070 22.165 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17586"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -10.814 24.712 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17587"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -5.710 27.190 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17588"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -0.580 29.680 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17589"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+BmwX5Simple {
+  translation -1.880 29.037 0.4
+  rotation 0 0 1 0.4590
+  color 0.1 0.1 0.1
+  name "car_17589"
+}
+Solid {
+  translation -119.169 -41.442 0.050
+  rotation 0 0 1 0.4224
+  name "bay_17590"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+TeslaModel3Simple {
+  translation -117.910 -40.877 0.4
+  rotation 0 0 1 3.5640
+  color 0.6 0.6 0.6
+  name "car_17590"
+}
+Solid {
+  translation -114.194 -39.085 0.050
+  rotation 0 0 1 0.4224
+  name "bay_17591"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+CitroenCZeroSimple {
+  translation -112.990 -38.544 0.4
+  rotation 0 0 1 3.5640
+  color 0.9 0.9 0.9
+  name "car_17591"
+}
+Solid {
+  translation -108.805 -36.439 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17592"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+LincolnMKZSimple {
+  translation -110.007 -37.033 0.4
+  rotation 0 0 1 0.4590
+  color 0.1 0.1 0.1
+  name "car_17592"
+}
+Solid {
+  translation -103.702 -33.962 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17593"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+CitroenCZeroSimple {
+  translation -104.885 -34.547 0.4
+  rotation 0 0 1 0.4590
+  color 0.9 0.9 0.9
+  name "car_17593"
+}
+Solid {
+  translation 3.752 18.761 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17594"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+TeslaModel3Simple {
+  translation 4.989 19.372 0.4
+  rotation 0 0 1 3.6006
+  color 0.2 0.5 0.2
+  name "car_17594"
+}
+Solid {
+  translation -1.116 16.361 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17595"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+RangeRoverSportSVRSimple {
+  translation -2.371 15.741 0.4
+  rotation 0 0 1 0.4590
+  color 0.1 0.1 0.1
+  name "car_17595"
+}
+Solid {
+  translation -6.030 13.938 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17596"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -10.874 11.551 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17597"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+RangeRoverSportSVRSimple {
+  translation -12.129 10.930 0.4
+  rotation 0 0 1 0.4590
+  color 0.9 0.9 0.9
+  name "car_17597"
+}
+Solid {
+  translation -16.052 8.999 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17598"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+BmwX5Simple {
+  translation -17.351 8.356 0.4
+  rotation 0 0 1 0.4590
+  color 0.6 0.6 0.6
+  name "car_17598"
+}
+Solid {
+  translation -21.234 6.444 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17599"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+MercedesBenzSprinterSimple {
+  translation -22.767 5.686 0.4
+  rotation 0 0 1 0.4590
+  color 0.9 0.9 0.9
+  name "car_17599"
+}
+Solid {
+  translation -25.994 4.097 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17600"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+CitroenCZeroSimple {
+  translation -27.177 3.513 0.4
+  rotation 0 0 1 0.4590
+  color 0.1 0.1 0.1
+  name "car_17600"
+}
+Solid {
+  translation -30.276 1.987 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17601"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -34.925 -0.173 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17602"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -39.651 -2.499 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17603"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -44.426 -4.849 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17604"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+LincolnMKZSimple {
+  translation -43.225 -4.255 0.4
+  rotation 0 0 1 3.6006
+  color 0.9 0.9 0.9
+  name "car_17604"
+}
+Solid {
+  translation -49.386 -7.290 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17605"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -54.576 -9.844 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17606"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+LincolnMKZSimple {
+  translation -53.375 -9.250 0.4
+  rotation 0 0 1 3.6006
+  color 0.9 0.9 0.9
+  name "car_17606"
+}
+Solid {
+  translation -60.261 -12.642 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17607"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+RangeRoverSportSVRSimple {
+  translation -59.006 -12.021 0.4
+  rotation 0 0 1 3.6006
+  color 0.1 0.1 0.1
+  name "car_17607"
+}
+Solid {
+  translation -13.436 125.997 0.050
+  rotation 0 0 1 -2.7838
+  name "bay_17652"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -8.039 128.038 0.050
+  rotation 0 0 1 -2.7838
+  name "bay_17653"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 93.015 62.788 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17672"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 88.565 60.603 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17673"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 83.717 58.219 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17674"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 78.816 55.812 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17675"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 73.945 53.420 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17676"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+BmwX5Simple {
+  translation 72.645 52.777 0.4
+  rotation 0 0 1 0.4590
+  color 0.1 0.1 0.8
+  name "car_17676"
+}
+Solid {
+  translation 68.818 50.902 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17677"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+ToyotaPriusSimple {
+  translation 67.581 50.291 0.4
+  rotation 0 0 1 0.4590
+  color 0.6 0.6 0.6
+  name "car_17677"
+}
+Solid {
+  translation 63.540 48.310 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17678"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+BmwX5Simple {
+  translation 64.839 48.952 0.4
+  rotation 0 0 1 3.6006
+  color 0.1 0.1 0.1
+  name "car_17678"
+}
+Solid {
+  translation 58.852 46.008 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17679"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+CitroenCZeroSimple {
+  translation 60.036 46.593 0.4
+  rotation 0 0 1 3.6006
+  color 0.1 0.1 0.8
+  name "car_17679"
+}
+Solid {
+  translation 54.367 43.805 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17680"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+LincolnMKZSimple {
+  translation 55.568 44.399 0.4
+  rotation 0 0 1 3.6006
+  color 0.2 0.5 0.2
+  name "car_17680"
+}
+Solid {
+  translation 49.943 41.632 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17681"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 45.177 39.292 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17682"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 40.410 36.951 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17683"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+MercedesBenzSprinterSimple {
+  translation 41.943 37.708 0.4
+  rotation 0 0 1 3.6006
+  color 0.2 0.5 0.2
+  name "car_17683"
+}
+Solid {
+  translation 35.414 34.497 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17684"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 30.283 31.977 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17685"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+ToyotaPriusSimple {
+  translation 29.046 31.366 0.4
+  rotation 0 0 1 0.4590
+  color 0.1 0.1 0.1
+  name "car_17685"
+}
+Solid {
+  translation 24.579 29.119 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17686"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 111.158 71.678 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17687"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+TeslaModel3Simple {
+  translation 109.921 71.067 0.4
+  rotation 0 0 1 0.4590
+  color 0.1 0.1 0.8
+  name "car_17687"
+}
+Solid {
+  translation 106.939 69.620 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17688"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+CitroenCZeroSimple {
+  translation 105.755 69.035 0.4
+  rotation 0 0 1 0.4590
+  color 0.8 0.1 0.1
+  name "car_17688"
+}
+Solid {
+  translation 102.070 67.220 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17689"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+MercedesBenzSprinterSimple {
+  translation 103.603 67.978 0.4
+  rotation 0 0 1 3.6006
+  color 0.8 0.1 0.1
+  name "car_17689"
+}
+Solid {
+  translation 97.471 64.971 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17690"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 125.559 78.729 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17696"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+CitroenCZeroSimple {
+  translation 124.376 78.144 0.4
+  rotation 0 0 1 0.4590
+  color 0.6 0.6 0.6
+  name "car_17696"
+}
+Solid {
+  translation 120.223 76.115 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17697"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 125.266 91.964 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17725"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 120.268 89.513 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17726"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+LincolnMKZSimple {
+  translation 119.067 88.919 0.4
+  rotation 0 0 1 0.4590
+  color 0.1 0.1 0.1
+  name "car_17726"
+}
+Solid {
+  translation 115.341 87.097 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17727"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+CitroenCZeroSimple {
+  translation 114.158 86.512 0.4
+  rotation 0 0 1 0.4590
+  color 0.6 0.6 0.6
+  name "car_17727"
+}
+Solid {
+  translation 108.444 83.691 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17728"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 104.062 81.524 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17729"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 99.940 79.487 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17730"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+ToyotaPriusSimple {
+  translation 98.703 78.875 0.4
+  rotation 0 0 1 0.4590
+  color 0.1 0.1 0.1
+  name "car_17730"
+}
+Solid {
+  translation 96.205 77.640 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17731"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 87.929 73.584 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17732"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+ToyotaPriusSimple {
+  translation 86.692 72.973 0.4
+  rotation 0 0 1 0.4590
+  color 0.2 0.5 0.2
+  name "car_17732"
+}
+Solid {
+  translation 84.008 71.684 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17733"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 79.515 69.390 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17734"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 25.233 42.705 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17735"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 31.412 45.756 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17736"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 37.659 48.905 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17737"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 42.978 51.566 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17738"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 48.417 54.136 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17739"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation 54.192 56.982 0.050
+  rotation 0 0 1 0.4590
+  name "bay_17740"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -128.421 -66.620 0.050
+  rotation 0 0 1 -1.2252
+  name "bay_22456"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+MercedesBenzSprinterSimple {
+  translation -129.000 -65.011 0.4
+  rotation 0 0 1 -1.2252
+  color 0.6 0.6 0.6
+  name "car_22456"
+}
+Solid {
+  translation -126.608 -71.894 0.050
+  rotation 0 0 1 -1.2252
+  name "bay_22457"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+CitroenCZeroSimple {
+  translation -127.055 -70.652 0.4
+  rotation 0 0 1 -1.2252
+  color 0.6 0.6 0.6
+  name "car_22457"
+}
+Solid {
+  translation -122.844 -82.845 0.050
+  rotation 0 0 1 -1.2252
+  name "bay_22458"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+TeslaModel3Simple {
+  translation -122.376 -84.143 0.4
+  rotation 0 0 1 1.9164
+  color 0.2 0.5 0.2
+  name "car_22458"
+}
+Solid {
+  translation -120.937 -88.392 0.050
+  rotation 0 0 1 -1.2252
+  name "bay_22459"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -119.031 -93.934 0.050
+  rotation 0 0 1 -1.2252
+  name "bay_22460"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -117.218 -99.208 0.050
+  rotation 0 0 1 -1.2252
+  name "bay_22461"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -109.534 -122.499 0.050
+  rotation 0 0 1 -1.2200
+  name "bay_22462"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Solid {
+  translation -107.667 -128.120 0.050
+  rotation 0 0 1 -1.2200
+  name "bay_22463"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.95 0.95 0.95 roughness 1 metalness 0 }
+    geometry Box { size 5.400 2.200 0.020 }
+  } ]
+}
+Mavic2Pro {
+  translation 0 0 0.15
+  controller "parkdrone"
+  controllerArgs [ "fmi_block_4st.route.json" ]
+}

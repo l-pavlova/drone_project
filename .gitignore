@@ -4,3 +4,9 @@ __pycache__/
 
 # Simulation output (camera frames + poses, regenerated each run)
 sim/output/
+
+# Webots per-world editor state (regenerated on every open)
+sim/worlds/.*.wbproj
+
+# Claude Code local (per-machine) settings
+.claude/settings.local.json
