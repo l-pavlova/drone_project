@@ -173,6 +173,14 @@ the documentation; the thesis chapters will be held to this glossary.*
 | sim-to-real transfer | пренос от симулация към реална среда | |
 | domain gap | разлика между симулирана и реална среда (domain gap) | описателно при първа употреба |
 | accuracy / precision / recall | точност / прецизност / пълнота | утвърдените преводи |
+| confusion matrix | матрица на обърканите класификации | или „confusion matrix“ в скоби |
+| false positive / false negative | лъжливо положителен / лъжливо отрицателен | |
+| multi-view voting | гласуване по няколко изгледа | |
+| strict majority | строго мнозинство | |
+| crop (image region) | изрязан участък (crop) | |
+| threshold | праг | |
+| calibration (of thresholds) | калибриране | |
+| held-out set | независимо тестово множество | ⚠ не „задържано множество“ |
 
 ---
 

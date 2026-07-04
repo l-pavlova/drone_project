@@ -33,9 +33,10 @@ The pipeline has three stages:
    flies a planned route over every street with bays and captures a
    downward-facing photo at each waypoint, recording its pose for later
    georeferencing.
-3. **Vision / scoring** (not yet started) — detect cars in the captured frames,
-   project detections to ground coordinates, match them to bays, and score
-   against the known ground truth.
+3. **Vision / scoring** (v1 implemented) — classify each bay occupied/free
+   from the captured frames by projecting the known bay polygons into the
+   images, and score the predictions against the known ground truth
+   (section 8).
 
 ## 2. Source data
 
@@ -331,7 +332,113 @@ Verified coverage with this logic: 110/111 bays inside at least one captured
 footprint on the 4-street world (the missed bay traces to one timeout arrival
 14.9 m off its waypoint — capture scatter is a known open item).
 
-## 8. Verification methodology
+## 8. Occupancy scoring (vision stage, v1)
+
+The first vision implementation (`vision/score_occupancy.py`) deliberately
+inverts the usual pipeline. Instead of running an open-ended car detector and
+matching detections to bays, it exploits what the system already knows: the
+exact bay polygons (GeoJSON) and the exact drone pose per frame — both in the
+shared ENU frame of section 3. This is the **georeferencing-first** approach:
+
+1. **Projection.** For a nadir camera at pose (x, y, alt, yaw), a ground point
+   projects to pixel coordinates by rotating its offset into the body frame
+   (image-up = drone heading) and scaling by `IMG_W / (2·alt·tan(FOV/2))`
+   pixels per metre (~16 px/m at 30 m). Every bay polygon is projected into
+   every frame.
+2. **View selection.** A view of a bay is usable when the *inner* 78% of its
+   projected polygon lies inside the frame (the outer band is excluded from
+   classification anyway — it contains the painted outline and neighbouring
+   cars). Bays are typically visible in 1–5 frames.
+3. **Per-view classification.** Over the inner region the classifier computes
+   the fraction of "paint-like" pixels (bright, non-chromatic — the bay
+   marking) and of "dark" pixels (glass, wheels, shadow — things paint never
+   shows). A view votes *occupied* if paint < 70% or dark > 4%. The thresholds
+   were calibrated once against the 4-street world's ground truth.
+4. **Multi-view voting.** A bay is declared occupied when a **strict majority
+   of its views** sees a car. Voting eliminates single-view artefacts — a
+   neighbouring car's overhang contaminates a bay's crop from one angle but
+   not from others.
+5. **Scoring.** Predictions are compared with `ground_truth.json`: confusion
+   matrix, accuracy, precision, recall; per-bay results and annotated debug
+   overlays are written next to the frames.
+
+Results on the 4-street world (111 bays, 49 occupied, 97 frames), on whose
+ground truth the two thresholds were calibrated:
+**107/111 bays classified — accuracy 97.2%, precision 100%, recall 93.5%**;
+4 bays had no usable view (capture-scatter edge cases). As a held-out check,
+the same classifier was then applied unchanged to a fresh flight of the
+default world (45 bays, different occupancy pattern): **40/45 classified —
+accuracy 95.0%, precision 100%, recall 88.2%** — consistent with the
+calibration world, so the heuristic is not overfitted to one scene. Every
+misclassification across both worlds was the same failure mode: a **white
+vehicle on white bay paint** (white cars and vans whose uniform bodies read
+as paint) — the natural limit of colour-statistics classification on that
+scene.
+
+### 8.1 Error-driven iteration (v1.5 and the realistic world)
+
+Going through the v1 errors one by one — the debug overlays make each
+misclassification inspectable — produced three targeted fixes and exposed two
+deeper problems, one in the simulated scene and one in the aircraft itself.
+
+The three classifier fixes (v1.5):
+
+- **Brightness/texture thresholds.** A truly free painted bay is almost
+  perfectly constant in the frames (brightness ≈ 239, σ ≈ 3 under the sim's
+  uniform light), while every missed white vehicle sat at brightness 176–213
+  with σ ≥ 21. Adding "occupied if brightness < 225 or σ > 15" recovered all
+  five white-on-white misses (recall 100%).
+- **Core sampling.** The new thresholds initially traded the misses for new
+  false positives: cars can physically overhang the *adjacent* bay (a bumper
+  across the line — visible in the overlays), which legitimately puts
+  non-paint pixels inside a free bay. But overhang can only intrude past the
+  bay's short ends, so classification moved to the lengthwise **core** of the
+  bay (central 55% of the long axis, full width): a parked car always covers
+  the core, an overhanging neighbour never reaches it.
+- **Partial views.** v1 required the whole sampled region inside the frame;
+  measuring the "uncovered" bays showed their best views missed full
+  visibility by only 12–45 px. Views now count whenever ≥ 70% of the core
+  area is visible, masked to the visible part.
+
+The two deeper findings:
+
+- **The camera was not actually pointing straight down.** The remaining false
+  positives all showed the *projected* bay polygons shifted by ~1 m against
+  the scene — across the whole frame, so a pose problem, not a classifier
+  problem. The cause: the gimbal pitch was commanded to a fixed +π/2
+  *relative to the drone's body*, and a quadcopter cruises pitched forward a
+  few degrees — at 30 m altitude a 2° tilt displaces the footprint by
+  `alt·tan(2°) ≈ 1 m`. The projection model assumes true nadir. The fix
+  subtracts the body attitude in the gimbal command (`π/2 − pitch`, `−roll`),
+  and the controller now records per-frame roll/pitch in `poses.json`. This
+  is a genuinely instructive bug for the real-drone transfer: it is exactly
+  the class of error a hardware gimbal hides (it stabilises mechanically) and
+  a fixed-mount camera does not.
+- **The scene itself was unrealistically easy — and unrealistically hard.**
+  The world painted each bay as a *filled white rectangle*, whereas real
+  Sofia bays are thin white **outlines on asphalt**. That single rendering
+  choice both made free/occupied trivially separable by colour (inflating
+  v1's apparent quality) and created the white-on-white failure mode (real
+  aerial imagery rarely hides a white car, because bays are not solid white).
+  The world generator now renders each bay as an asphalt pad with a ~12 cm
+  painted outline; ground truth and routes stayed byte-identical.
+
+On the realistic scene the classifier was recalibrated (same code path, new
+thresholds): a free core is now *uniform asphalt*, and a view votes occupied
+on any of five cues — chroma (coloured bodywork; on the calibration world
+this cue alone separates the classes: free ≤ 12.0, occupied ≥ 13.5), very
+dark pixels (glass/shadow, well below asphalt), bright achromatic pixels
+(white/silver roofs), brightness outside the asphalt envelope, or texture.
+After re-flying both worlds with the nadir-corrected gimbal:
+**dev world 109/111 classified, held-out world 43/45 — accuracy, precision
+and recall all 100% on both.** The remaining unclassified bays are the known
+capture-scatter cases. The colour-statistics heuristic thus saturates the
+current simulation; a learned classifier only becomes necessary together
+with harder rendering (textures, shadows, lighting variation) or real
+imagery — the projection, view-selection and scoring stages are
+classifier-agnostic either way.
+
+## 9. Verification methodology
 
 There is no unit-test suite; verification is empirical and scripted:
 
@@ -347,7 +454,7 @@ There is no unit-test suite; verification is empirical and scripted:
   verified in full, must survive algorithm changes byte-identical (it did for
   the postman migration and the origin pinning).
 
-## 9. Transfer to the real drone
+## 10. Transfer to the real drone
 
 The simulation was structured so that each component maps onto a concrete part
 of the planned hardware stack (Pixhawk autopilot + Raspberry Pi 4 companion
@@ -355,7 +462,7 @@ computer + Coral USB accelerator + IMX219 camera). The mapping below states,
 for every piece of simulation logic, what transfers directly, what is replaced
 by an off-the-shelf equivalent, and what changes.
 
-### 9.1 What transfers directly
+### 10.1 What transfers directly
 
 - **The GIS pipeline and route planner transfer unchanged.** Nothing in
   stages 1–2 of route building depends on Webots: the bay construction, street
@@ -376,9 +483,9 @@ by an off-the-shelf equivalent, and what changes.
   georeferenced nadir frames plus poses; whether those come from
   `sim/output/<world>/` or from the real camera is transparent to it.
   Simulated frames additionally serve as pre-training/validation data with
-  perfect labels (with the usual sim-to-real domain gap — see 9.3).
+  perfect labels (with the usual sim-to-real domain gap — see 10.3).
 
-### 9.2 What is replaced by the autopilot
+### 10.2 What is replaced by the autopilot
 
 The entire hand-written flight controller (section 7) is a **simulation stand-in
 for ArduPilot/Pixhawk** and is deliberately *not* transferred:
@@ -402,7 +509,7 @@ for ArduPilot/Pixhawk** and is deliberately *not* transferred:
   simulated gimbal-pitch command; the lesson that the mount's sign conventions
   must be verified against reality (section 7.1) carries over directly.
 
-### 9.3 What changes materially
+### 10.3 What changes materially
 
 - **Flight-plan constraints.** EU open-category rules cap altitude at 120 m
   (our 30 m is comfortably legal) but require visual line of sight, which a
@@ -435,11 +542,15 @@ georeference → score) with the flight-dynamics layer swapped for a stand-in;
 transfer consists of replacing that one layer with ArduPilot and re-validating
 the unchanged layers above it.
 
-## 10. Current limitations and future work
+## 11. Current limitations and future work
 
-- **Vision stage not started**: frames and poses are captured but no detector
-  consumes them yet; scoring against `ground_truth.json` is designed but not
-  implemented.
+- **Vision is a calibrated heuristic that saturates the current scene**: after
+  the realistic-world and nadir fixes (section 8.1) it scores 100% on both the
+  calibration and the held-out world, but its thresholds encode the sim's
+  uniform lighting and untextured surfaces. It will not survive shadows,
+  surface texture, weathered markings or real imagery — the step to a learned
+  classifier over the identical bay crops belongs together with making the
+  scene harder, so that the comparison is meaningful.
 - **Cruise speed**: 2.5 m/s makes the 19 km neighbourhood patrol ≈2 h of sim
   time; speed/altitude trade-offs (footprint size vs image resolution vs
   turn dynamics) are unexplored.
