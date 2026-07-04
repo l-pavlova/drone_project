@@ -124,12 +124,14 @@ def region_stats(img_arr, poly):
         return None, vis
     px = img_arr[m].astype(np.float32)              # N x 3 (RGB)
     mx, mn = px.max(axis=1), px.min(axis=1)
-    # "paint" pixels: bright and non-chromatic, like the white bay marking
+    # bright near-achromatic pixels: white/silver car bodywork (or the painted
+    # outline, which the INNER shrink keeps out of the sampled region)
     paint = (mn > 140) & ((mx - mn) < 45)
-    # darkness fraction: glass, wheels, shadows - things paint never has
-    dark = (px.mean(axis=1) < 90)
+    # much darker than the bay asphalt: glass, tyres, the shadow under a car
+    dark = (px.mean(axis=1) < 55)
     return {"paint_frac": float(paint.mean()),
             "dark_frac": float(dark.mean()),
+            "chroma": float((mx - mn).mean()),      # coloured bodywork pops
             "brightness": float(px.mean()),
             "std": float(px.std())}, vis
 
@@ -148,21 +150,28 @@ def bay_features(img_arr, ring_px):
     return feat
 
 
-# calibrated on fmi_block_4st against ground truth (v1.5; a learned classifier
-# can replace this without touching projection/view selection/scoring)
-T_PAINT = 0.70
-T_DARK = 0.04
-T_BRIGHT = 225                   # free paint is ~239 under the sim's uniform
-T_STD = 15                       # light and dead flat; any roof is darker/noisier
+# calibrated on fmi_block_4st against ground truth (v2 heuristic for the
+# realistic outline-marked world; a learned classifier can replace this
+# without touching projection/view selection/scoring). Free-core envelope on
+# the dev world: chroma <= 12.0, dark 0, paint <= 0.10, brightness 84.7-99.8,
+# std <= 45.5; every occupied view clears T_CHROMA alone (min 13.5).
+T_CHROMA = 12.7                  # asphalt is near-achromatic; any bodywork isn't
+T_DARK = 0.02                    # glass/tyres/under-car shadow, well below asphalt
+T_PAINT = 0.15                   # white/silver roof (the outline stays excluded)
+T_BRIGHT_LO, T_BRIGHT_HI = 82, 102   # asphalt tone envelope
+T_STD = 50                       # texture: panel gaps, windscreen edges
 
 
 def classify(feat):
-    """v1.5 heuristic on the bay CORE: a free core is uniform bright paint; a
-    car covers the paint, shows dark glass/wheels, or (white-on-white case) an
-    off-white textured roof. Ends of the bay are excluded so a neighbour's
-    overhang cannot fake occupancy."""
-    return (feat["core_paint_frac"] < T_PAINT or feat["core_dark_frac"] > T_DARK
-            or feat["core_brightness"] < T_BRIGHT or feat["core_std"] > T_STD)
+    """v2 heuristic on the bay CORE: a free core is uniform asphalt; a car
+    differs from it in chroma (coloured bodywork), brightness (light or very
+    dark bodywork), darkness (glass/shadow) or texture. Ends of the bay are
+    excluded so a neighbour's overhang cannot fake occupancy."""
+    return (feat["core_chroma"] > T_CHROMA
+            or feat["core_dark_frac"] > T_DARK
+            or feat["core_paint_frac"] > T_PAINT
+            or not T_BRIGHT_LO < feat["core_brightness"] < T_BRIGHT_HI
+            or feat["core_std"] > T_STD)
 
 
 def main():

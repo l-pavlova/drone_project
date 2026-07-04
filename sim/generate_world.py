@@ -546,11 +546,33 @@ else:
 
 rng_cars = random.Random(7)   # separate stream so ground_truth.json stays stable
 
+# Bays look like real Sofia street parking: an asphalt pad with a thin white
+# painted OUTLINE (~12 cm lines), not a filled white rectangle. The old filled
+# rectangle made free/occupied trivially separable by colour (and made white
+# cars invisible on it) — unrealistic in both directions.
+LINE_W = 0.12                 # painted line width (m)
+BAY_ASPHALT = "0.20 0.20 0.21"
+
+def bay_marking(b):
+    """Asphalt pad + 4 white outline lines for one bay, as Solid strings."""
+    ca, sa = math.cos(b["ang"]), math.sin(b["ang"])
+    out = [solid(b["x"], b["y"], 0.05, b["ang"], b["L"], b["W"], 0.02,
+                 BAY_ASPHALT, name=f"bay_{b['id']}")]
+    # (u, v) = centre of each line in the bay frame (u along length, v across),
+    # with the line's box size; lines sit just above the pad
+    lines = [(0, +(b["W"] - LINE_W) / 2, b["L"], LINE_W),
+             (0, -(b["W"] - LINE_W) / 2, b["L"], LINE_W),
+             (+(b["L"] - LINE_W) / 2, 0, LINE_W, b["W"]),
+             (-(b["L"] - LINE_W) / 2, 0, LINE_W, b["W"])]
+    for i, (u, v, sx, sy) in enumerate(lines):
+        out.append(solid(b["x"] + u * ca - v * sa, b["y"] + u * sa + v * ca,
+                         0.065, b["ang"], sx, sy, 0.012,
+                         "0.95 0.95 0.95", name=f"bay_{b['id']}_l{i}"))
+    return out
+
 placed = []   # body rectangles (with clearance) of cars already placed
 for b in bays:
-    # painted bay marking (white, thin); sits above the staggered road surfaces
-    parts.append(solid(b["x"], b["y"], 0.05, b["ang"], b["L"], b["W"], 0.02,
-                       "0.95 0.95 0.95", name=f"bay_{b['id']}"))
+    parts.extend(bay_marking(b))
     if b["occupied"]:
         longitudinal = b["L"] > 5.0
         if longitudinal and rng_cars.random() < 0.12:

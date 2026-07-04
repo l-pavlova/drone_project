@@ -180,13 +180,17 @@ while robot.step(dt) != -1:
     # Point the gimbal straight down (nadir). On the stock Mavic2Pro proto DOWN
     # is the POSITIVE pitch direction (range ~[-0.5, +1.7]), so +pi/2 is true
     # nadir. The old code used getMinPosition() (-0.5) which tilts the camera UP
-    # ~29 deg -> sky-only frames. We clamp +pi/2 into the device range to be safe.
+    # ~29 deg -> sky-only frames. We clamp into the device range to be safe.
+    # The gimbal angles are BODY-relative, so the body attitude must be
+    # subtracted out: a fixed +pi/2 left the camera off-nadir by the cruise
+    # pitch (~2 deg = ~1 m footprint shift at 30 m), which showed up as bay
+    # polygons misprojected onto the neighbouring bay in the occupancy scoring.
     if cam_pitch is not None:
-        cam_pitch.setPosition(clamp(math.pi / 2,
+        cam_pitch.setPosition(clamp(math.pi / 2 - pitch,
                                     cam_pitch.getMinPosition(),
                                     cam_pitch.getMaxPosition()))
     if cam_roll is not None:
-        cam_roll.setPosition(clamp(-0.115 * roll,
+        cam_roll.setPosition(clamp(-roll,
                                    cam_roll.getMinPosition(),
                                    cam_roll.getMaxPosition()))
 
@@ -225,7 +229,7 @@ while robot.step(dt) != -1:
                 wp_steps = 0
                 capture(os.path.join(OUT, f"frame_{idx:03d}.png"))
                 poses.append({"i": idx, "x": x, "y": y, "alt": alt, "yaw": yaw,
-                              "wp": [tx, ty]})
+                              "roll": roll, "pitch": pitch, "wp": [tx, ty]})
                 # write poses.json after every waypoint so progress survives even
                 # if the run is cut short before the full patrol completes.
                 json.dump(poses, open(os.path.join(OUT, "poses.json"), "w"), indent=1)
