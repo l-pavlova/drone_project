@@ -38,7 +38,7 @@ Road {
   wayPoints [ -212.08 428.66 0, -271.55 438.96 0, -397.36 468.90 0 ]
 }
 Road {
-  translation 0 0 0.013
+  translation 0 0 0.010
   name "road_1 Бряст"
   width 6.50
   numberOfLanes 2
@@ -49,7 +49,7 @@ Road {
   wayPoints [ -22.92 398.15 0, -18.27 400.28 0, 103.44 432.48 0, 178.44 456.35 0 ]
 }
 Road {
-  translation 0 0 0.016
+  translation 0 0 0.010
   name "road_2 Вишнева"
   width 5.00
   numberOfLanes 2
@@ -60,7 +60,7 @@ Road {
   wayPoints [ 213.20 386.95 0, 175.88 377.42 0, 121.63 363.58 0, 40.42 342.87 0, 35.34 341.57 0, 34.48 340.27 0, 32.08 336.63 0 ]
 }
 Road {
-  translation 0 0 0.019
+  translation 0 0 0.010
   name "road_3 Лале"
   width 6.50
   numberOfLanes 2
@@ -71,7 +71,7 @@ Road {
   wayPoints [ -487.27 457.37 0, -423.02 447.58 0 ]
 }
 Road {
-  translation 0 0 0.022
+  translation 0 0 0.010
   name "road_4 бул. Свети Наум"
   width 6.50
   numberOfLanes 2
@@ -82,7 +82,7 @@ Road {
   wayPoints [ 311.77 191.35 0, 300.33 209.72 0 ]
 }
 Road {
-  translation 0 0 0.025
+  translation 0 0 0.010
   name "road_5 пл. Велчова завера"
   width 9.75
   numberOfLanes 2
@@ -93,7 +93,7 @@ Road {
   wayPoints [ 306.68 174.94 0, 307.45 173.39 0, 312.35 160.21 0, 314.96 141.33 0, 317.42 116.67 0, 319.05 97.26 0, 320.96 73.82 0, 324.18 37.23 0, 325.70 17.45 0, 326.89 10.78 0 ]
 }
 Road {
-  translation 0 0 0.028
+  translation 0 0 0.013
   name "road_6 бул. Свети Наум"
   width 9.75
   numberOfLanes 2
@@ -104,7 +104,7 @@ Road {
   wayPoints [ 284.63 220.45 0, 299.42 189.49 0, 301.39 185.36 0, 305.97 176.38 0, 306.68 174.94 0 ]
 }
 Road {
-  translation 0 0 0.031
+  translation 0 0 0.010
   name "road_7 Презвитер Козма"
   width 6.50
   numberOfLanes 2
@@ -115,7 +115,7 @@ Road {
   wayPoints [ 87.86 223.03 0, 205.48 250.97 0, 214.01 253.00 0 ]
 }
 Road {
-  translation 0 0 0.034
+  translation 0 0 0.010
   name "road_8 Златовръх"
   width 6.50
   numberOfLanes 2
@@ -126,7 +126,7 @@ Road {
   wayPoints [ 351.77 -10.07 0, 346.64 -13.85 0, 341.35 -20.77 0, 335.56 -33.64 0 ]
 }
 Road {
-  translation 0 0 0.037
+  translation 0 0 0.010
   name "road_9 Васил Кирков"
   width 6.50
   numberOfLanes 2
@@ -137,7 +137,7 @@ Road {
   wayPoints [ 439.93 -273.36 0, 406.76 -225.95 0 ]
 }
 Road {
-  translation 0 0 0.040
+  translation 0 0 0.010
   name "road_10 Ведрина"
   width 6.50
   numberOfLanes 2
@@ -148,7 +148,7 @@ Road {
   wayPoints [ 296.10 -352.95 0, 257.66 -344.27 0 ]
 }
 Road {
-  translation 0 0 0.043
+  translation 0 0 0.013
   name "road_11 Симеоново"
   width 6.50
   numberOfLanes 2
@@ -159,7 +159,7 @@ Road {
   wayPoints [ 406.76 -225.95 0, 350.28 -290.65 0, 338.48 -304.22 0, 296.10 -352.95 0 ]
 }
 Road {
-  translation 0 0 0.046
+  translation 0 0 0.010
   name "road_12 Проф. Хараламби Тачев"
   width 6.50
   numberOfLanes 2
@@ -170,7 +170,7 @@ Road {
   wayPoints [ 375.99 -181.96 0, 350.28 -290.65 0 ]
 }
 Road {
-  translation 0 0 0.049
+  translation 0 0 0.010
   name "road_13 Златовръх"
   width 6.50
   numberOfLanes 2
@@ -181,7 +181,7 @@ Road {
   wayPoints [ 227.30 -446.16 0, 211.39 -484.22 0 ]
 }
 Road {
-  translation 0 0 0.052
+  translation 0 0 0.010
   name "road_14 бул. Джеймс Баучер"
   width 6.50
   numberOfLanes 2
@@ -192,7 +192,7 @@ Road {
   wayPoints [ -296.02 -104.24 0, -156.13 -50.23 0, -134.30 -41.52 0, -129.26 -39.40 0, -113.30 -32.23 0, -95.78 -23.57 0, 14.96 31.06 0, 19.36 33.23 0, 129.11 87.35 0, 135.26 90.38 0, 189.31 117.04 0, 204.13 124.36 0, 246.03 145.02 0 ]
 }
 Road {
-  translation 0 0 0.055
+  translation 0 0 0.010
   name "road_15 primary_link"
   width 6.50
   numberOfLanes 2
@@ -203,7 +203,7 @@ Road {
   wayPoints [ 498.36 -221.22 0, 487.59 -233.55 0, 458.23 -266.93 0, 440.66 -286.96 0, 381.22 -356.03 0 ]
 }
 Road {
-  translation 0 0 0.058
+  translation 0 0 0.010
   name "road_16 primary_link"
   width 6.50
   numberOfLanes 2
@@ -214,7 +214,7 @@ Road {
   wayPoints [ 513.91 -245.86 0, 515.00 -244.59 0 ]
 }
 Road {
-  translation 0 0 0.061
+  translation 0 0 0.010
   name "road_17 Галичица"
   width 6.50
   numberOfLanes 2
@@ -225,7 +225,7 @@ Road {
   wayPoints [ 87.02 -253.35 0, 96.99 -254.21 0, 102.67 -254.70 0, 131.58 -257.17 0, 153.49 -259.05 0, 208.80 -263.69 0, 213.06 -264.05 0, 267.10 -268.59 0, 276.72 -269.61 0 ]
 }
 Road {
-  translation 0 0 0.064
+  translation 0 0 0.010
   name "road_18 Йоан Екзарх"
   width 5.00
   numberOfLanes 2
@@ -236,7 +236,7 @@ Road {
   wayPoints [ -443.12 283.82 0, -469.94 284.59 0, -513.86 290.50 0, -515.00 290.65 0 ]
 }
 Road {
-  translation 0 0 0.067
+  translation 0 0 0.010
   name "road_19 Кричим"
   width 6.50
   numberOfLanes 2
@@ -247,7 +247,7 @@ Road {
   wayPoints [ 20.52 -515.00 0, -52.61 -508.35 0, -58.62 -505.93 0, -63.41 -503.98 0, -104.81 -501.10 0, -165.34 -496.53 0, -178.62 -495.25 0, -183.16 -494.82 0 ]
 }
 Road {
-  translation 0 0 0.070
+  translation 0 0 0.010
   name "road_20 Лозенска планина"
   width 6.50
   numberOfLanes 2
@@ -258,7 +258,7 @@ Road {
   wayPoints [ -515.00 208.85 0, -436.06 207.67 0 ]
 }
 Road {
-  translation 0 0 0.073
+  translation 0 0 0.010
   name "road_21 Минзухар"
   width 6.50
   numberOfLanes 2
@@ -269,7 +269,7 @@ Road {
   wayPoints [ -156.35 -160.39 0, -282.12 -193.73 0 ]
 }
 Road {
-  translation 0 0 0.076
+  translation 0 0 0.013
   name "road_22 Плачковица"
   width 6.50
   numberOfLanes 2
@@ -280,7 +280,7 @@ Road {
   wayPoints [ -297.36 -485.26 0, -292.13 -424.95 0, -290.62 -400.07 0, -282.36 -304.35 0, -281.72 -233.46 0, -282.12 -193.73 0 ]
 }
 Road {
-  translation 0 0 0.079
+  translation 0 0 0.010
   name "road_23 Резньовете"
   width 6.50
   numberOfLanes 2
@@ -291,7 +291,7 @@ Road {
   wayPoints [ -486.64 -76.10 0, -515.00 -76.68 0 ]
 }
 Road {
-  translation 0 0 0.082
+  translation 0 0 0.013
   name "road_24 Св. Теодосий Търновски"
   width 5.00
   numberOfLanes 2
@@ -302,7 +302,7 @@ Road {
   wayPoints [ -399.05 515.00 0, -397.36 468.90 0, -392.71 395.63 0, -392.50 387.34 0 ]
 }
 Road {
-  translation 0 0 0.085
+  translation 0 0 0.013
   name "road_25 Якубица"
   width 6.50
   numberOfLanes 2
@@ -313,7 +313,7 @@ Road {
   wayPoints [ -85.96 -177.30 0, -81.47 -190.89 0, -79.26 -197.57 0, -79.41 -207.55 0, -79.55 -216.05 0, -79.92 -239.06 0, -84.59 -318.20 0, -89.30 -360.39 0, -92.83 -391.94 0, -95.72 -417.76 0, -101.24 -468.38 0, -101.70 -472.56 0, -104.81 -501.10 0, -106.27 -515.00 0 ]
 }
 Road {
-  translation 0 0 0.088
+  translation 0 0 0.010
   name "road_26 Димитър Димов"
   width 5.00
   numberOfLanes 2
@@ -324,7 +324,7 @@ Road {
   wayPoints [ 162.89 189.63 0, 91.62 162.42 0, 66.15 152.82 0, 59.43 150.29 0, 35.95 141.45 0, 11.67 132.31 0 ]
 }
 Road {
-  translation 0 0 0.091
+  translation 0 0 0.010
   name "road_27 Йоан Екзарх"
   width 5.00
   numberOfLanes 2
@@ -335,7 +335,7 @@ Road {
   wayPoints [ -241.14 294.25 0, -387.23 300.85 0 ]
 }
 Road {
-  translation 0 0 0.094
+  translation 0 0 0.013
   name "road_28 Йоан Екзарх"
   width 5.00
   numberOfLanes 2
@@ -346,7 +346,7 @@ Road {
   wayPoints [ 246.03 145.02 0, 245.22 146.54 0, 241.70 152.34 0, 239.89 155.35 0, 162.89 189.63 0, 87.86 223.03 0, 65.30 233.07 0, -32.88 276.79 0 ]
 }
 Road {
-  translation 0 0 0.097
+  translation 0 0 0.010
   name "road_29 Йосиф Обербауер"
   width 6.50
   numberOfLanes 2
@@ -357,7 +357,7 @@ Road {
   wayPoints [ 160.05 -346.23 0, 149.41 -439.16 0 ]
 }
 Road {
-  translation 0 0 0.100
+  translation 0 0 0.013
   name "road_30 Кораб планина"
   width 6.50
   numberOfLanes 2
@@ -368,7 +368,7 @@ Road {
   wayPoints [ 253.85 -356.97 0, 217.16 -352.76 0, 198.73 -350.66 0, 179.29 -348.43 0, 160.05 -346.23 0, 147.82 -344.82 0, 78.51 -336.89 0 ]
 }
 Road {
-  translation 0 0 0.103
+  translation 0 0 0.010
   name "road_31 Презвитер Козма"
   width 5.00
   numberOfLanes 2
@@ -379,7 +379,7 @@ Road {
   wayPoints [ -111.05 173.74 0, -105.12 177.31 0, -100.14 178.82 0, -55.28 192.38 0, -41.58 196.52 0 ]
 }
 Road {
-  translation 0 0 0.106
+  translation 0 0 0.013
   name "road_32 Света гора"
   width 5.00
   numberOfLanes 2
@@ -390,7 +390,7 @@ Road {
   wayPoints [ -37.66 232.68 0, -41.58 196.52 0, -20.83 120.11 0 ]
 }
 Road {
-  translation 0 0 0.109
+  translation 0 0 0.010
   name "road_33 Черноризец Храбър"
   width 5.00
   numberOfLanes 2
@@ -401,7 +401,7 @@ Road {
   wayPoints [ -129.89 214.47 0, -132.73 214.59 0, -159.21 215.64 0, -175.66 216.28 0, -193.09 216.97 0, -210.64 217.66 0, -227.98 218.35 0, -252.78 219.33 0 ]
 }
 Road {
-  translation 0 0 0.112
+  translation 0 0 0.016
   name "road_34 бул. Свети Наум"
   width 9.75
   numberOfLanes 2
@@ -412,7 +412,7 @@ Road {
   wayPoints [ 284.63 220.45 0, 214.01 253.00 0, 162.41 276.88 0, 34.01 335.70 0 ]
 }
 Road {
-  translation 0 0 0.115
+  translation 0 0 0.013
   name "road_35 бул. Христо Смирненски"
   width 5.00
   numberOfLanes 2
@@ -423,7 +423,7 @@ Road {
   wayPoints [ 167.49 515.00 0, 178.44 456.35 0, 191.12 430.86 0, 192.46 428.36 0, 207.20 398.73 0, 213.20 386.95 0, 225.12 363.87 0, 233.55 347.56 0, 246.56 322.24 0, 261.84 292.46 0, 272.15 272.32 0, 286.68 244.19 0 ]
 }
 Road {
-  translation 0 0 0.118
+  translation 0 0 0.010
   name "road_36 Света гора"
   width 6.50
   numberOfLanes 2
@@ -434,7 +434,7 @@ Road {
   wayPoints [ -51.37 471.92 0, -52.69 476.00 0, -65.59 515.00 0 ]
 }
 Road {
-  translation 0 0 0.121
+  translation 0 0 0.010
   name "road_37 Стрелча"
   width 6.50
   numberOfLanes 2
@@ -445,7 +445,7 @@ Road {
   wayPoints [ -117.85 515.00 0, -98.65 453.60 0 ]
 }
 Road {
-  translation 0 0 0.124
+  translation 0 0 0.010
   name "road_38 бул. Никола Й. Вапцаров"
   width 9.75
   numberOfLanes 2
@@ -456,7 +456,7 @@ Road {
   wayPoints [ 269.00 -515.00 0, 275.53 -507.89 0 ]
 }
 Road {
-  translation 0 0 0.127
+  translation 0 0 0.013
   name "road_39 Кръстьо Сарафов"
   width 6.50
   numberOfLanes 2
@@ -467,7 +467,7 @@ Road {
   wayPoints [ 69.54 515.00 0, -12.19 486.12 0, -46.70 473.61 0, -51.37 471.92 0, -54.52 470.69 0, -60.42 468.41 0, -98.65 453.60 0, -183.19 424.91 0 ]
 }
 Road {
-  translation 0 0 0.130
+  translation 0 0 0.013
   name "road_40 бул. Свети Наум"
   width 6.50
   numberOfLanes 2
@@ -478,7 +478,7 @@ Road {
   wayPoints [ 320.25 178.84 0, 319.84 179.39 0, 317.87 182.04 0, 311.77 191.35 0 ]
 }
 Road {
-  translation 0 0 0.133
+  translation 0 0 0.013
   name "road_41 Милин камък"
   width 6.50
   numberOfLanes 2
@@ -489,7 +489,7 @@ Road {
   wayPoints [ -252.78 219.33 0, -253.44 202.08 0, -250.15 184.51 0, -237.64 152.24 0, -216.97 109.82 0, -183.47 52.99 0, -140.07 -30.35 0, -138.56 -33.20 0 ]
 }
 Road {
-  translation 0 0 0.136
+  translation 0 0 0.010
   name "road_42 бул. Свети Наум"
   width 9.75
   numberOfLanes 2
@@ -500,7 +500,7 @@ Road {
   wayPoints [ -222.41 379.20 0, -227.48 379.43 0, -232.15 379.67 0, -248.34 380.44 0 ]
 }
 Road {
-  translation 0 0 0.139
+  translation 0 0 0.019
   name "road_43 бул. Свети Наум"
   width 6.50
   numberOfLanes 2
@@ -511,7 +511,7 @@ Road {
   wayPoints [ 300.33 209.72 0, 290.76 217.54 0, 284.63 220.45 0 ]
 }
 Road {
-  translation 0 0 0.142
+  translation 0 0 0.013
   name "road_44 бул. Свети Наум"
   width 9.75
   numberOfLanes 2
@@ -522,7 +522,7 @@ Road {
   wayPoints [ -183.96 375.93 0, -193.68 376.75 0, -211.23 378.24 0, -216.05 378.63 0, -222.41 379.20 0 ]
 }
 Road {
-  translation 0 0 0.145
+  translation 0 0 0.013
   name "road_45 бул. Свети Наум"
   width 6.50
   numberOfLanes 2
@@ -533,7 +533,7 @@ Road {
   wayPoints [ -248.34 380.44 0, -269.69 381.48 0, -281.11 382.04 0, -286.60 382.31 0, -304.71 383.19 0, -320.08 383.93 0, -333.65 384.60 0 ]
 }
 Road {
-  translation 0 0 0.148
+  translation 0 0 0.010
   name "road_46 Митрополит Кирил Видински"
   width 6.50
   numberOfLanes 2
@@ -544,7 +544,7 @@ Road {
   wayPoints [ 489.58 515.00 0, 494.49 435.03 0, 497.15 391.52 0, 499.94 345.01 0, 501.52 318.55 0, 506.47 247.80 0 ]
 }
 Road {
-  translation 0 0 0.151
+  translation 0 0 0.013
   name "road_47 Стоян Михайловски"
   width 16.25
   numberOfLanes 2
@@ -555,7 +555,7 @@ Road {
   wayPoints [ 492.41 -211.81 0, 490.68 -209.33 0, 468.55 -177.71 0 ]
 }
 Road {
-  translation 0 0 0.154
+  translation 0 0 0.010
   name "road_48 бул. Пейо К. Яворов"
   width 6.50
   numberOfLanes 2
@@ -566,7 +566,7 @@ Road {
   wayPoints [ 515.00 -217.28 0, 472.35 -266.03 0 ]
 }
 Road {
-  translation 0 0 0.157
+  translation 0 0 0.010
   name "road_49 бул. Пейо К. Яворов"
   width 6.50
   numberOfLanes 2
@@ -577,7 +577,7 @@ Road {
   wayPoints [ 478.98 -272.24 0, 515.00 -230.85 0 ]
 }
 Road {
-  translation 0 0 0.160
+  translation 0 0 0.010
   name "road_50 бул. Пейо К. Яворов"
   width 6.50
   numberOfLanes 2
@@ -588,7 +588,7 @@ Road {
   wayPoints [ 364.20 -410.92 0, 423.58 -333.69 0 ]
 }
 Road {
-  translation 0 0 0.163
+  translation 0 0 0.013
   name "road_51 бул. Пейо К. Яворов"
   width 6.50
   numberOfLanes 2
@@ -599,7 +599,7 @@ Road {
   wayPoints [ 472.35 -266.03 0, 417.58 -326.52 0 ]
 }
 Road {
-  translation 0 0 0.166
+  translation 0 0 0.013
   name "road_52 primary_link"
   width 6.50
   numberOfLanes 2
@@ -610,7 +610,7 @@ Road {
   wayPoints [ 364.20 -410.92 0, 411.68 -360.90 0, 464.28 -301.65 0, 475.43 -289.22 0 ]
 }
 Road {
-  translation 0 0 0.169
+  translation 0 0 0.013
   name "road_53 бул. Пейо К. Яворов"
   width 9.75
   numberOfLanes 2
@@ -621,7 +621,7 @@ Road {
   wayPoints [ 265.44 -504.42 0, 255.32 -515.00 0 ]
 }
 Road {
-  translation 0 0 0.172
+  translation 0 0 0.010
   name "road_54 бул. Пейо К. Яворов"
   width 6.50
   numberOfLanes 2
@@ -632,7 +632,7 @@ Road {
   wayPoints [ 417.58 -326.52 0, 397.50 -349.40 0, 288.08 -478.98 0, 265.44 -504.42 0 ]
 }
 Road {
-  translation 0 0 0.175
+  translation 0 0 0.013
   name "road_55 бул. Пейо К. Яворов"
   width 6.50
   numberOfLanes 2
@@ -643,7 +643,7 @@ Road {
   wayPoints [ 423.58 -333.69 0, 478.98 -272.24 0 ]
 }
 Road {
-  translation 0 0 0.178
+  translation 0 0 0.010
   name "road_56 пл. Велчова завера"
   width 6.50
   numberOfLanes 2
@@ -654,7 +654,7 @@ Road {
   wayPoints [ 348.32 13.90 0, 346.86 39.00 0, 344.67 76.71 0, 343.00 99.12 0, 340.30 135.44 0, 336.07 159.05 0, 328.23 169.20 0 ]
 }
 Road {
-  translation 0 0 0.181
+  translation 0 0 0.010
   name "road_57 Бабуна планина"
   width 5.00
   numberOfLanes 2
@@ -665,7 +665,7 @@ Road {
   wayPoints [ 65.46 -432.91 0, 69.02 -406.89 0, 72.02 -384.73 0, 73.65 -372.72 0, 77.51 -344.32 0, 78.51 -336.89 0 ]
 }
 Road {
-  translation 0 0 0.184
+  translation 0 0 0.010
   name "road_58 Св. Теодосий Търновски"
   width 5.00
   numberOfLanes 2
@@ -676,7 +676,7 @@ Road {
   wayPoints [ -385.26 282.15 0, -377.34 206.79 0, -378.56 132.62 0 ]
 }
 Road {
-  translation 0 0 0.187
+  translation 0 0 0.010
   name "road_59 Св. Теодосий Търновски"
   width 6.50
   numberOfLanes 2
@@ -687,7 +687,7 @@ Road {
   wayPoints [ -358.08 -128.20 0, -357.48 -129.67 0, -355.23 -134.89 0, -339.28 -176.56 0, -328.78 -200.00 0, -314.18 -232.56 0, -298.94 -266.97 0, -282.36 -304.35 0 ]
 }
 Road {
-  translation 0 0 0.190
+  translation 0 0 0.016
   name "road_60 Бабуна планина"
   width 6.50
   numberOfLanes 2
@@ -698,7 +698,7 @@ Road {
   wayPoints [ 78.51 -336.89 0, 87.02 -253.35 0 ]
 }
 Road {
-  translation 0 0 0.193
+  translation 0 0 0.010
   name "road_61 Йосиф Петров"
   width 6.50
   numberOfLanes 2
@@ -709,7 +709,7 @@ Road {
   wayPoints [ 320.25 178.84 0, 342.26 185.65 0 ]
 }
 Road {
-  translation 0 0 0.196
+  translation 0 0 0.016
   name "road_62 бул. Симеоновско шосе"
   width 16.25
   numberOfLanes 2
@@ -720,7 +720,7 @@ Road {
   wayPoints [ 498.36 -221.22 0, 513.91 -245.86 0 ]
 }
 Road {
-  translation 0 0 0.199
+  translation 0 0 0.013
   name "road_63 Гребен планина"
   width 6.50
   numberOfLanes 2
@@ -731,7 +731,7 @@ Road {
   wayPoints [ -487.27 457.37 0, -488.84 445.05 0 ]
 }
 Road {
-  translation 0 0 0.202
+  translation 0 0 0.010
   name "road_64 Гребен планина"
   width 5.00
   numberOfLanes 2
@@ -742,7 +742,7 @@ Road {
   wayPoints [ -493.47 498.79 0, -485.32 477.56 0, -485.98 470.72 0 ]
 }
 Road {
-  translation 0 0 0.205
+  translation 0 0 0.019
   name "road_65 Галичица"
   width 6.50
   numberOfLanes 2
@@ -753,7 +753,7 @@ Road {
   wayPoints [ -79.92 -239.06 0, -36.92 -242.74 0, 35.77 -248.97 0, 43.28 -249.61 0, 52.14 -250.37 0, 54.21 -250.55 0, 80.73 -252.82 0, 87.02 -253.35 0 ]
 }
 Road {
-  translation 0 0 0.208
+  translation 0 0 0.010
   name "road_66 Галичица"
   width 6.50
   numberOfLanes 2
@@ -764,7 +764,7 @@ Road {
   wayPoints [ -281.72 -233.46 0, -129.13 -237.69 0, -86.11 -238.89 0, -79.92 -239.06 0 ]
 }
 Road {
-  translation 0 0 0.211
+  translation 0 0 0.013
   name "road_67 Галичица"
   width 6.50
   numberOfLanes 2
@@ -775,7 +775,7 @@ Road {
   wayPoints [ -445.31 -228.92 0, -314.18 -232.56 0 ]
 }
 Road {
-  translation 0 0 0.214
+  translation 0 0 0.013
   name "road_68 Д-р Марин Русев"
   width 6.50
   numberOfLanes 2
@@ -786,7 +786,7 @@ Road {
   wayPoints [ 161.80 -169.75 0, 159.10 -203.40 0, 153.49 -259.05 0 ]
 }
 Road {
-  translation 0 0 0.217
+  translation 0 0 0.016
   name "road_69 Ведрина"
   width 6.50
   numberOfLanes 2
@@ -797,7 +797,7 @@ Road {
   wayPoints [ 296.10 -352.95 0, 340.91 -390.23 0 ]
 }
 Road {
-  translation 0 0 0.220
+  translation 0 0 0.016
   name "road_70 бул. Пейо К. Яворов"
   width 9.75
   numberOfLanes 2
@@ -808,7 +808,7 @@ Road {
   wayPoints [ 275.53 -507.89 0, 292.78 -488.23 0, 364.20 -410.92 0 ]
 }
 Road {
-  translation 0 0 0.223
+  translation 0 0 0.013
   name "road_71 Васил Кирков"
   width 6.50
   numberOfLanes 2
@@ -819,7 +819,7 @@ Road {
   wayPoints [ 321.96 -104.73 0, 375.99 -181.96 0 ]
 }
 Road {
-  translation 0 0 0.226
+  translation 0 0 0.016
   name "road_72 Васил Кирков"
   width 6.50
   numberOfLanes 2
@@ -830,7 +830,7 @@ Road {
   wayPoints [ 375.99 -181.96 0, 385.04 -194.90 0 ]
 }
 Road {
-  translation 0 0 0.229
+  translation 0 0 0.016
   name "road_73 Вишнева"
   width 6.50
   numberOfLanes 2
@@ -841,7 +841,7 @@ Road {
   wayPoints [ 213.20 386.95 0, 258.72 399.13 0 ]
 }
 Road {
-  translation 0 0 0.232
+  translation 0 0 0.010
   name "road_74 Бигла"
   width 5.00
   numberOfLanes 2
@@ -852,7 +852,7 @@ Road {
   wayPoints [ -290.62 -400.07 0, -124.48 -415.16 0, -95.72 -417.76 0, -57.46 -421.18 0, -49.52 -421.80 0 ]
 }
 Road {
-  translation 0 0 0.235
+  translation 0 0 0.010
   name "road_75 бул. Христо Смирненски"
   width 5.00
   numberOfLanes 2
@@ -863,7 +863,7 @@ Road {
   wayPoints [ 286.68 244.19 0, 288.22 241.17 0 ]
 }
 Road {
-  translation 0 0 0.238
+  translation 0 0 0.010
   name "road_76 Плачковица"
   width 6.50
   numberOfLanes 2
@@ -874,7 +874,7 @@ Road {
   wayPoints [ -299.15 -515.00 0, -297.36 -485.26 0 ]
 }
 Road {
-  translation 0 0 0.241
+  translation 0 0 0.019
   name "road_77 primary_link"
   width 6.50
   numberOfLanes 2
@@ -885,7 +885,7 @@ Road {
   wayPoints [ 475.43 -289.22 0, 497.51 -263.94 0, 500.97 -260.13 0, 513.91 -245.86 0 ]
 }
 Road {
-  translation 0 0 0.244
+  translation 0 0 0.013
   name "road_78 Св. Теодосий Търновски"
   width 6.50
   numberOfLanes 2
@@ -896,7 +896,7 @@ Road {
   wayPoints [ -368.53 -104.97 0, -363.75 -115.46 0, -362.59 -117.99 0, -358.67 -126.72 0, -358.08 -128.20 0 ]
 }
 Road {
-  translation 0 0 0.247
+  translation 0 0 0.010
   name "road_79 бул. Свети Наум"
   width 6.50
   numberOfLanes 2
@@ -907,7 +907,7 @@ Road {
   wayPoints [ -392.50 387.34 0, -471.16 390.87 0, -515.00 392.84 0 ]
 }
 Road {
-  translation 0 0 0.250
+  translation 0 0 0.010
   name "road_80 Стоян Михайловски"
   width 13.00
   numberOfLanes 2
@@ -918,7 +918,7 @@ Road {
   wayPoints [ 468.55 -177.71 0, 388.73 -63.63 0 ]
 }
 Road {
-  translation 0 0 0.253
+  translation 0 0 0.016
   name "road_81 Света гора"
   width 5.00
   numberOfLanes 2
@@ -929,7 +929,7 @@ Road {
   wayPoints [ -20.83 120.11 0, -10.35 86.67 0, 11.47 38.12 0, 14.28 32.49 0, 14.96 31.06 0 ]
 }
 Road {
-  translation 0 0 0.256
+  translation 0 0 0.016
   name "road_82 primary_link"
   width 5.00
   numberOfLanes 2
@@ -940,7 +940,7 @@ Road {
   wayPoints [ 323.36 -425.06 0, 284.59 -473.11 0, 265.44 -504.42 0 ]
 }
 Road {
-  translation 0 0 0.259
+  translation 0 0 0.013
   name "road_83 primary_link"
   width 6.50
   numberOfLanes 2
@@ -951,7 +951,7 @@ Road {
   wayPoints [ 381.22 -356.03 0, 349.24 -393.61 0, 323.36 -425.06 0 ]
 }
 Road {
-  translation 0 0 0.262
+  translation 0 0 0.019
   name "road_84 primary_link"
   width 9.75
   numberOfLanes 2
@@ -962,7 +962,7 @@ Road {
   wayPoints [ 515.00 -202.40 0, 514.95 -202.46 0, 498.36 -221.22 0 ]
 }
 Road {
-  translation 0 0 0.265
+  translation 0 0 0.022
   name "road_85 Стоян Михайловски"
   width 16.25
   numberOfLanes 2
@@ -973,7 +973,7 @@ Road {
   wayPoints [ 498.36 -221.22 0, 492.41 -211.81 0 ]
 }
 Road {
-  translation 0 0 0.268
+  translation 0 0 0.013
   name "road_86 бул. Симеоновско шосе"
   width 16.25
   numberOfLanes 2
@@ -984,7 +984,7 @@ Road {
   wayPoints [ 515.00 -247.57 0, 513.91 -245.86 0 ]
 }
 Road {
-  translation 0 0 0.271
+  translation 0 0 0.016
   name "road_87 Кораб планина"
   width 6.50
   numberOfLanes 2
@@ -995,7 +995,7 @@ Road {
   wayPoints [ -135.00 -314.67 0, -226.77 -308.25 0, -282.36 -304.35 0, -310.03 -302.71 0, -488.45 -292.14 0 ]
 }
 Road {
-  translation 0 0 0.274
+  translation 0 0 0.019
   name "road_88 Кораб планина"
   width 6.50
   numberOfLanes 2
@@ -1006,7 +1006,7 @@ Road {
   wayPoints [ 78.51 -336.89 0, 73.70 -336.33 0, 61.61 -334.95 0, 42.25 -332.74 0, 17.51 -329.90 0, 4.50 -328.41 0, -1.87 -327.67 0, -10.45 -326.69 0 ]
 }
 Road {
-  translation 0 0 0.277
+  translation 0 0 0.016
   name "road_89 Плачковица"
   width 6.50
   numberOfLanes 2
@@ -1017,7 +1017,7 @@ Road {
   wayPoints [ -282.12 -193.73 0, -283.20 -186.75 0, -288.16 -155.05 0, -294.89 -112.04 0, -295.63 -105.80 0, -296.02 -104.24 0 ]
 }
 Road {
-  translation 0 0 0.280
+  translation 0 0 0.013
   name "road_90 Стоян Михайловски"
   width 13.00
   numberOfLanes 2
@@ -1028,7 +1028,7 @@ Road {
   wayPoints [ 388.73 -63.63 0, 361.94 -25.17 0 ]
 }
 Road {
-  translation 0 0 0.283
+  translation 0 0 0.013
   name "road_91 пл. Велчова завера"
   width 9.75
   numberOfLanes 2
@@ -1039,7 +1039,7 @@ Road {
   wayPoints [ 326.89 10.78 0, 331.36 2.82 0, 340.20 -4.80 0, 351.77 -10.07 0 ]
 }
 Road {
-  translation 0 0 0.286
+  translation 0 0 0.016
   name "road_92 Стоян Михайловски"
   width 13.00
   numberOfLanes 2
@@ -1050,7 +1050,7 @@ Road {
   wayPoints [ 361.94 -25.17 0, 351.77 -10.07 0 ]
 }
 Road {
-  translation 0 0 0.289
+  translation 0 0 0.016
   name "road_93 Златовръх"
   width 6.50
   numberOfLanes 2
@@ -1061,7 +1061,7 @@ Road {
   wayPoints [ 321.96 -104.73 0, 306.81 -159.44 0, 302.17 -176.42 0, 287.57 -229.89 0, 284.11 -242.57 0, 276.72 -269.61 0, 266.62 -309.20 0, 257.66 -344.27 0, 253.85 -356.97 0, 227.30 -446.16 0 ]
 }
 Road {
-  translation 0 0 0.292
+  translation 0 0 0.013
   name "road_94 Йоан Екзарх"
   width 5.00
   numberOfLanes 2
@@ -1072,7 +1072,7 @@ Road {
   wayPoints [ -385.26 282.15 0, -407.29 282.79 0 ]
 }
 Road {
-  translation 0 0 0.295
+  translation 0 0 0.016
   name "road_95 Йоан Екзарх"
   width 5.00
   numberOfLanes 2
@@ -1083,7 +1083,7 @@ Road {
   wayPoints [ -407.29 282.79 0, -443.12 283.82 0 ]
 }
 Road {
-  translation 0 0 0.298
+  translation 0 0 0.013
   name "road_96 Плана планина"
   width 5.00
   numberOfLanes 2
@@ -1094,7 +1094,7 @@ Road {
   wayPoints [ -378.56 132.62 0, -396.61 132.74 0 ]
 }
 Road {
-  translation 0 0 0.301
+  translation 0 0 0.010
   name "road_97 Плана планина"
   width 5.00
   numberOfLanes 2
@@ -1105,7 +1105,7 @@ Road {
   wayPoints [ -396.61 132.74 0, -424.47 132.92 0 ]
 }
 Road {
-  translation 0 0 0.304
+  translation 0 0 0.010
   name "road_98 Презвитер Козма"
   width 5.00
   numberOfLanes 2
@@ -1116,7 +1116,7 @@ Road {
   wayPoints [ -489.68 59.99 0, -448.59 61.67 0 ]
 }
 Road {
-  translation 0 0 0.307
+  translation 0 0 0.013
   name "road_99 Презвитер Козма"
   width 5.00
   numberOfLanes 2
@@ -1127,7 +1127,7 @@ Road {
   wayPoints [ -448.59 61.67 0, -379.67 64.49 0 ]
 }
 Road {
-  translation 0 0 0.310
+  translation 0 0 0.010
   name "road_100 Кораб планина"
   width 6.50
   numberOfLanes 2
@@ -1138,7 +1138,7 @@ Road {
   wayPoints [ -488.45 -292.14 0, -505.36 -290.90 0, -515.00 -290.20 0 ]
 }
 Road {
-  translation 0 0 0.313
+  translation 0 0 0.010
   name "road_101 Кораб планина"
   width 6.50
   numberOfLanes 2
@@ -1149,7 +1149,7 @@ Road {
   wayPoints [ -10.45 -326.69 0, -84.59 -318.20 0, -94.17 -317.53 0 ]
 }
 Road {
-  translation 0 0 0.316
+  translation 0 0 0.013
   name "road_102 Кораб планина"
   width 6.50
   numberOfLanes 2
@@ -1160,7 +1160,7 @@ Road {
   wayPoints [ -94.17 -317.53 0, -135.00 -314.67 0 ]
 }
 Road {
-  translation 0 0 0.319
+  translation 0 0 0.010
   name "road_103 Д-р Марин Русев"
   width 6.50
   numberOfLanes 2
@@ -1171,7 +1171,7 @@ Road {
   wayPoints [ 242.54 -163.64 0, 230.64 -163.38 0 ]
 }
 Road {
-  translation 0 0 0.322
+  translation 0 0 0.013
   name "road_104 Д-р Марин Русев"
   width 6.50
   numberOfLanes 2
@@ -1182,7 +1182,7 @@ Road {
   wayPoints [ 230.64 -163.38 0, 211.35 -162.96 0 ]
 }
 Road {
-  translation 0 0 0.325
+  translation 0 0 0.010
   name "road_105 Д-р Марин Русев"
   width 6.50
   numberOfLanes 2
@@ -1193,7 +1193,7 @@ Road {
   wayPoints [ 211.35 -162.96 0, 166.00 -159.93 0, 162.15 -159.50 0, 161.80 -169.75 0 ]
 }
 Road {
-  translation 0 0 0.328
+  translation 0 0 0.019
   name "road_106 Васил Кирков"
   width 6.50
   numberOfLanes 2
@@ -1204,7 +1204,7 @@ Road {
   wayPoints [ 385.04 -194.90 0, 406.76 -225.95 0 ]
 }
 Road {
-  translation 0 0 0.331
+  translation 0 0 0.010
   name "road_107 Свети Седмочисленици"
   width 6.50
   numberOfLanes 2
@@ -1215,7 +1215,7 @@ Road {
   wayPoints [ -515.00 -19.10 0, -513.56 -19.00 0, -503.91 -18.35 0, -485.25 -17.33 0 ]
 }
 Road {
-  translation 0 0 0.334
+  translation 0 0 0.010
   name "road_108 Галичица"
   width 6.50
   numberOfLanes 2
@@ -1226,7 +1226,7 @@ Road {
   wayPoints [ -486.13 -227.78 0, -445.31 -228.92 0 ]
 }
 Road {
-  translation 0 0 0.337
+  translation 0 0 0.016
   name "road_109 Галичица"
   width 6.50
   numberOfLanes 2
@@ -1237,7 +1237,7 @@ Road {
   wayPoints [ -314.18 -232.56 0, -281.72 -233.46 0 ]
 }
 Road {
-  translation 0 0 0.340
+  translation 0 0 0.010
   name "road_110 Архитект Йордан Миланов"
   width 6.50
   numberOfLanes 2
@@ -1248,7 +1248,7 @@ Road {
   wayPoints [ 344.96 257.13 0, 336.36 281.27 0, 330.67 297.25 0, 317.46 334.34 0, 311.54 350.96 0, 301.73 378.51 0, 295.38 396.32 0, 291.31 407.77 0, 284.65 426.43 0, 283.07 430.86 0, 276.60 449.05 0, 274.19 455.81 0, 268.24 472.53 0, 254.94 509.87 0, 253.11 515.00 0 ]
 }
 Road {
-  translation 0 0 0.343
+  translation 0 0 0.013
   name "road_111 Йосиф Петров"
   width 6.50
   numberOfLanes 2
@@ -1259,7 +1259,7 @@ Road {
   wayPoints [ 342.26 185.65 0, 352.35 186.43 0, 355.65 186.68 0, 433.35 192.72 0 ]
 }
 Road {
-  translation 0 0 0.346
+  translation 0 0 0.016
   name "road_112 пл. Велчова завера"
   width 6.50
   numberOfLanes 2
@@ -1270,7 +1270,7 @@ Road {
   wayPoints [ 328.23 169.20 0, 320.25 178.84 0 ]
 }
 Road {
-  translation 0 0 0.349
+  translation 0 0 0.019
   name "road_113 бул. Джеймс Баучер"
   width 13.00
   numberOfLanes 2
@@ -1281,7 +1281,7 @@ Road {
   wayPoints [ 306.68 174.94 0, 315.39 177.36 0, 320.25 178.84 0 ]
 }
 Road {
-  translation 0 0 0.352
+  translation 0 0 0.013
   name "road_114 Бигла"
   width 6.50
   numberOfLanes 2
@@ -1292,7 +1292,7 @@ Road {
   wayPoints [ 131.82 -437.79 0, 149.41 -439.16 0, 169.08 -441.03 0 ]
 }
 Road {
-  translation 0 0 0.355
+  translation 0 0 0.019
   name "road_115 Бигла"
   width 6.50
   numberOfLanes 2
@@ -1303,7 +1303,7 @@ Road {
   wayPoints [ 169.08 -441.03 0, 227.30 -446.16 0 ]
 }
 Road {
-  translation 0 0 0.358
+  translation 0 0 0.016
   name "road_116 Кричим"
   width 6.50
   numberOfLanes 2
@@ -1314,7 +1314,7 @@ Road {
   wayPoints [ -258.17 -487.85 0, -297.36 -485.26 0, -315.79 -483.79 0, -365.04 -480.42 0, -372.39 -479.97 0, -417.78 -477.17 0, -439.64 -475.83 0, -445.49 -475.38 0, -502.21 -471.11 0 ]
 }
 Road {
-  translation 0 0 0.361
+  translation 0 0 0.013
   name "road_117 Кричим"
   width 6.50
   numberOfLanes 2
@@ -1325,7 +1325,7 @@ Road {
   wayPoints [ -183.16 -494.82 0, -188.95 -494.26 0, -236.36 -489.70 0, -249.72 -488.41 0, -258.17 -487.85 0 ]
 }
 Road {
-  translation 0 0 0.364
+  translation 0 0 0.016
   name "road_118 Милин камък"
   width 6.50
   numberOfLanes 2
@@ -1336,7 +1336,7 @@ Road {
   wayPoints [ -194.94 515.00 0, -195.38 513.03 0, -212.08 428.66 0, -219.84 391.69 0, -221.06 385.81 0, -222.41 379.20 0 ]
 }
 Road {
-  translation 0 0 0.367
+  translation 0 0 0.010
   name "road_119 Бигла"
   width 6.50
   numberOfLanes 2
@@ -1347,7 +1347,7 @@ Road {
   wayPoints [ -515.00 -380.87 0, -493.73 -382.76 0, -358.71 -394.27 0, -334.12 -396.37 0, -331.51 -396.59 0 ]
 }
 Road {
-  translation 0 0 0.370
+  translation 0 0 0.016
   name "road_120 Бигла"
   width 6.50
   numberOfLanes 2
@@ -1358,7 +1358,7 @@ Road {
   wayPoints [ -331.51 -396.59 0, -290.62 -400.07 0 ]
 }
 Road {
-  translation 0 0 0.373
+  translation 0 0 0.013
   name "road_121 Трепетлика"
   width 6.50
   numberOfLanes 2
@@ -1369,7 +1369,7 @@ Road {
   wayPoints [ -486.13 -227.78 0, -488.45 -292.14 0 ]
 }
 Road {
-  translation 0 0 0.376
+  translation 0 0 0.016
   name "road_122 Трепетлика"
   width 6.50
   numberOfLanes 2
@@ -1380,7 +1380,7 @@ Road {
   wayPoints [ -491.51 -204.06 0, -488.32 -218.11 0, -486.13 -227.78 0 ]
 }
 Road {
-  translation 0 0 0.379
+  translation 0 0 0.013
   name "road_123 Минзухар"
   width 6.50
   numberOfLanes 2
@@ -1391,7 +1391,7 @@ Road {
   wayPoints [ -96.76 -144.59 0, -156.35 -160.39 0 ]
 }
 Road {
-  translation 0 0 0.382
+  translation 0 0 0.013
   name "road_124 Бигла"
   width 5.00
   numberOfLanes 2
@@ -1402,7 +1402,7 @@ Road {
   wayPoints [ -49.52 -421.80 0, -44.03 -422.28 0, -37.30 -422.87 0, 14.94 -427.49 0, 22.41 -428.29 0, 49.33 -431.18 0, 65.46 -432.91 0 ]
 }
 Road {
-  translation 0 0 0.385
+  translation 0 0 0.016
   name "road_125 Бигла"
   width 6.50
   numberOfLanes 2
@@ -1413,7 +1413,7 @@ Road {
   wayPoints [ 65.46 -432.91 0, 131.82 -437.79 0 ]
 }
 Road {
-  translation 0 0 0.388
+  translation 0 0 0.016
   name "road_126 бул. Свети Наум"
   width 9.75
   numberOfLanes 2
@@ -1424,7 +1424,7 @@ Road {
   wayPoints [ -333.65 384.60 0, -384.76 387.09 0, -392.50 387.34 0 ]
 }
 Road {
-  translation 0 0 0.391
+  translation 0 0 0.019
   name "road_127 пл. Велчова завера"
   width 6.50
   numberOfLanes 2
@@ -1435,7 +1435,7 @@ Road {
   wayPoints [ 351.77 -10.07 0, 348.32 13.90 0 ]
 }
 Road {
-  translation 0 0 0.394
+  translation 0 0 0.010
   name "road_128 Света гора"
   width 5.00
   numberOfLanes 2
@@ -1446,7 +1446,7 @@ Road {
   wayPoints [ -32.88 276.79 0, -33.79 268.43 0, -37.66 232.68 0 ]
 }
 Road {
-  translation 0 0 0.397
+  translation 0 0 0.019
   name "road_129 Димитър Димов"
   width 5.00
   numberOfLanes 2
@@ -1457,7 +1457,7 @@ Road {
   wayPoints [ 11.67 132.31 0, -2.67 126.92 0, -20.83 120.11 0, -28.95 116.83 0 ]
 }
 Road {
-  translation 0 0 0.400
+  translation 0 0 0.010
   name "road_130 Димитър Димов"
   width 5.00
   numberOfLanes 2
@@ -1468,7 +1468,7 @@ Road {
   wayPoints [ -28.95 116.83 0, -39.71 112.39 0 ]
 }
 Road {
-  translation 0 0 0.403
+  translation 0 0 0.013
   name "road_131 Димитър Димов"
   width 5.00
   numberOfLanes 2
@@ -1479,7 +1479,7 @@ Road {
   wayPoints [ -39.71 112.39 0, -70.99 99.46 0 ]
 }
 Road {
-  translation 0 0 0.406
+  translation 0 0 0.010
   name "road_132 Димитър Димов"
   width 5.00
   numberOfLanes 2
@@ -1490,7 +1490,7 @@ Road {
   wayPoints [ -70.99 99.46 0, -103.54 86.02 0 ]
 }
 Road {
-  translation 0 0 0.409
+  translation 0 0 0.016
   name "road_133 Димитър Димов"
   width 5.00
   numberOfLanes 2
@@ -1501,7 +1501,7 @@ Road {
   wayPoints [ -103.54 86.02 0, -183.47 52.99 0 ]
 }
 Road {
-  translation 0 0 0.412
+  translation 0 0 0.010
   name "road_134 Презвитер Козма"
   width 5.00
   numberOfLanes 2
@@ -1512,7 +1512,7 @@ Road {
   wayPoints [ -216.97 109.82 0, -187.71 127.47 0 ]
 }
 Road {
-  translation 0 0 0.415
+  translation 0 0 0.013
   name "road_135 Презвитер Козма"
   width 5.00
   numberOfLanes 2
@@ -1523,7 +1523,7 @@ Road {
   wayPoints [ -187.71 127.47 0, -115.51 171.04 0, -111.05 173.74 0 ]
 }
 Road {
-  translation 0 0 0.418
+  translation 0 0 0.013
   name "road_136 Свети Седмочисленици"
   width 6.50
   numberOfLanes 2
@@ -1534,7 +1534,7 @@ Road {
   wayPoints [ -485.25 -17.33 0, -476.40 -16.80 0, -461.76 -15.91 0, -457.46 -15.65 0, -445.99 -14.95 0, -380.89 -9.05 0 ]
 }
 Road {
-  translation 0 0 0.421
+  translation 0 0 0.010
   name "road_137 Плана планина"
   width 5.00
   numberOfLanes 2
@@ -1545,7 +1545,7 @@ Road {
   wayPoints [ -466.31 133.19 0, -515.00 133.51 0 ]
 }
 Road {
-  translation 0 0 0.424
+  translation 0 0 0.013
   name "road_138 Плана планина"
   width 5.00
   numberOfLanes 2
@@ -1556,7 +1556,7 @@ Road {
   wayPoints [ -424.47 132.92 0, -444.37 133.05 0 ]
 }
 Road {
-  translation 0 0 0.427
+  translation 0 0 0.016
   name "road_139 Плана планина"
   width 5.00
   numberOfLanes 2
@@ -1567,7 +1567,7 @@ Road {
   wayPoints [ -444.37 133.05 0, -466.31 133.19 0 ]
 }
 Road {
-  translation 0 0 0.430
+  translation 0 0 0.019
   name "road_140 Св. Теодосий Търновски"
   width 5.00
   numberOfLanes 2
@@ -1578,7 +1578,7 @@ Road {
   wayPoints [ -392.50 387.34 0, -392.24 383.06 0, -387.23 300.85 0, -385.26 282.15 0 ]
 }
 Road {
-  translation 0 0 0.433
+  translation 0 0 0.016
   name "road_141 бул. Джеймс Баучер"
   width 16.25
   numberOfLanes 2
@@ -1589,7 +1589,7 @@ Road {
   wayPoints [ 262.73 153.19 0, 293.00 168.18 0, 296.83 170.06 0, 306.68 174.94 0 ]
 }
 Road {
-  translation 0 0 0.436
+  translation 0 0 0.019
   name "road_142 Трепетлика"
   width 6.50
   numberOfLanes 2
@@ -1600,7 +1600,7 @@ Road {
   wayPoints [ -488.45 -292.14 0, -489.97 -318.16 0 ]
 }
 Road {
-  translation 0 0 0.439
+  translation 0 0 0.013
   name "road_143 Лозенска планина"
   width 6.50
   numberOfLanes 2
@@ -1611,7 +1611,7 @@ Road {
   wayPoints [ -436.06 207.67 0, -377.34 206.79 0 ]
 }
 Road {
-  translation 0 0 0.442
+  translation 0 0 0.016
   name "road_144 Гребен планина"
   width 5.00
   numberOfLanes 2
@@ -1622,7 +1622,7 @@ Road {
   wayPoints [ -485.98 470.72 0, -487.27 457.37 0 ]
 }
 Road {
-  translation 0 0 0.445
+  translation 0 0 0.010
   name "road_145 Гребен планина"
   width 6.50
   numberOfLanes 2
@@ -1633,7 +1633,7 @@ Road {
   wayPoints [ -488.84 445.05 0, -489.17 442.40 0, -490.01 435.81 0 ]
 }
 Road {
-  translation 0 0 0.448
+  translation 0 0 0.013
   name "road_146 Бряст"
   width 6.50
   numberOfLanes 2
@@ -1644,7 +1644,7 @@ Road {
   wayPoints [ -39.59 389.84 0, -27.08 396.08 0, -22.92 398.15 0 ]
 }
 Road {
-  translation 0 0 0.451
+  translation 0 0 0.010
   name "road_147 Вишнева"
   width 6.50
   numberOfLanes 2
@@ -1655,7 +1655,7 @@ Road {
   wayPoints [ 258.72 399.13 0, 282.76 405.56 0 ]
 }
 Road {
-  translation 0 0 0.454
+  translation 0 0 0.013
   name "road_148 Вишнева"
   width 6.50
   numberOfLanes 2
@@ -1666,7 +1666,7 @@ Road {
   wayPoints [ 282.76 405.56 0, 285.26 406.23 0, 291.31 407.77 0 ]
 }
 Road {
-  translation 0 0 0.457
+  translation 0 0 0.019
   name "road_149 Кръстьо Сарафов"
   width 6.50
   numberOfLanes 2
@@ -1677,7 +1677,7 @@ Road {
   wayPoints [ -183.19 424.91 0, -212.08 428.66 0 ]
 }
 Road {
-  translation 0 0 0.460
+  translation 0 0 0.019
   name "road_150 Милин камък"
   width 6.50
   numberOfLanes 2
@@ -1688,7 +1688,7 @@ Road {
   wayPoints [ -222.41 379.20 0, -223.46 374.44 0, -224.11 371.42 0, -224.89 367.95 0, -241.14 294.25 0 ]
 }
 Road {
-  translation 0 0 0.463
+  translation 0 0 0.010
   name "road_151 Йосиф Петров"
   width 6.50
   numberOfLanes 2
@@ -1699,7 +1699,7 @@ Road {
   wayPoints [ 509.89 198.66 0, 515.00 199.06 0 ]
 }
 Road {
-  translation 0 0 0.466
+  translation 0 0 0.019
   name "road_152 бул. Джеймс Баучер"
   width 6.50
   numberOfLanes 2
@@ -1710,7 +1710,7 @@ Road {
   wayPoints [ -515.00 -188.91 0, -502.32 -183.89 0, -496.56 -181.66 0, -481.42 -175.82 0, -408.04 -147.49 0, -358.08 -128.20 0, -296.02 -104.24 0 ]
 }
 Road {
-  translation 0 0 0.469
+  translation 0 0 0.010
   name "road_153 бул. Свети Наум"
   width 9.75
   numberOfLanes 2
@@ -1721,7 +1721,7 @@ Road {
   wayPoints [ -47.85 361.23 0, -82.27 366.87 0, -86.35 367.36 0, -94.25 368.30 0, -129.94 371.33 0, -183.96 375.93 0 ]
 }
 Road {
-  translation 0 0 0.472
+  translation 0 0 0.013
   name "road_154 бул. Свети Наум"
   width 9.75
   numberOfLanes 2
@@ -1732,7 +1732,7 @@ Road {
   wayPoints [ 32.08 336.63 0, 11.57 345.08 0, -13.25 353.53 0 ]
 }
 Road {
-  translation 0 0 0.475
+  translation 0 0 0.016
   name "road_155 бул. Свети Наум"
   width 9.75
   numberOfLanes 2
@@ -1743,7 +1743,7 @@ Road {
   wayPoints [ -13.25 353.53 0, -20.02 355.52 0, -45.45 360.84 0, -47.85 361.23 0 ]
 }
 Road {
-  translation 0 0 0.478
+  translation 0 0 0.010
   name "road_156 Златовръх"
   width 6.50
   numberOfLanes 2
@@ -1754,7 +1754,7 @@ Road {
   wayPoints [ 203.52 -503.04 0, 196.99 -513.24 0, 194.97 -515.00 0 ]
 }
 Road {
-  translation 0 0 0.481
+  translation 0 0 0.013
   name "road_157 Якубица"
   width 6.50
   numberOfLanes 2
@@ -1765,7 +1765,7 @@ Road {
   wayPoints [ -134.30 -41.52 0, -133.52 -43.11 0, -131.23 -49.59 0 ]
 }
 Road {
-  translation 0 0 0.484
+  translation 0 0 0.016
   name "road_158 Милин камък"
   width 6.50
   numberOfLanes 2
@@ -1776,7 +1776,7 @@ Road {
   wayPoints [ -138.56 -33.20 0, -135.07 -39.94 0, -134.30 -41.52 0 ]
 }
 Road {
-  translation 0 0 0.487
+  translation 0 0 0.010
   name "road_159 Якубица"
   width 6.50
   numberOfLanes 2
@@ -1787,7 +1787,7 @@ Road {
   wayPoints [ -131.23 -49.59 0, -130.52 -51.52 0, -115.82 -92.34 0, -112.19 -102.41 0, -109.34 -110.22 0, -96.76 -144.59 0, -92.64 -157.07 0, -85.96 -177.30 0 ]
 }
 Road {
-  translation 0 0 0.490
+  translation 0 0 0.010
   name "road_160 Бряст"
   width 6.50
   numberOfLanes 2
@@ -1798,7 +1798,7 @@ Road {
   wayPoints [ -62.90 377.27 0, -39.59 389.84 0 ]
 }
 Road {
-  translation 0 0 0.493
+  translation 0 0 0.013
   name "road_161 Бряст"
   width 6.50
   numberOfLanes 2
@@ -1809,7 +1809,7 @@ Road {
   wayPoints [ -82.27 366.87 0, -71.57 372.62 0 ]
 }
 Road {
-  translation 0 0 0.496
+  translation 0 0 0.016
   name "road_162 Бряст"
   width 6.50
   numberOfLanes 2
@@ -1820,7 +1820,7 @@ Road {
   wayPoints [ -71.57 372.62 0, -62.90 377.27 0 ]
 }
 Road {
-  translation 0 0 0.499
+  translation 0 0 0.016
   name "road_163 Архитект Йордан Миланов"
   width 6.50
   numberOfLanes 2
@@ -1831,7 +1831,7 @@ Road {
   wayPoints [ 342.26 185.65 0, 343.07 191.17 0, 343.47 195.23 0, 344.08 202.46 0 ]
 }
 Road {
-  translation 0 0 0.502
+  translation 0 0 0.013
   name "road_164 Архитект Йордан Миланов"
   width 6.50
   numberOfLanes 2
@@ -1842,7 +1842,7 @@ Road {
   wayPoints [ 344.08 202.46 0, 344.66 212.52 0, 346.89 244.16 0, 344.96 257.13 0 ]
 }
 Road {
-  translation 0 0 0.505
+  translation 0 0 0.019
   name "road_165 бул. Свети Наум"
   width 9.75
   numberOfLanes 2
@@ -1853,7 +1853,7 @@ Road {
   wayPoints [ 34.01 335.70 0, 32.08 336.63 0 ]
 }
 Road {
-  translation 0 0 0.508
+  translation 0 0 0.013
   name "road_166 Златовръх"
   width 6.50
   numberOfLanes 2
@@ -1864,7 +1864,7 @@ Road {
   wayPoints [ 335.56 -33.64 0, 331.33 -55.59 0 ]
 }
 Road {
-  translation 0 0 0.511
+  translation 0 0 0.010
   name "road_167 Златовръх"
   width 6.50
   numberOfLanes 2
@@ -1875,7 +1875,7 @@ Road {
   wayPoints [ 331.33 -55.59 0, 323.29 -97.73 0, 321.96 -104.73 0 ]
 }
 Road {
-  translation 0 0 0.514
+  translation 0 0 0.013
   name "road_168 Златовръх"
   width 6.50
   numberOfLanes 2
@@ -1886,7 +1886,7 @@ Road {
   wayPoints [ 211.39 -484.22 0, 207.72 -492.99 0, 203.52 -503.04 0 ]
 }
 Road {
-  translation 0 0 0.517
+  translation 0 0 0.022
   name "road_169 бул. Христо Смирненски"
   width 5.00
   numberOfLanes 2
@@ -1897,7 +1897,7 @@ Road {
   wayPoints [ 288.22 241.17 0, 291.31 235.05 0, 287.37 226.31 0, 284.63 220.45 0 ]
 }
 Road {
-  translation 0 0 0.520
+  translation 0 0 0.010
   name "road_170 Св. Теодосий Търновски"
   width 5.00
   numberOfLanes 2
@@ -1908,7 +1908,7 @@ Road {
   wayPoints [ -379.67 64.49 0, -380.89 -9.05 0, -374.35 -59.82 0, -368.53 -104.97 0 ]
 }
 Road {
-  translation 0 0 0.523
+  translation 0 0 0.016
   name "road_171 Св. Теодосий Търновски"
   width 6.50
   numberOfLanes 2
@@ -1919,7 +1919,7 @@ Road {
   wayPoints [ -378.56 132.62 0, -379.67 64.49 0 ]
 }
 Road {
-  translation 0 0 0.526
+  translation 0 0 0.016
   name "road_172 Милин камък"
   width 6.50
   numberOfLanes 2
@@ -1930,7 +1930,7 @@ Road {
   wayPoints [ -241.14 294.25 0, -244.70 276.90 0, -249.71 247.30 0, -252.78 219.33 0 ]
 }
 Road {
-  translation 0 0 0.529
+  translation 0 0 0.019
   name "road_173 бул. Джеймс Баучер"
   width 13.00
   numberOfLanes 2
@@ -1941,7 +1941,7 @@ Road {
   wayPoints [ 246.03 145.02 0, 262.73 153.19 0 ]
 }
 Road {
-  translation 0 0 0.532
+  translation 0 0 0.016
   name "road_174 Света гора"
   width 6.50
   numberOfLanes 2
@@ -1952,7 +1952,7 @@ Road {
   wayPoints [ -22.92 398.15 0, -24.23 401.58 0, -49.48 467.03 0, -51.37 471.92 0 ]
 }
 Road {
-  translation 0 0 0.535
+  translation 0 0 0.010
   name "road_175 Йосиф Петров"
   width 6.50
   numberOfLanes 2
@@ -1963,7 +1963,7 @@ Road {
   wayPoints [ 433.35 192.72 0, 490.07 197.13 0 ]
 }
 Road {
-  translation 0 0 0.538
+  translation 0 0 0.013
   name "road_176 Йосиф Петров"
   width 6.50
   numberOfLanes 2
@@ -1974,7 +1974,7 @@ Road {
   wayPoints [ 490.07 197.13 0, 503.54 198.17 0, 509.89 198.66 0 ]
 }
 Road {
-  translation 0 0 0.541
+  translation 0 0 0.013
   name "road_177 Митрополит Кирил Видински"
   width 6.50
   numberOfLanes 2
@@ -1985,7 +1985,7 @@ Road {
   wayPoints [ 506.47 247.80 0, 508.33 221.14 0 ]
 }
 Road {
-  translation 0 0 0.544
+  translation 0 0 0.016
   name "road_178 Митрополит Кирил Видински"
   width 6.50
   numberOfLanes 2

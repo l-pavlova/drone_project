@@ -38,7 +38,7 @@ Road {
   wayPoints [ -145.00 -45.79 0, -134.30 -41.52 0, -129.26 -39.40 0, -113.30 -32.23 0, -95.78 -23.57 0, 14.96 31.06 0, 19.36 33.23 0, 129.11 87.35 0, 135.26 90.38 0, 145.00 95.19 0 ]
 }
 Road {
-  translation 0 0 0.013
+  translation 0 0 0.010
   name "road_1 Димитър Димов"
   width 5.00
   numberOfLanes 2
@@ -49,7 +49,7 @@ Road {
   wayPoints [ 45.37 145.00 0, 35.95 141.45 0, 11.67 132.31 0 ]
 }
 Road {
-  translation 0 0 0.016
+  translation 0 0 0.010
   name "road_2 Света гора"
   width 5.00
   numberOfLanes 2
@@ -60,7 +60,7 @@ Road {
   wayPoints [ -27.59 145.00 0, -20.83 120.11 0 ]
 }
 Road {
-  translation 0 0 0.019
+  translation 0 0 0.010
   name "road_3 Милин камък"
   width 6.50
   numberOfLanes 2
@@ -71,7 +71,7 @@ Road {
   wayPoints [ -145.00 -20.88 0, -140.07 -30.35 0, -138.56 -33.20 0 ]
 }
 Road {
-  translation 0 0 0.022
+  translation 0 0 0.013
   name "road_4 Света гора"
   width 5.00
   numberOfLanes 2
@@ -82,7 +82,7 @@ Road {
   wayPoints [ -20.83 120.11 0, -10.35 86.67 0, 11.47 38.12 0, 14.28 32.49 0, 14.96 31.06 0 ]
 }
 Road {
-  translation 0 0 0.025
+  translation 0 0 0.010
   name "road_5 Минзухар"
   width 6.50
   numberOfLanes 2
@@ -93,7 +93,7 @@ Road {
   wayPoints [ -96.76 -144.59 0, -98.30 -145.00 0 ]
 }
 Road {
-  translation 0 0 0.028
+  translation 0 0 0.016
   name "road_6 Димитър Димов"
   width 5.00
   numberOfLanes 2
@@ -104,7 +104,7 @@ Road {
   wayPoints [ 11.67 132.31 0, -2.67 126.92 0, -20.83 120.11 0, -28.95 116.83 0 ]
 }
 Road {
-  translation 0 0 0.031
+  translation 0 0 0.010
   name "road_7 Димитър Димов"
   width 5.00
   numberOfLanes 2
@@ -115,7 +115,7 @@ Road {
   wayPoints [ -28.95 116.83 0, -39.71 112.39 0 ]
 }
 Road {
-  translation 0 0 0.034
+  translation 0 0 0.013
   name "road_8 Димитър Димов"
   width 5.00
   numberOfLanes 2
@@ -126,7 +126,7 @@ Road {
   wayPoints [ -39.71 112.39 0, -70.99 99.46 0 ]
 }
 Road {
-  translation 0 0 0.037
+  translation 0 0 0.010
   name "road_9 Димитър Димов"
   width 5.00
   numberOfLanes 2
@@ -137,7 +137,7 @@ Road {
   wayPoints [ -70.99 99.46 0, -103.54 86.02 0 ]
 }
 Road {
-  translation 0 0 0.040
+  translation 0 0 0.013
   name "road_10 Димитър Димов"
   width 5.00
   numberOfLanes 2
@@ -148,7 +148,7 @@ Road {
   wayPoints [ -103.54 86.02 0, -145.00 68.88 0 ]
 }
 Road {
-  translation 0 0 0.043
+  translation 0 0 0.013
   name "road_11 Якубица"
   width 6.50
   numberOfLanes 2
@@ -159,7 +159,7 @@ Road {
   wayPoints [ -134.30 -41.52 0, -133.52 -43.11 0, -131.23 -49.59 0 ]
 }
 Road {
-  translation 0 0 0.046
+  translation 0 0 0.016
   name "road_12 Милин камък"
   width 6.50
   numberOfLanes 2
@@ -170,7 +170,7 @@ Road {
   wayPoints [ -138.56 -33.20 0, -135.07 -39.94 0, -134.30 -41.52 0 ]
 }
 Road {
-  translation 0 0 0.049
+  translation 0 0 0.016
   name "road_13 Якубица"
   width 6.50
   numberOfLanes 2

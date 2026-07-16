@@ -517,20 +517,74 @@ def clip_polyline(pts, lim):
         runs.append(run)
     return [r for r in runs if len(r) >= 2]
 
+def _pt_seg_d2(px, py, ax, ay, bx, by):
+    """Squared distance from point to segment."""
+    dx, dy = bx - ax, by - ay
+    d2 = dx * dx + dy * dy
+    t = 0.0 if d2 == 0 else max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / d2))
+    ex, ey = ax + t * dx - px, ay + t * dy - py
+    return ex * ex + ey * ey
+
+def _seg_seg_d2(p, q, r, s):
+    """Squared distance between segments pq and rs (0 if they intersect)."""
+    d1 = (q[0]-p[0])*(r[1]-p[1]) - (q[1]-p[1])*(r[0]-p[0])
+    d2 = (q[0]-p[0])*(s[1]-p[1]) - (q[1]-p[1])*(s[0]-p[0])
+    d3 = (s[0]-r[0])*(p[1]-r[1]) - (s[1]-r[1])*(p[0]-r[0])
+    d4 = (s[0]-r[0])*(q[1]-r[1]) - (s[1]-r[1])*(q[0]-r[0])
+    if d1 * d2 < 0 and d3 * d4 < 0:
+        return 0.0
+    return min(_pt_seg_d2(*r, *p, *q), _pt_seg_d2(*s, *p, *q),
+               _pt_seg_d2(*p, *r, *s), _pt_seg_d2(*q, *r, *s))
+
+def runs_overlap(run_a, wa, run_b, wb):
+    """Do two road runs (centreline polylines with widths) overlap on the
+    ground? Conservative bbox prefilter, then exact segment distances."""
+    gap = (wa + wb) / 2 + 0.3
+    ax0 = min(p[0] for p in run_a); ax1 = max(p[0] for p in run_a)
+    ay0 = min(p[1] for p in run_a); ay1 = max(p[1] for p in run_a)
+    bx0 = min(p[0] for p in run_b); bx1 = max(p[0] for p in run_b)
+    by0 = min(p[1] for p in run_b); by1 = max(p[1] for p in run_b)
+    if ax0 - gap > bx1 or bx0 - gap > ax1 or ay0 - gap > by1 or by0 - gap > ay1:
+        return False
+    g2 = gap * gap
+    return any(_seg_seg_d2(p, q, r, s) < g2
+               for p, q in zip(run_a, run_a[1:])
+               for r, s in zip(run_b, run_b[1:]))
+
 road_runs = []   # (osm name, projected polyline) - also feeds the route builder
 n_roads = 0
 if os.path.exists(ROADS):
     lim = WINDOW + ROAD_MARGIN
+    emit = []     # (properties, run) in stable order
     for f in json.load(open(ROADS, encoding="utf-8"))["features"]:
         pts = [((lon - lon0) * mlon, (lat - lat0) * mlat)
                for lon, lat in f["geometry"]["coordinates"]]
         pr = f["properties"]
         for run in clip_polyline(pts, lim):
             road_runs.append((pr.get("name") or "", run))
-            wpts = ", ".join(f"{x:.2f} {y:.2f} 0" for x, y in run)
-            # stagger heights so overlapping roads (intersections) don't z-fight
-            parts.append(f"""Road {{
-  translation 0 0 {0.01 + 0.003 * n_roads:.3f}
+            emit.append((pr, run))
+    # Roads must stay BELOW the bay pads (pad box spans z 0.04..0.06): a plain
+    # per-road stagger 0.01+0.003*n grows past the pads once a world has >~17
+    # runs and paints the road OVER the parking strips — on the 1 km world this
+    # covered whole longitudinal bay rows in dark asphalt and produced 330
+    # occupancy false positives. Stagger is only needed between roads that
+    # actually overlap (junctions), so assign each run the lowest z-slot not
+    # used by any earlier overlapping run (greedy colouring): crossing roads
+    # keep the 3 mm separation, and the max z stays bounded by the junction
+    # degree (< 0.04) instead of the road count.
+    slots = []    # slot index per emitted run
+    for i, (pr, run) in enumerate(emit):
+        used = {slots[j] for j in range(i)
+                if runs_overlap(run, road_width(pr), emit[j][1], road_width(emit[j][0]))}
+        slot = next(k for k in range(len(used) + 1) if k not in used)
+        slots.append(slot)
+    if slots and 0.01 + 0.003 * max(slots) >= 0.04:
+        print(f"WARNING: road z-slot {max(slots)} reaches the bay-pad layer "
+              f"(z >= 0.04) - roads may paint over parking bays")
+    for (pr, run), slot in zip(emit, slots):
+        wpts = ", ".join(f"{x:.2f} {y:.2f} 0" for x, y in run)
+        parts.append(f"""Road {{
+  translation 0 0 {0.01 + 0.003 * slot:.3f}
   name "road_{n_roads} {pr.get('name') or pr.get('highway')}"
   width {road_width(pr):.2f}
   numberOfLanes 2
@@ -540,7 +594,7 @@ if os.path.exists(ROADS):
   leftBorder FALSE
   wayPoints [ {wpts} ]
 }}""")
-            n_roads += 1
+        n_roads += 1
 else:
     print("WARNING: no block_roads.geojson (run tools/get_roads.py) - world has no streets")
 

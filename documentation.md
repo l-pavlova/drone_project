@@ -173,9 +173,12 @@ a per-world output folder (`sim/output/<world>/frame_###.png`, `poses.json`):
 The default world is the regression baseline (its route has been flown and
 verified repeatedly); the 4-street world exercises junctions, dead-end
 backtracks and transits at manageable runtime; the 1 km world is the
-neighbourhood-scale target. At the current cruise speed (2.5 m/s) the 1 km
-patrol is ≈2 h of simulated flight — raising cruise speed (or altitude, for a
-larger footprint) is future work.
+neighbourhood-scale target. At the 2.5 m/s cruise speed the 1 km patrol is
+≈2 h of simulated flight; the dominant *wall-clock* cost — continuous camera
+rendering — was removed (section 7.4), after which the remaining limit is
+physics: with ~700 car models the simulation runs near real time on one CPU
+core, so the full patrol is an hours-scale run (made restartable by the
+resume capability, section 7.4).
 
 ## 6. Route planning
 
@@ -330,7 +333,49 @@ interrupted runs.
 
 Verified coverage with this logic: 110/111 bays inside at least one captured
 footprint on the 4-street world (the missed bay traces to one timeout arrival
-14.9 m off its waypoint — capture scatter is a known open item).
+14.9 m off its waypoint — capture scatter is a known open item; a later run at
+the 5 m/s cruise cap covered all 111/111, see 7.4).
+
+### 7.4 Simulation throughput: render on demand
+
+Scaling to the neighbourhood world exposed a bottleneck that had nothing to do
+with flight dynamics. With the camera enabled at the simulation's basic time
+step (8 ms), Webots renders 125 camera frames per simulated second — of which
+the controller saves roughly one per waypoint. On the 4-street world this
+rendering held the whole simulation to ~2.5× real time even in fast mode.
+
+The fix exploits the fact that frames are only needed at waypoint arrivals:
+the camera stays disabled in cruise, is enabled when the arrival condition
+fires, is given two control steps to produce a fresh image, and the frame and
+the pose are then saved on the same step before the camera is disabled again.
+The image–pose mismatch is bounded by one basic time step (~4 cm of travel at
+5 m/s), the same bound as with continuous sampling, so the georeferencing in
+the vision stage is unaffected. (The timed diagnostic snapshots, which do
+need a continuously enabled camera, moved behind a debug flag.)
+
+Measured on the 4-street world, together with raising the cruise cap `V_MAX`
+from 2.5 to 5 m/s: wall time fell from 249 s to 46 s (5.4×) for the same
+97-waypoint patrol, with zero capture failures, full 111/111 bay coverage and
+the occupancy score unchanged at 100%. The higher cap itself was a mixed
+result: it raises straight-leg speed (90th-percentile ground speed
+2.77 → 4.21 m/s) but overshoots waypoints harder — orbit/timeout recoveries
+actually lengthened the test patrol from 624 to 703 simulated seconds while
+widening capture scatter (13 → 23 captures more than 4 m off their waypoint).
+
+The neighbourhood world then delivered the verdict on the 5 m/s cap: after
+645 clean waypoints the drone tumbled out of the sky entering a sharp
+junction turn at full speed. Braking there saturates the brake-pitch, yaw and
+drift-damping-roll commands simultaneously and for long enough that the lift
+dip flips the drone — the same mechanism behind the project's standing
+`TILT_MAX` limit, which brief saturations at 2.5 m/s never trigger. The
+4-street world cannot catch this failure because its legs are too short to
+reach full speed before a corner: a passing test on the small world does not
+generalise to routes with long straights. The cap went back to 2.5 m/s
+(median ground speed loses only ~15%, since the approach ramp dominates with
+10 m waypoint spacing), and the crash motivated a **resume** capability: the
+controller now reads the incrementally-written `poses.json` on startup and
+continues from the first uncaptured waypoint, so a multi-hour patrol survives
+crashes and host interruptions without re-flying.
 
 ## 8. Occupancy scoring (vision stage, v1)
 
@@ -551,9 +596,27 @@ the unchanged layers above it.
   surface texture, weathered markings or real imagery — the step to a learned
   classifier over the identical bay crops belongs together with making the
   scene harder, so that the comparison is meaningful.
-- **Cruise speed**: 2.5 m/s makes the 19 km neighbourhood patrol ≈2 h of sim
-  time; speed/altitude trade-offs (footprint size vs image resolution vs
-  turn dynamics) are unexplored.
+- **Cruise speed**: capped at 2.5 m/s — a 5 m/s trial crashed the
+  neighbourhood patrol at a fast junction turn (section 7.4), and with
+  waypoints every 10 m the approach ramp keeps the median speed near 2.5 m/s
+  regardless. Measured on the two legs of the same 1 km flight, the wall-time
+  gain from the higher cap was marginal anyway (~8 s vs ~7–12 s per waypoint):
+  on the neighbourhood world wall time is bound by physics with ~700 car
+  models, not by flight speed or the camera. If faster flight is wanted, two
+  safe designs address the crash mechanism directly rather than capping
+  everything: **corner-aware speed** (cap `v_des` by the heading change to the
+  upcoming waypoint, so straights cruise fast and corners are braked into
+  ahead of time) and a **brake-saturation cap** (never let the brake command
+  reach the full tilt limit; longer overshoot, no lift dip). Both matter for
+  the real drone too, where flight time is battery-limited.
+- **Faster neighbourhood patrols** would come from attacking the actual
+  bottlenecks instead: **fly higher** — at 50 m the footprint grows ~1.7×, so
+  waypoint spacing could double, halving both waypoints and route length, at
+  the cost of ground resolution (16 → ~10 px/m; the classifier would need
+  re-verification at that scale) — and **cheaper physics** — the parked cars
+  only need to be seen, never collided with, so stripping their collision
+  geometry (or raising `basicTimeStep`, which would force a controller
+  re-tune) targets the saturated physics core directly.
 - **Capture scatter**: occasional timeout arrivals capture up to ~15 m off the
   waypoint; ~1% of bays can fall outside all footprints at zero margin.
 - **Name matching**: 4 of 49 streets in the 1 km cut have no OSM name match

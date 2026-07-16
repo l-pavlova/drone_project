@@ -86,7 +86,20 @@ def load_route():
 robot = Robot()
 dt = int(robot.getBasicTimeStep())
 
-camera = robot.getDevice("camera"); camera.enable(dt)
+camera = robot.getDevice("camera")
+# The camera is NOT enabled continuously: at basicTimeStep 8 ms an enabled
+# camera re-renders 125 frames/s that nobody reads, and that rendering
+# dominates wall time in --mode=fast (the sim barely beat real time on the
+# 4-street world). Instead the camera is enabled on waypoint arrival, given
+# CAM_WARMUP steps to produce a fresh image, saved, then disabled again.
+# Pose is recorded at the save step, so image/pose mismatch stays <= one
+# basic time step (~4 cm at 5 m/s) — same as with continuous sampling.
+CAM_WARMUP = 2             # steps between camera.enable() and saveImage()
+cam_warm = -1              # >=0 while a capture is scheduled (counts down)
+SNAP_DIAG = True           # timed snap_###.png diagnostics need a continuously
+#   enabled camera; turn back on only when debugging capture itself.
+if SNAP_DIAG:
+    camera.enable(dt)
 imu = robot.getDevice("inertial unit"); imu.enable(dt)
 gps = robot.getDevice("gps"); gps.enable(dt)
 gyro = robot.getDevice("gyro"); gyro.enable(dt)
@@ -107,6 +120,32 @@ else:
 if cam_roll is None:
     print("[parkdrone] !! 'camera roll' device NOT FOUND")
 
+# The gimbal compensation command (pi/2 - pitch) is only as good as the servo
+# tracking it: captures fire at waypoint arrival, i.e. right after braking,
+# when body pitch has just swung hard and the servo may still lag its target
+# by tens of milliradians -- at 30 m altitude 0.03 rad off-nadir shifts the
+# ground footprint ~1 m and misprojects bays near the frame edge. Record the
+# ACTUAL gimbal angles (position sensors, if the proto exposes them) with each
+# pose so the scorer can correct the projection instead of assuming nadir.
+def _gimbal_sensor(motor, label):
+    if motor is None:
+        return None
+    sensor = motor.getPositionSensor()
+    if sensor is None:
+        print(f"[parkdrone] !! no position sensor on '{label}' - poses will "
+              f"not carry actual gimbal angles")
+        return None
+    sensor.enable(dt)
+    return sensor
+
+cam_pitch_pos = _gimbal_sensor(cam_pitch, "camera pitch")
+cam_roll_pos = _gimbal_sensor(cam_roll, "camera roll")
+# The proto also has an uncommanded "camera yaw" joint resting at 0; its servo
+# can transiently deflect during hard yaw maneuvers (captures at corners), and
+# the scorer assumes camera yaw == body yaw. Record the actual joint angle.
+cam_yaw = robot.getDevice("camera yaw")
+cam_yaw_pos = _gimbal_sensor(cam_yaw, "camera yaw")
+
 motors = [robot.getDevice(n) for n in
           ("front left propeller", "front right propeller",
            "rear left propeller", "rear right propeller")]
@@ -119,12 +158,62 @@ K_YAW = 1.0; K_YAWD = 0.8                    # heading PD: point the nose at the
 #   waypoint. K_YAWD damps yaw RATE -- without it the yaw is pure-proportional and
 #   the drone spins in circles past the target heading, never converging.
 K_VD = 2.0                                  # vertical-velocity damping (kills overshoot)
-# Horizontal navigation: body-frame position+velocity PD -> roll/pitch tilt.
-# Pull toward the waypoint (K_POS) while damping ground velocity (K_VEL) so the
-# drone decelerates into the target instead of orbiting it (the old bug).
-K_POS = 0.6; K_VEL = 0.4; TILT_MAX = 1.0     # TILT_MAX>~1.0 dips lift -> crash
-V_MAX = 2.5                                   # cruise-speed cap (m/s); lower = tighter turns
-#   (tried 2.0 hoping tighter waypoint captures -> no coverage gain, just slower)
+# Horizontal navigation: velocity-target control -> roll/pitch tilt. Chase a
+# desired forward speed (from the corner-aware profile below) while damping
+# ground velocity (K_VEL) so the drone decelerates into corners instead of
+# orbiting waypoints (the old bug).
+K_VEL = 0.4; TILT_MAX = 1.0                  # TILT_MAX>~1.0 dips lift -> crash
+# Corner-aware cruise speed. A flat cap is a bad trade: 2.5 m/s is safe
+# everywhere but slow on straights, while a flat 5.0 CRASHED the 1 km patrol
+# at wp645 -- entering a sharp junction turn at full speed saturates brake
+# pitch + yaw + drift-damping roll all at once and the lift dip tumbles the
+# drone (the 4-street route never reaches 5 m/s before a corner, so it can't
+# catch this). So the cap now depends on the route geometry: every waypoint
+# gets a speed limit from its heading change (V_MAX when straight, down to
+# V_TURN for sharp corners), and a backward pass propagates each limit
+# upstream along the real kinematic braking curve (A_BRAKE, below) so
+# braking starts early enough -- the drone cruises the straights at V_MAX
+# and arrives at corners at the speed the 2.5 m/s patrols proved safe.
+V_MAX = 5.0                # cruise speed on straight legs (m/s)
+V_TURN = 2.0               # arrival speed at sharp corners / reversals / ends
+TURN_FREE = 0.3            # rad heading change below which a wp is "straight"
+TURN_HARD = 1.2            # rad heading change at which the full V_TURN applies
+# A_BRAKE is the vehicle's REAL achievable accel/decel, measured from a 1 km
+# headless run's GPS log (poses/heartbeat), not assumed: velocity-vs-time
+# showed ~12-14 s to go from ~3.6 m/s to ~0.1 m/s (and back), i.e. ~0.29 m/s^2
+# -- TILT_MAX=1.0 caps the equilibrium tilt angle (pitch_d/K_PITCH ~ 2 deg),
+# and there is no aerodynamic drag in the sim, so this is a hard ceiling, not
+# a gain-tuning artifact. The old linear K_BRAKE=0.25 model assumed decel
+# "<=1.25 m/s^2" (5x too strong): it started braking only ~12 m out for a
+# 5->2 m/s drop that actually needs ~36 m, so the drone blew through every
+# waypoint near cruise speed, the AIM_BLEND carrot swung hard toward the next
+# point, and -- since steering is yaw-then-forward only, no reverse/strafe --
+# it had to bleed the overshoot off in a wide loop instead of flowing
+# through. Fixed by planning against the real KINEMATIC curve
+# v(dist) = sqrt(v_target^2 + 2*A_BRAKE*dist) instead of a linear ramp, with
+# a small safety margin below the measured 0.29 m/s^2.
+A_BRAKE = 0.22             # m/s^2, conservative vs. the ~0.29 measured
+
+
+def speed_profile(wps):
+    """Per-waypoint speed limit: corner limit from the route's heading change,
+    then a backward pass so the kinematic braking curve (v^2 = v_next^2 +
+    2*A_BRAKE*dist) is announced early enough upstream (junction segments can
+    be much shorter than the 10 m route step)."""
+    n = len(wps)
+    prof = [V_TURN] * n     # first wp (takeoff turn-in) and last wp stay slow
+    for i in range(1, n - 1):
+        h_in = math.atan2(wps[i][1] - wps[i-1][1], wps[i][0] - wps[i-1][0])
+        h_out = math.atan2(wps[i+1][1] - wps[i][1], wps[i+1][0] - wps[i][0])
+        f = clamp((abs(wrap(h_out - h_in)) - TURN_FREE) / (TURN_HARD - TURN_FREE),
+                  0.0, 1.0)
+        prof[i] = V_MAX - f * (V_MAX - V_TURN)
+    for i in range(n - 2, -1, -1):
+        seg = math.hypot(wps[i+1][0] - wps[i][0], wps[i+1][1] - wps[i][1])
+        prof[i] = min(prof[i], math.sqrt(prof[i+1]**2 + 2 * A_BRAKE * seg))
+    return prof
+
+
 ROLL_SIGN = 1.0                             # +roll_in -> +body-left; flip if it diverges
 
 dt_s = dt / 1000.0
@@ -133,8 +222,25 @@ prev_alt = None
 wp_min = float("inf")     # closest approach to the current waypoint so far
 wp_steps = 0              # steps spent near the current waypoint
 wps = load_route()
+wp_vmax = speed_profile(wps)
+n_slow = sum(1 for v in wp_vmax if v < V_MAX - 0.01)
+print(f"[parkdrone] corner speed profile: {n_slow}/{len(wps)} waypoints "
+      f"below V_MAX {V_MAX} (corner floor {V_TURN} m/s)")
+# RESUME: poses.json is rewritten after every capture, so if a long patrol is
+# interrupted (crash, kill, host sleep) the flight can continue where it left
+# off: load the recorded poses and start from the first uncaptured waypoint.
+# Delete poses.json (or the world's output dir) to re-fly from scratch.
 idx = 0
 poses = []
+POSES_FILE = os.path.join(OUT, "poses.json")
+try:
+    poses = json.load(open(POSES_FILE, encoding="utf-8"))
+except (OSError, ValueError):
+    poses = []
+if poses:
+    idx = max(p["i"] for p in poses) + 1
+    print(f"[parkdrone] RESUME: {len(poses)} captures on disk -> "
+          f"continuing at wp{idx}/{len(wps)}")
 step = 0
 snap = 0                          # timed-snapshot counter (diagnostic capture)
 HEARTBEAT = max(1, int(1.0 / dt_s))      # ~1 s of steps
@@ -196,7 +302,7 @@ while robot.step(dt) != -1:
 
     # diagnostic: once airborne, save a frame on a timer regardless of nav,
     # so we can confirm the camera works even if the lawnmower isn't converging.
-    if alt > TARGET_ALT - 1.0 and step % SNAP_EVERY == 0:
+    if SNAP_DIAG and alt > TARGET_ALT - 1.0 and step % SNAP_EVERY == 0:
         if capture(os.path.join(OUT, f"snap_{snap:03d}.png")):
             print(f"[parkdrone] snapshot snap_{snap:03d}.png at alt {alt:.1f}")
         snap += 1
@@ -222,22 +328,48 @@ while robot.step(dt) != -1:
                 wp_steps += 1
                 if near:
                     wp_min = min(wp_min, dist)
-            arrived = (near and (dist < WP_CAPTURE or dist > wp_min + 1.0)) or \
-                      (wp_min < float("inf") and wp_steps * dt_s > WP_TIMEOUT)
-            if arrived:
-                wp_min = float("inf")
-                wp_steps = 0
-                capture(os.path.join(OUT, f"frame_{idx:03d}.png"))
-                poses.append({"i": idx, "x": x, "y": y, "alt": alt, "yaw": yaw,
-                              "roll": roll, "pitch": pitch, "wp": [tx, ty]})
-                # write poses.json after every waypoint so progress survives even
-                # if the run is cut short before the full patrol completes.
-                json.dump(poses, open(os.path.join(OUT, "poses.json"), "w"), indent=1)
-                print(f"[parkdrone] reached wp{idx} at ({x:.1f},{y:.1f}) "
-                      f"-> frame_{idx:03d}.png")
-                idx += 1
-                if idx == len(wps):
-                    print("[parkdrone] patrol complete")
+            # Recede fires WITHOUT requiring dist < WP_REACH: when the closest
+            # pass is near the basin edge (e.g. 5 m at cruise speed), the drone
+            # is already outside the basin by the time it has receded 1 m, the
+            # basin-gated test can never fire, and the orbit TIMEOUT ends up
+            # taking the frame wherever the recovery loop happens to be (27 m
+            # off-waypoint in the worst observed case). Ungated, the capture
+            # distance is bounded by closest-approach + 1 m <= WP_REACH + 1.
+            arrived = (dist < WP_CAPTURE) or \
+                      (wp_min < float("inf") and
+                       (dist > wp_min + 1.0 or wp_steps * dt_s > WP_TIMEOUT))
+            if cam_warm >= 0:
+                # capture scheduled on a previous step: give the just-enabled
+                # camera CAM_WARMUP steps to render, then save frame + pose
+                # together (drone drifts ~4 cm/step meanwhile — negligible).
+                cam_warm -= 1
+                if cam_warm < 0:
+                    capture(os.path.join(OUT, f"frame_{idx:03d}.png"))
+                    pose = {"i": idx, "x": x, "y": y, "alt": alt, "yaw": yaw,
+                            "roll": roll, "pitch": pitch, "wp": [tx, ty]}
+                    if cam_pitch_pos is not None:
+                        pose["cam_pitch"] = cam_pitch_pos.getValue()
+                    if cam_roll_pos is not None:
+                        pose["cam_roll"] = cam_roll_pos.getValue()
+                    if cam_yaw_pos is not None:
+                        pose["cam_yaw"] = cam_yaw_pos.getValue()
+                    poses.append(pose)
+                    # write poses.json after every waypoint so progress survives
+                    # even if the run is cut short before the patrol completes
+                    # (it is also what RESUME continues from after a crash).
+                    json.dump(poses, open(POSES_FILE, "w"), indent=1)
+                    print(f"[parkdrone] reached wp{idx} at ({x:.1f},{y:.1f}) "
+                          f"-> frame_{idx:03d}.png")
+                    if not SNAP_DIAG:
+                        camera.disable()
+                    wp_min = float("inf")
+                    wp_steps = 0
+                    idx += 1
+                    if idx == len(wps):
+                        print("[parkdrone] patrol complete")
+            elif arrived:
+                camera.enable(dt)
+                cam_warm = CAM_WARMUP
             else:
                 # aim point: the current waypoint, blending toward the next one
                 # as we close in, so the nose flows through waypoint hand-offs
@@ -250,12 +382,14 @@ while robot.step(dt) != -1:
                 # we do NOT strafe with roll, which would tumble the drone).
                 yaw_err = wrap(math.atan2(ay - y, ax - x) - yaw)
                 yaw_d = clamp(K_YAW * yaw_err - K_YAWD * yaw_rate, -1.0, 1.0)
-                fwd_err = c * dx + s * dy
-                # Velocity-target forward control: desired speed ramps DOWN within
-                # ~V_MAX/K_POS metres of the target (and is 0 until we're facing
-                # it), so the drone arrives slow and turns tightly at row ends
-                # instead of coasting tens of metres past. Roll just damps drift.
-                v_des = clamp(K_POS * fwd_err, 0.0, V_MAX) if abs(yaw_err) < 0.5 else 0.0
+                # Velocity-target forward control against the corner-aware
+                # profile: the allowed speed decays along the kinematic
+                # braking curve toward the current waypoint's limit (V_MAX on
+                # straights -- no dip at hand-offs; V_TURN at corners --
+                # arrive slow, turn tightly) and is 0 until we're facing the
+                # aim point. Roll damps drift.
+                v_des = (min(V_MAX, math.sqrt(wp_vmax[idx]**2 + 2 * A_BRAKE * dist))
+                         if abs(yaw_err) < 0.5 else 0.0)
                 pitch_d = -clamp(K_VEL * (v_des - fwd_vel), -TILT_MAX, TILT_MAX)
                 roll_d = ROLL_SIGN * clamp(-K_VEL * lat_vel, -TILT_MAX, TILT_MAX)
         else:
