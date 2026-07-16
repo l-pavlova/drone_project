@@ -11,10 +11,10 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/project
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/vehicles/protos/mercedes_benz/MercedesBenzSprinterSimple.proto"
 WorldInfo { basicTimeStep 8 }
 Viewpoint {
-  orientation -0.35 0.35 0.87 1.75
-  position -8 -14 10
+  orientation 0 1 0 0.4
+  position -0.5 0 0.8
   follow "Mavic 2 PRO"
-  followType "Tracking Shot"
+  followType "Mounted Shot"
 }
 Background { skyColor [ 0.5 0.7 1 ] }
 DirectionalLight { direction 0.4 0.5 -1 intensity 2.5 castShadows FALSE }
@@ -5473,4 +5473,106 @@ Mavic2Pro {
   translation 0 0 0.15
   controller "parkdrone"
   controllerArgs [ "fmi_block_4st.route.json" ]
+}
+Solid {
+  name "route markers"
+  children [
+    Pose { translation -135.00 73.00 0.5 children [ DEF WPMARK Shape { appearance PBRAppearance { baseColor 1 0 0 emissiveColor 1 0 0 roughness 1 metalness 0 } geometry Sphere { radius 0.5 } } ] }
+    Pose { translation -124.50 77.33 0.5 children [ USE WPMARK ] }
+    Pose { translation -114.00 81.67 0.5 children [ USE WPMARK ] }
+    Pose { translation -103.50 86.00 0.5 children [ USE WPMARK ] }
+    Pose { translation -95.38 89.38 0.5 children [ USE WPMARK ] }
+    Pose { translation -87.25 92.75 0.5 children [ USE WPMARK ] }
+    Pose { translation -79.12 96.12 0.5 children [ USE WPMARK ] }
+    Pose { translation -71.00 99.50 0.5 children [ USE WPMARK ] }
+    Pose { translation -60.50 103.83 0.5 children [ USE WPMARK ] }
+    Pose { translation -50.00 108.17 0.5 children [ USE WPMARK ] }
+    Pose { translation -39.50 112.50 0.5 children [ USE WPMARK ] }
+    Pose { translation -29.00 117.00 0.5 children [ USE WPMARK ] }
+    Pose { translation -21.00 120.00 0.5 children [ USE WPMARK ] }
+    Pose { translation -11.75 123.50 0.5 children [ USE WPMARK ] }
+    Pose { translation -2.50 127.00 0.5 children [ USE WPMARK ] }
+    Pose { translation 4.50 129.75 0.5 children [ USE WPMARK ] }
+    Pose { translation 11.50 132.50 0.5 children [ USE WPMARK ] }
+    Pose { translation 19.00 135.00 0.5 children [ USE WPMARK ] }
+    Pose { translation 11.50 132.50 0.5 children [ USE WPMARK ] }
+    Pose { translation 4.50 129.75 0.5 children [ USE WPMARK ] }
+    Pose { translation -2.50 127.00 0.5 children [ USE WPMARK ] }
+    Pose { translation -11.75 123.50 0.5 children [ USE WPMARK ] }
+    Pose { translation -21.00 120.00 0.5 children [ USE WPMARK ] }
+    Pose { translation -23.00 127.50 0.5 children [ USE WPMARK ] }
+    Pose { translation -25.00 135.00 0.5 children [ USE WPMARK ] }
+    Pose { translation -23.00 127.50 0.5 children [ USE WPMARK ] }
+    Pose { translation -21.00 120.00 0.5 children [ USE WPMARK ] }
+    Pose { translation -18.38 111.62 0.5 children [ USE WPMARK ] }
+    Pose { translation -15.75 103.25 0.5 children [ USE WPMARK ] }
+    Pose { translation -13.12 94.88 0.5 children [ USE WPMARK ] }
+    Pose { translation -10.50 86.50 0.5 children [ USE WPMARK ] }
+    Pose { translation -6.10 76.80 0.5 children [ USE WPMARK ] }
+    Pose { translation -1.70 67.10 0.5 children [ USE WPMARK ] }
+    Pose { translation 2.70 57.40 0.5 children [ USE WPMARK ] }
+    Pose { translation 7.10 47.70 0.5 children [ USE WPMARK ] }
+    Pose { translation 11.50 38.00 0.5 children [ USE WPMARK ] }
+    Pose { translation 14.50 32.50 0.5 children [ USE WPMARK ] }
+    Pose { translation 15.00 31.00 0.5 children [ USE WPMARK ] }
+    Pose { translation 19.50 33.00 0.5 children [ USE WPMARK ] }
+    Pose { translation 28.62 37.54 0.5 children [ USE WPMARK ] }
+    Pose { translation 37.75 42.08 0.5 children [ USE WPMARK ] }
+    Pose { translation 46.88 46.62 0.5 children [ USE WPMARK ] }
+    Pose { translation 56.00 51.17 0.5 children [ USE WPMARK ] }
+    Pose { translation 65.12 55.71 0.5 children [ USE WPMARK ] }
+    Pose { translation 74.25 60.25 0.5 children [ USE WPMARK ] }
+    Pose { translation 83.38 64.79 0.5 children [ USE WPMARK ] }
+    Pose { translation 92.50 69.33 0.5 children [ USE WPMARK ] }
+    Pose { translation 101.62 73.88 0.5 children [ USE WPMARK ] }
+    Pose { translation 110.75 78.42 0.5 children [ USE WPMARK ] }
+    Pose { translation 119.88 82.96 0.5 children [ USE WPMARK ] }
+    Pose { translation 129.00 87.50 0.5 children [ USE WPMARK ] }
+    Pose { translation 135.00 90.50 0.5 children [ USE WPMARK ] }
+    Pose { translation 129.00 87.50 0.5 children [ USE WPMARK ] }
+    Pose { translation 119.88 82.96 0.5 children [ USE WPMARK ] }
+    Pose { translation 110.75 78.42 0.5 children [ USE WPMARK ] }
+    Pose { translation 101.62 73.88 0.5 children [ USE WPMARK ] }
+    Pose { translation 92.50 69.33 0.5 children [ USE WPMARK ] }
+    Pose { translation 83.38 64.79 0.5 children [ USE WPMARK ] }
+    Pose { translation 74.25 60.25 0.5 children [ USE WPMARK ] }
+    Pose { translation 65.12 55.71 0.5 children [ USE WPMARK ] }
+    Pose { translation 56.00 51.17 0.5 children [ USE WPMARK ] }
+    Pose { translation 46.88 46.62 0.5 children [ USE WPMARK ] }
+    Pose { translation 37.75 42.08 0.5 children [ USE WPMARK ] }
+    Pose { translation 28.62 37.54 0.5 children [ USE WPMARK ] }
+    Pose { translation 19.50 33.00 0.5 children [ USE WPMARK ] }
+    Pose { translation 15.00 31.00 0.5 children [ USE WPMARK ] }
+    Pose { translation 5.75 26.46 0.5 children [ USE WPMARK ] }
+    Pose { translation -3.50 21.92 0.5 children [ USE WPMARK ] }
+    Pose { translation -12.75 17.38 0.5 children [ USE WPMARK ] }
+    Pose { translation -22.00 12.83 0.5 children [ USE WPMARK ] }
+    Pose { translation -31.25 8.29 0.5 children [ USE WPMARK ] }
+    Pose { translation -40.50 3.75 0.5 children [ USE WPMARK ] }
+    Pose { translation -49.75 -0.79 0.5 children [ USE WPMARK ] }
+    Pose { translation -59.00 -5.33 0.5 children [ USE WPMARK ] }
+    Pose { translation -68.25 -9.88 0.5 children [ USE WPMARK ] }
+    Pose { translation -77.50 -14.42 0.5 children [ USE WPMARK ] }
+    Pose { translation -86.75 -18.96 0.5 children [ USE WPMARK ] }
+    Pose { translation -96.00 -23.50 0.5 children [ USE WPMARK ] }
+    Pose { translation -104.75 -27.75 0.5 children [ USE WPMARK ] }
+    Pose { translation -113.50 -32.00 0.5 children [ USE WPMARK ] }
+    Pose { translation -121.50 -35.75 0.5 children [ USE WPMARK ] }
+    Pose { translation -129.50 -39.50 0.5 children [ USE WPMARK ] }
+    Pose { translation -134.50 -41.50 0.5 children [ USE WPMARK ] }
+    Pose { translation -135.00 -42.00 0.5 children [ USE WPMARK ] }
+    Pose { translation -134.50 -41.50 0.5 children [ USE WPMARK ] }
+    Pose { translation -133.50 -43.00 0.5 children [ USE WPMARK ] }
+    Pose { translation -131.00 -49.50 0.5 children [ USE WPMARK ] }
+    Pose { translation -130.50 -51.50 0.5 children [ USE WPMARK ] }
+    Pose { translation -126.88 -61.75 0.5 children [ USE WPMARK ] }
+    Pose { translation -123.25 -72.00 0.5 children [ USE WPMARK ] }
+    Pose { translation -119.62 -82.25 0.5 children [ USE WPMARK ] }
+    Pose { translation -116.00 -92.50 0.5 children [ USE WPMARK ] }
+    Pose { translation -112.00 -102.50 0.5 children [ USE WPMARK ] }
+    Pose { translation -109.50 -110.00 0.5 children [ USE WPMARK ] }
+    Pose { translation -106.50 -118.33 0.5 children [ USE WPMARK ] }
+    Pose { translation -103.50 -126.67 0.5 children [ USE WPMARK ] }
+    Pose { translation -100.50 -135.00 0.5 children [ USE WPMARK ] }
+  ]
 }

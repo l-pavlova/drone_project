@@ -175,9 +175,23 @@ K_VEL = 0.4; TILT_MAX = 1.0                  # TILT_MAX>~1.0 dips lift -> crash
 # braking starts early enough -- the drone cruises the straights at V_MAX
 # and arrives at corners at the speed the 2.5 m/s patrols proved safe.
 V_MAX = 5.0                # cruise speed on straight legs (m/s)
-V_TURN = 2.0               # arrival speed at sharp corners / reversals / ends
+V_TURN = 2.0               # arrival speed at sharp corners (~90 deg)
 TURN_FREE = 0.3            # rad heading change below which a wp is "straight"
 TURN_HARD = 1.2            # rad heading change at which the full V_TURN applies
+# Route REVERSALS (~180 deg, end of a bay row) get a still lower arrival
+# speed: braking tops out at ~0.29 m/s^2, so overshoot past the turn point
+# scales with v^2/(2*0.29) -- at V_TURN 2.0 the drone coasted ~7 m past the
+# reversal while yawing round and had to fly back (a visible teardrop loop);
+# at 0.8 m/s the excursion is ~1 m, i.e. it turns essentially on the spot.
+V_REV = 0.8                # arrival speed at reversals (turn ~in place)
+REV_HARD = 2.6             # rad heading change treated as a full reversal
+# Full stop before big turns: even at V_REV the residual momentum coasts ~1 m
+# through the pirouette. If the heading change to the NEXT waypoint (measured
+# at capture) exceeds HOLD_TURN, hold zero forward command until ground speed
+# falls below HOLD_SPEED -- the drone brakes to a hover, spins in place, then
+# accelerates out on the new heading.
+HOLD_TURN = 1.5            # rad yaw change that triggers a stop-and-turn
+HOLD_SPEED = 0.15          # m/s ground speed that counts as "stopped"
 # A_BRAKE is the vehicle's REAL achievable accel/decel, measured from a 1 km
 # headless run's GPS log (poses/heartbeat), not assumed: velocity-vs-time
 # showed ~12-14 s to go from ~3.6 m/s to ~0.1 m/s (and back), i.e. ~0.29 m/s^2
@@ -201,13 +215,23 @@ def speed_profile(wps):
     2*A_BRAKE*dist) is announced early enough upstream (junction segments can
     be much shorter than the 10 m route step)."""
     n = len(wps)
-    prof = [V_TURN] * n     # first wp (takeoff turn-in) and last wp stay slow
-    for i in range(1, n - 1):
-        h_in = math.atan2(wps[i][1] - wps[i-1][1], wps[i][0] - wps[i-1][0])
+    prof = [V_TURN] * n     # last wp stays slow (patrol ends station-keeping)
+    for i in range(n - 1):
+        # wp0 has no route leg in: use the takeoff spawn (world origin) as the
+        # virtual previous point, so its corner limit reflects the real turn-in
+        # instead of a blanket V_TURN.
+        px, py = wps[i - 1] if i > 0 else (0.0, 0.0)
+        if (px, py) == wps[i]:
+            continue
+        h_in = math.atan2(wps[i][1] - py, wps[i][0] - px)
         h_out = math.atan2(wps[i+1][1] - wps[i][1], wps[i+1][0] - wps[i][0])
-        f = clamp((abs(wrap(h_out - h_in)) - TURN_FREE) / (TURN_HARD - TURN_FREE),
-                  0.0, 1.0)
-        prof[i] = V_MAX - f * (V_MAX - V_TURN)
+        turn = abs(wrap(h_out - h_in))
+        if turn <= TURN_HARD:
+            f = clamp((turn - TURN_FREE) / (TURN_HARD - TURN_FREE), 0.0, 1.0)
+            prof[i] = V_MAX - f * (V_MAX - V_TURN)
+        else:   # beyond a hard corner: ramp further down toward reversal speed
+            f = clamp((turn - TURN_HARD) / (REV_HARD - TURN_HARD), 0.0, 1.0)
+            prof[i] = V_TURN - f * (V_TURN - V_REV)
     for i in range(n - 2, -1, -1):
         seg = math.hypot(wps[i+1][0] - wps[i][0], wps[i+1][1] - wps[i][1])
         prof[i] = min(prof[i], math.sqrt(prof[i+1]**2 + 2 * A_BRAKE * seg))
@@ -221,6 +245,7 @@ prev_xy = None
 prev_alt = None
 wp_min = float("inf")     # closest approach to the current waypoint so far
 wp_steps = 0              # steps spent near the current waypoint
+hold_stop = False         # braking to a hover before a stop-and-turn reversal
 wps = load_route()
 wp_vmax = speed_profile(wps)
 n_slow = sum(1 for v in wp_vmax if v < V_MAX - 0.01)
@@ -367,6 +392,9 @@ while robot.step(dt) != -1:
                     idx += 1
                     if idx == len(wps):
                         print("[parkdrone] patrol complete")
+                    elif abs(wrap(math.atan2(wps[idx][1] - y, wps[idx][0] - x)
+                                  - yaw)) > HOLD_TURN:
+                        hold_stop = True   # big turn ahead: stop, spin, then go
             elif arrived:
                 camera.enable(dt)
                 cam_warm = CAM_WARMUP
@@ -388,8 +416,16 @@ while robot.step(dt) != -1:
                 # straights -- no dip at hand-offs; V_TURN at corners --
                 # arrive slow, turn tightly) and is 0 until we're facing the
                 # aim point. Roll damps drift.
-                v_des = (min(V_MAX, math.sqrt(wp_vmax[idx]**2 + 2 * A_BRAKE * dist))
-                         if abs(yaw_err) < 0.5 else 0.0)
+                if hold_stop:
+                    # stop-and-turn: brake to a hover (yaw PD keeps spinning
+                    # toward the new heading meanwhile), release once stopped.
+                    if math.hypot(vx, vy) < HOLD_SPEED:
+                        hold_stop = False
+                    v_des = 0.0
+                else:
+                    v_des = (min(V_MAX,
+                                 math.sqrt(wp_vmax[idx]**2 + 2 * A_BRAKE * dist))
+                             if abs(yaw_err) < 0.5 else 0.0)
                 pitch_d = -clamp(K_VEL * (v_des - fwd_vel), -TILT_MAX, TILT_MAX)
                 roll_d = ROLL_SIGN * clamp(-K_VEL * lat_vel, -TILT_MAX, TILT_MAX)
         else:
