@@ -1,0 +1,7 @@
+# PARKDRONE vision worker
+numpy>=1.24
+Pillow>=10.0
+redis>=5.0
+psycopg2-binary>=2.9
+# optional: only needed when frames are fetched from S3/MinIO (worker.py)
+boto3>=1.34

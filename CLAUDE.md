@@ -64,3 +64,68 @@ Hard-won controller invariants — **do not regress these** (they are why the si
 
 - The shell is Git Bash. **Windows backslash paths break** in commands — use forward slashes (`/c/Users/...`) or quote carefully.
 - The data scripts deliberately use Python `urllib` + UTF-8 (`sys.stdout.reconfigure(encoding="utf-8")`) instead of shelling out, because **Git Bash mangles Cyrillic** (street names, zone types are in Bulgarian). For manual downloads use `curl --ssl-no-revoke` (Windows cert revocation is flaky); the scripts already disable cert verification for these public read-only GETs.
+
+## Web infrastructure (`web/`) — live occupancy product
+
+A separate stage 4 turns the on-disk occupancy report into a live product: an ingest API, a
+real-time occupancy push, and an end-user parking map. It lives in **`web/`** (a pnpm monorepo),
+independent of the Python sim/vision code. Full design in `.claude/plans/witty-petting-ritchie.md`.
+
+**Status: Phases 1–5 built & verified end-to-end; Phase 6 (admin dashboard) and Phase 7 (prod
+hardening) remain.** See project memory `project-web-infra.md` for the running log.
+
+### Layout
+- `packages/contracts` — shared TS types + zod schemas + the ENU projection (mirrors
+  `generate_world.py`/`score_occupancy.py`; **must** stay in lockstep — same ORIGIN/MLAT/MLON).
+- `packages/db` — Postgres+PostGIS migrations, repositories, and the geojson→`bay` seeder.
+- `apps/vision-worker` (Python) — reuses `vision/score_occupancy.py`'s `project`/`bay_features`/
+  `classify` **verbatim**; consumes frame jobs, writes `bay_state`, publishes deltas.
+- `apps/api` (Node/Express) — ingest (`POST /api/v1/ingest/frame`, per-drone API key), read
+  (`/api/v1/bays` GeoJSON, `/summary`, `/bays/:id`), and `WS /ws/occupancy` push.
+- `apps/web-user` (React + react-leaflet) — the parking map (drone "survey-readout" UI identity).
+- `infra/docker-compose.yml` — postgis + redis + minio.
+
+### Architecture invariants (do not regress)
+- **Postgres + PostGIS from the start** (no SQLite). Bay geometry is WGS84; bbox/nearest queries
+  push down into PostGIS. The ENU projection is only for pose math.
+- **Node owns the web edge; Python owns CV.** They talk over a **plain Redis list queue**
+  (`parkdrone:jobs`, BRPOP) + **Redis pub/sub** (`parkdrone:deltas`) — not BullMQ (cross-language).
+- **Bay ids: int in `block_bays.geojson`, string everywhere in the web tier** (`toBayId`).
+- Frame ingest is idempotent on `UNIQUE(drone_id, world, i)` — a re-send does NOT re-enqueue; to
+  reprocess a world, clear the `frame` table first.
+- The worker classifies **all** visible bays (production has no ground truth); `gt` is eval-only.
+
+### Run it (dev)
+```bash
+cd web && cp -n .env.example .env
+npm i -g pnpm            # corepack isn't on PATH here
+pnpm install
+pnpm infra:up           # postgis + redis + minio (needs Docker Desktop running)
+pnpm db:migrate && pnpm db:seed         # loads all 1698 bays
+# API (:4000):
+(cd apps/api && pnpm exec tsx src/server.ts &)
+# Vision worker (needs numpy/Pillow/redis/psycopg2/boto3 in your Python env):
+(cd apps/vision-worker && python -u -m parkdrone_vision.worker &)
+# Dashboard (:5173, proxies /api + /ws to :4000):
+(cd apps/web-user && pnpm exec vite &)
+```
+Verification harnesses:
+- Worker golden test: `cd apps/vision-worker && python -m parkdrone_vision.replay fmi_block`
+  (expect 43/43 match vs `occupancy_results.json`, 100% vs GT).
+- Full stack E2E: register a drone `pnpm --filter @parkdrone/api exec tsx src/scripts/register-drone.ts drone-1`,
+  then `API_KEY=<key> pnpm --filter @parkdrone/api exec tsx src/scripts/replay-ingest.ts fmi_block`
+  (expect WS deltas received + final `/bays` matching the offline result).
+
+### Dev/test occupancy toggle (drive the dashboard by hand)
+Manual override endpoints (mounted unless `ENABLE_DEV_ROUTES=false`) upsert `bay_state` and publish a
+delta on the worker's channel, so the map updates live over the WebSocket — no drone/vision needed:
+```bash
+curl -X POST http://localhost:4000/api/v1/dev/occupy   # occupy the bay nearest FMI (default 17596)
+curl -X POST http://localhost:4000/api/v1/dev/free     # free it again
+curl -X POST "http://localhost:4000/api/v1/dev/occupy?bay_id=17571"   # target a specific bay
+```
+Both return `{bay_id, occupied, updated_at}`; watch the bay flip red/green on :5173.
+
+Gotchas: native Windows Python needs `D:/...` paths, not Git Bash `/d/...`. Kill stray workers with
+`taskkill //F //IM python.exe` (careful — also kills sim Python). The WebSocket `observations` field
+is optional (worker omits it on the hot path).

@@ -11,3 +11,4 @@ sim/worlds/.*.wbproj
 # Claude Code local (per-machine) settings
 .claude/settings.local.json
 pics/*
+web/.env.example

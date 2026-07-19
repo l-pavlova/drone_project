@@ -1,0 +1,166 @@
+:root {
+  --asphalt: #14181d;
+  --asphalt-2: #1c222a;
+  --paint: #ecf1ed;
+  --zelena: #35c46e;
+  --signal: #ff5c3e;
+  --telemetry: #14b8a6;
+  --muted: #9aa6ae;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+  --sans: "Space Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { font-family: var(--sans); color: var(--paint); }
+
+.app { position: relative; height: 100%; overflow: hidden; }
+.map { position: absolute; inset: 0; width: 100%; height: 100%; }
+.loading {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-family: var(--mono); color: var(--muted); letter-spacing: 1px;
+}
+
+/* ---- survey readout panel (top-left) ---- */
+.readout {
+  position: absolute; top: 18px; left: 18px; z-index: 1200; width: 264px;
+  padding: 18px 20px 16px;
+  background: linear-gradient(180deg, rgba(20, 24, 29, 0.96), rgba(20, 24, 29, 0.92));
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(236, 241, 237, 0.08);
+  border-radius: 14px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+}
+
+.eyebrow { display: flex; align-items: center; justify-content: space-between; }
+.wordmark {
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  letter-spacing: 3px; color: var(--paint);
+}
+.status {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 1.5px;
+}
+.status.live { color: var(--telemetry); }
+.status.idle { color: var(--muted); }
+.beacon { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.status.live .beacon { box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.6); animation: beacon 2s infinite; }
+@keyframes beacon {
+  0% { box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.55); }
+  70% { box-shadow: 0 0 0 7px rgba(20, 184, 166, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(20, 184, 166, 0); }
+}
+
+.locus {
+  margin-top: 6px; font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: 1.5px; color: var(--muted);
+}
+
+.figure {
+  margin-top: 16px; font-family: var(--mono); font-weight: 600;
+  font-size: 58px; line-height: 0.95; color: var(--zelena);
+  font-variant-numeric: tabular-nums; letter-spacing: -2px;
+}
+.figure-label {
+  font-family: var(--sans); font-size: 13px; color: var(--paint);
+  opacity: 0.75; margin-top: 2px;
+}
+
+.meter {
+  display: flex; height: 8px; margin-top: 16px; gap: 2px;
+  border-radius: 4px; overflow: hidden; background: rgba(236, 241, 237, 0.06);
+}
+.seg { display: block; flex-basis: 0; min-width: 3px; border-radius: 2px; }
+.seg.free { background: var(--zelena); }
+.seg.occ { background: var(--signal); }
+
+.meter-legend {
+  display: flex; gap: 16px; margin-top: 9px;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.5px; color: var(--muted);
+}
+.meter-legend b { color: var(--paint); font-weight: 600; }
+
+.coverage {
+  margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid rgba(236, 241, 237, 0.08);
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 1px; color: var(--muted);
+}
+.coverage b { color: var(--telemetry); font-weight: 600; }
+
+/* ---- FAB controls (bottom-right) ---- */
+.fab-stack {
+  position: absolute; right: 18px; bottom: 30px; z-index: 1200;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.fab {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--asphalt); color: var(--paint); cursor: pointer;
+  display: grid; place-items: center;
+  border: 1px solid rgba(236, 241, 237, 0.1);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  transition: transform 0.08s ease, background 0.15s ease;
+}
+.fab:hover { background: var(--asphalt-2); }
+.fab:active { transform: scale(0.93); }
+.fab svg { width: 25px; height: 25px; fill: currentColor; }
+.fab.car { background: var(--telemetry); color: #04211d; border-color: transparent; }
+.fab.car:hover { background: #17cbbb; }
+.fab:disabled { opacity: 0.5; cursor: default; }
+.fab:focus-visible { outline: 2px solid var(--telemetry); outline-offset: 3px; }
+
+.spinner {
+  width: 21px; height: 21px; border-radius: 50%;
+  border: 3px solid rgba(4, 33, 29, 0.35); border-top-color: #04211d;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- toasts (bottom-center) ---- */
+.toast {
+  position: absolute; left: 50%; bottom: 30px; transform: translateX(-50%);
+  z-index: 1200; display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; border-radius: 10px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.3px; color: var(--paint);
+  background: var(--asphalt); border: 1px solid rgba(236, 241, 237, 0.12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); max-width: 90vw;
+}
+.toast.ok b { color: var(--zelena); }
+.toast.warn { color: #ffd27a; }
+.toast-x {
+  background: transparent; border: none; color: var(--muted);
+  cursor: pointer; font-size: 13px; padding: 0 2px;
+}
+.toast-x:hover { color: var(--paint); }
+
+/* ---- leaflet tooltip in telemetry style ---- */
+.tele-tip {
+  font-family: var(--mono) !important; font-size: 10.5px !important; letter-spacing: 1px;
+  background: var(--asphalt) !important; color: var(--telemetry) !important;
+  border: 1px solid rgba(20, 184, 166, 0.4) !important; border-radius: 6px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+}
+.tele-tip::before { display: none !important; }
+
+/* ---- bay popup ---- */
+.popup { font-family: var(--sans); }
+.popup dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 6px 0 0; font-family: var(--mono); font-size: 11px; }
+.popup dt { color: #888; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 4px; color: #fff; font-size: 11px; font-family: var(--mono); letter-spacing: 1px; margin: 4px 0; }
+.badge.free { background: var(--zelena); }
+.badge.occupied { background: var(--signal); }
+.badge.unknown { background: var(--muted); }
+
+@media (max-width: 480px) {
+  .readout { width: calc(100vw - 36px); }
+  .figure { font-size: 48px; }
+
+  /* ~30% shorter bay popup on phones: tighter type, spacing, and badge */
+  .leaflet-popup-content { margin: 7px 9px; font-size: 10px; line-height: 1.15; }
+  .popup strong { font-size: 11px; }
+  .popup dl { gap: 0 8px; margin-top: 3px; }
+  .popup dt, .popup dd { margin: 0; line-height: 1.2; }
+  .badge { margin: 2px 0; padding: 0 6px; font-size: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .status.live .beacon, .spinner { animation: none; }
+}
