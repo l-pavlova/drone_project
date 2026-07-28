@@ -77,48 +77,60 @@ hardening) remain.** See project memory `project-web-infra.md` for the running l
 ### Layout
 - `packages/contracts` — shared TS types + zod schemas + the ENU projection (mirrors
   `generate_world.py`/`score_occupancy.py`; **must** stay in lockstep — same ORIGIN/MLAT/MLON).
-- `packages/db` — Postgres+PostGIS migrations, repositories, and the geojson→`bay` seeder.
-- `apps/vision-worker` (Python) — reuses `vision/score_occupancy.py`'s `project`/`bay_features`/
-  `classify` **verbatim**; consumes frame jobs, writes `bay_state`, publishes deltas.
-- `apps/api` (Node/Express) — ingest (`POST /api/v1/ingest/frame`, per-drone API key), read
-  (`/api/v1/bays` GeoJSON, `/summary`, `/bays/:id`), and `WS /ws/occupancy` push.
+- `packages/db` — Postgres+PostGIS migrations and the geojson→`bay` seeder (dev tooling, run via
+  `pnpm db:migrate`/`db:seed`; not on the runtime path).
+- `apps/vision-worker` (Python) — **the whole server** (FastAPI monolith). Reuses
+  `vision/score_occupancy.py`'s `project`/`bay_features`/`classify` **verbatim** (via
+  `vision_core.py`/`pipeline.py`), and adds the web edge: ingest (`POST /api/v1/ingest/frame`,
+  per-drone API key), read (`/api/v1/bays` GeoJSON, `/summary`, `/bays/:id`), `WS /ws/occupancy`
+  push, and the dev toggle. Ingest → in-process `queue.Queue` → classify threads → `bay_state` +
+  direct WebSocket push. Entry point `parkdrone_vision.server` (uvicorn on :4000).
 - `apps/web-user` (React + react-leaflet) — the parking map (drone "survey-readout" UI identity).
-- `infra/docker-compose.yml` — postgis + redis + minio.
+- `infra/docker-compose.yml` — postgis + minio (no Redis).
 
 ### Architecture invariants (do not regress)
 - **Postgres + PostGIS from the start** (no SQLite). Bay geometry is WGS84; bbox/nearest queries
   push down into PostGIS. The ENU projection is only for pose math.
-- **Node owns the web edge; Python owns CV.** They talk over a **plain Redis list queue**
-  (`parkdrone:jobs`, BRPOP) + **Redis pub/sub** (`parkdrone:deltas`) — not BullMQ (cross-language).
-- **Bay ids: int in `block_bays.geojson`, string everywhere in the web tier** (`toBayId`).
+- **One Python process owns everything** (web edge *and* CV) because the classifier is Python and
+  reused verbatim. No cross-language boundary → **no Redis**: the job queue is an in-process
+  `queue.Queue` drained by dedicated classify threads (numpy releases the GIL, so real parallelism
+  off the event loop), and deltas are pushed **straight** to WebSocket clients the same process
+  holds. Read/ingest handlers are sync `def` (Starlette threadpool) so blocking psycopg2/boto3 never
+  touch the loop; only the WS endpoint is async.
+- **Durability without a broker:** an in-memory queue loses in-flight jobs on restart, so on startup
+  the server re-enqueues frames with `status='queued'` (rebuilt from the `frame` table + S3). A
+  frame whose image has expired from the store is marked `failed` so recovery won't loop on it.
+- **Bay ids: int in `block_bays.geojson`, string everywhere in the web tier**.
 - Frame ingest is idempotent on `UNIQUE(drone_id, world, i)` — a re-send does NOT re-enqueue; to
   reprocess a world, clear the `frame` table first.
-- The worker classifies **all** visible bays (production has no ground truth); `gt` is eval-only.
+- The server classifies **all** visible bays (production has no ground truth); `gt` is eval-only.
 
 ### Run it (dev)
 ```bash
 cd web && cp -n .env.example .env
 npm i -g pnpm            # corepack isn't on PATH here
 pnpm install
-pnpm infra:up           # postgis + redis + minio (needs Docker Desktop running)
+pnpm infra:up           # postgis + minio (needs Docker Desktop running)
 pnpm db:migrate && pnpm db:seed         # loads all 1698 bays
-# API (:4000):
-(cd apps/api && pnpm exec tsx src/server.ts &)
-# Vision worker (needs numpy/Pillow/redis/psycopg2/boto3 in your Python env):
-(cd apps/vision-worker && python -u -m parkdrone_vision.worker &)
+# Server (:4000) — the whole web edge + in-process vision, one uvicorn process.
+# Needs fastapi/uvicorn/websockets/python-multipart + numpy/Pillow/psycopg2/boto3
+# (pip install -r apps/vision-worker/requirements.txt):
+(cd apps/vision-worker && python -m parkdrone_vision.server &)
 # Dashboard (:5173, proxies /api + /ws to :4000):
 (cd apps/web-user && pnpm exec vite &)
 ```
-Verification harnesses:
-- Worker golden test: `cd apps/vision-worker && python -m parkdrone_vision.replay fmi_block`
-  (expect 43/43 match vs `occupancy_results.json`, 100% vs GT).
-- Full stack E2E: register a drone `pnpm --filter @parkdrone/api exec tsx src/scripts/register-drone.ts drone-1`,
-  then `API_KEY=<key> pnpm --filter @parkdrone/api exec tsx src/scripts/replay-ingest.ts fmi_block`
-  (expect WS deltas received + final `/bays` matching the offline result).
+Verification harnesses (all Python, run from `apps/vision-worker`):
+- Vision golden test: `python -m parkdrone_vision.replay fmi_block`
+  (expect 43/43 match vs `occupancy_results.json`, 100% vs GT). Imports the classifier only — no
+  server needed.
+- Full stack E2E: register a drone `python -m parkdrone_vision.register_drone drone-1`, then
+  `API_KEY=<key> python -m parkdrone_vision.replay_ingest fmi_block` (expect WS deltas received +
+  final `/bays` matching the offline result). To re-run, first clear the world's `frame` rows
+  (idempotency skips duplicates).
 
 ### Dev/test occupancy toggle (drive the dashboard by hand)
-Manual override endpoints (mounted unless `ENABLE_DEV_ROUTES=false`) upsert `bay_state` and publish a
-delta on the worker's channel, so the map updates live over the WebSocket — no drone/vision needed:
+Manual override endpoints (mounted unless `ENABLE_DEV_ROUTES=false`) upsert `bay_state` and push a
+delta straight to the WebSocket hub, so the map updates live — no drone/vision needed:
 ```bash
 curl -X POST http://localhost:4000/api/v1/dev/occupy   # occupy the bay nearest FMI (default 17596)
 curl -X POST http://localhost:4000/api/v1/dev/free     # free it again
@@ -126,6 +138,7 @@ curl -X POST "http://localhost:4000/api/v1/dev/occupy?bay_id=17571"   # target a
 ```
 Both return `{bay_id, occupied, updated_at}`; watch the bay flip red/green on :5173.
 
-Gotchas: native Windows Python needs `D:/...` paths, not Git Bash `/d/...`. Kill stray workers with
-`taskkill //F //IM python.exe` (careful — also kills sim Python). The WebSocket `observations` field
-is optional (worker omits it on the hot path).
+Gotchas: native Windows Python needs `D:/...` paths, not Git Bash `/d/...`. The server binds :4000;
+free it by PID (`netstat -ano | grep :4000` → `taskkill //F //PID <pid>`) rather than blanket-killing
+`python.exe` (also kills sim Python). `CLASSIFY_THREADS=0` starts the server without draining the
+queue (used to stage frames for the restart-recovery test).

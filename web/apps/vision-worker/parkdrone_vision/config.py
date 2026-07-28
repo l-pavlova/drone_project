@@ -35,16 +35,9 @@ _load_dotenv()
 DATABASE_URL = os.environ.get(
     "DATABASE_URL", "postgres://parkdrone:parkdrone@localhost:5432/parkdrone"
 )
-REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
 
-# Redis keys shared with the Node API (see apps/api). A plain list is the job
-# queue (language-agnostic, unlike BullMQ's internal format); a pub/sub channel
-# carries deltas back for WebSocket fan-out.
-JOBS_QUEUE = os.environ.get("PARKDRONE_JOBS_QUEUE", "parkdrone:jobs")
-DELTAS_CHANNEL = os.environ.get("PARKDRONE_DELTAS_CHANNEL", "parkdrone:deltas")
-
-# Object store (frames). Only used by the live worker when a job carries an
-# s3:// image_uri; the replay driver reads local files instead.
+# Object store (frames). The server writes frame bytes here on ingest and the
+# classify threads read them back; the replay driver reads local files instead.
 S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "http://localhost:9000")
 S3_REGION = os.environ.get("S3_REGION", "us-east-1")
 S3_BUCKET = os.environ.get("S3_BUCKET", "parkdrone-frames")
@@ -55,3 +48,12 @@ S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY", "minioadmin")
 SIM_OUTPUT_ROOT = os.environ.get(
     "SIM_OUTPUT_ROOT", os.path.join(REPO_ROOT, "sim", "output")
 )
+
+# ---- FastAPI server (the monolith replacing the Node API + Redis) ----------
+# Kept on :4000 so the web-user vite proxy target is unchanged.
+API_PORT = int(os.environ.get("API_PORT", "4000"))
+# Dev-only manual occupancy toggle; mount unless explicitly disabled.
+ENABLE_DEV_ROUTES = os.environ.get("ENABLE_DEV_ROUTES", "true").lower() != "false"
+# Dedicated classify threads draining the in-process job queue (numpy releases
+# the GIL during array ops, so these parallelise real CV work off the event loop).
+CLASSIFY_THREADS = int(os.environ.get("CLASSIFY_THREADS", "4"))

@@ -15,14 +15,6 @@ services:
       timeout: 3s
       retries: 10
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - redisdata:/data
-
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
@@ -35,7 +27,11 @@ services:
     volumes:
       - miniodata:/data
 
-  # Creates the frames bucket on startup so the API/worker can assume it exists.
+  # Creates the frames bucket on startup so the server can assume it exists,
+  # and sets a 1-day expiry lifecycle rule: frames are transient scoring input, so
+  # only the latest run per world is retained (keys overwrite in place) and any
+  # stale tail / abandoned-world frames age out within a day. `ilm rule add` is
+  # idempotent enough here — a duplicate rule on restart is harmless.
   minio-init:
     image: minio/mc:latest
     depends_on:
@@ -44,10 +40,10 @@ services:
       /bin/sh -c "
       until (mc alias set local http://minio:9000 minioadmin minioadmin) do sleep 1; done;
       mc mb -p local/parkdrone-frames;
+      mc ilm rule ls local/parkdrone-frames >/dev/null 2>&1 || mc ilm rule add local/parkdrone-frames --expire-days 1;
       exit 0;
       "
 
 volumes:
   pgdata:
-  redisdata:
   miniodata:

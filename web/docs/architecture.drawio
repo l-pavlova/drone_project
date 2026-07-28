@@ -9,91 +9,85 @@
         <mxCell id="title" value="PARKDRONE — Web System (UML Component Diagram)" style="text;html=1;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#14181D;" vertex="1" parent="1">
           <mxGeometry x="60" y="20" width="640" height="30" as="geometry" />
         </mxCell>
-        <mxCell id="subtitle" value="Dependencies are dashed «usage» arrows labelled with the protocol / operation. Cylinders are data stores." style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#6b747c;" vertex="1" parent="1">
-          <mxGeometry x="60" y="46" width="720" height="20" as="geometry" />
+        <mxCell id="subtitle" value="One Python FastAPI process owns the web edge AND the vision CV (classifier imported verbatim) — no Redis, no separate worker. Dashed «usage» arrows are labelled with the protocol / operation; cylinders are data stores." style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#6b747c;" vertex="1" parent="1">
+          <mxGeometry x="60" y="46" width="900" height="20" as="geometry" />
         </mxCell>
 
         <!-- ===== components ===== -->
         <mxCell id="drone" value="&#171;component&#187;&#10;Drone / Webots Sim&#10;nadir frames + poses" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=12;fillColor=#EEF1F3;strokeColor=#9AA6AE;fontColor=#14181D;spacingLeft=8;" vertex="1" parent="1">
-          <mxGeometry x="440" y="90" width="230" height="64" as="geometry" />
+          <mxGeometry x="435" y="90" width="230" height="60" as="geometry" />
         </mxCell>
 
-        <mxCell id="api" value="&#171;component&#187;&#10;API — Node / Express&#10;ingest · read · WebSocket hub" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=12;fillColor=#E4F7F4;strokeColor=#0F9E90;fontColor=#06403a;spacingLeft=8;" vertex="1" parent="1">
-          <mxGeometry x="415" y="215" width="280" height="90" as="geometry" />
+        <!-- server container (the monolith) -->
+        <mxCell id="server" value="&#171;component&#187;  PARKDRONE Server — Python / FastAPI (single process, :4000)" style="rounded=1;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=12;fontStyle=1;fillColor=#EAF2FB;strokeColor=#3B6FB0;fontColor=#1a3a5c;spacingLeft=10;spacingTop=6;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="330" y="200" width="440" height="200" as="geometry" />
         </mxCell>
 
-        <mxCell id="objstore" value="&#171;datastore&#187;&#10;Object store&#10;MinIO / S3 — raw frames" style="shape=cylinder3;html=1;whiteSpace=wrap;boundedLbl=1;backgroundOutline=1;size=14;fillColor=#EEF1F3;strokeColor=#9AA6AE;fontColor=#14181D;fontSize=11;" vertex="1" parent="1">
-          <mxGeometry x="70" y="360" width="190" height="100" as="geometry" />
+        <!-- server internals -->
+        <mxCell id="edge_c" value="Web edge&#10;ingest · read · /ws hub&#10;sync handlers → threadpool" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=11;fillColor=#E4F7F4;strokeColor=#0F9E90;fontColor=#06403a;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="350" y="250" width="170" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="vision_c" value="In-process vision&#10;classify threads (queue.Queue)&#10;score_occupancy.py verbatim" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=11;fillColor=#FDE9E4;strokeColor=#E14B2E;fontColor=#5c1c10;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="580" y="250" width="170" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="int_note" value="in-process handoff: ingest → queue.Queue → classify threads → deltas back to the /ws hub (no broker). Restart re-enqueues frames with status='queued' (rebuilt from the frame table + object store)." style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontColor=#33383d;" vertex="1" parent="1">
+          <mxGeometry x="350" y="340" width="400" height="48" as="geometry" />
         </mxCell>
 
-        <mxCell id="redis" value="&#171;message broker&#187;&#10;Redis&#10;jobs list · deltas pub/sub" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=12;fillColor=#FBF1DA;strokeColor=#C79A2E;fontColor=#5b4611;spacingLeft=8;" vertex="1" parent="1">
-          <mxGeometry x="450" y="375" width="210" height="72" as="geometry" />
+        <!-- internal edges -->
+        <mxCell id="e_edge_queue" value="queue.Queue" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#EAF2FB;exitX=1;exitY=0.35;exitDx=0;exitDy=0;entryX=0;entryY=0.35;entryDx=0;entryDy=0;" edge="1" parent="1" source="edge_c" target="vision_c">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_queue_hub" value="deltas → WS hub" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#EAF2FB;exitX=0;exitY=0.75;exitDx=0;exitDy=0;entryX=1;entryY=0.75;entryDx=0;entryDy=0;" edge="1" parent="1" source="vision_c" target="edge_c">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <mxCell id="worker" value="&#171;component&#187;&#10;Vision Worker — Python&#10;reuses score_occupancy.py" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=12;fillColor=#FDE9E4;strokeColor=#E14B2E;fontColor=#5c1c10;spacingLeft=8;" vertex="1" parent="1">
-          <mxGeometry x="415" y="520" width="280" height="90" as="geometry" />
+        <!-- ===== data stores ===== -->
+        <mxCell id="objstore" value="&#171;datastore&#187;&#10;Object store&#10;MinIO / S3 — raw frames&#10;1-day TTL · latest run / world" style="shape=cylinder3;html=1;whiteSpace=wrap;boundedLbl=1;backgroundOutline=1;size=14;fillColor=#EEF1F3;strokeColor=#9AA6AE;fontColor=#14181D;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="70" y="430" width="190" height="120" as="geometry" />
         </mxCell>
 
         <mxCell id="pg" value="&#171;database&#187;&#10;Postgres + PostGIS&#10;bay · bay_state · observation&#10;frame · drone · mission" style="shape=cylinder3;html=1;whiteSpace=wrap;boundedLbl=1;backgroundOutline=1;size=14;fillColor=#EEF1F3;strokeColor=#6b7686;fontColor=#14181D;fontSize=11;" vertex="1" parent="1">
-          <mxGeometry x="800" y="505" width="220" height="120" as="geometry" />
+          <mxGeometry x="840" y="420" width="220" height="130" as="geometry" />
         </mxCell>
 
+        <!-- ===== clients ===== -->
         <mxCell id="user" value="&#171;component&#187;&#10;User Dashboard&#10;React + Leaflet" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=12;fillColor=#E6F6EC;strokeColor=#2E9E57;fontColor=#0f4023;spacingLeft=8;" vertex="1" parent="1">
-          <mxGeometry x="300" y="700" width="230" height="78" as="geometry" />
+          <mxGeometry x="300" y="600" width="230" height="78" as="geometry" />
         </mxCell>
 
         <mxCell id="admin" value="&#171;component&#187;&#10;Admin Dashboard&#10;(planned)" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=12;fillColor=#F1F3F5;strokeColor=#9AA6AE;fontColor=#6b747c;dashed=1;spacingLeft=8;" vertex="1" parent="1">
-          <mxGeometry x="590" y="700" width="230" height="78" as="geometry" />
+          <mxGeometry x="590" y="600" width="230" height="78" as="geometry" />
         </mxCell>
 
         <!-- ===== dependencies ===== -->
-        <mxCell id="e_drone_api" value="&#171;HTTP&#187; POST /ingest/frame&#10;(frame + pose, API key)" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="drone" target="api">
+        <mxCell id="e_drone_srv" value="&#171;HTTP&#187; POST /ingest/frame&#10;(frame + pose, API key)" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="drone" target="server">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <mxCell id="e_api_obj" value="&#171;S3&#187; put frame" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="api" target="objstore">
+        <mxCell id="e_srv_obj" value="&#171;S3&#187; put frame&#10;(overwrite per world/i)" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;exitX=0;exitY=0.6;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="server" target="objstore">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <mxCell id="e_api_redis" value="&#171;enqueue&#187; job" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;exitX=0.4;exitY=1;exitDx=0;exitDy=0;entryX=0.4;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="api" target="redis">
+        <mxCell id="e_obj_srv" value="&#171;S3&#187; get frame&#10;(classify threads)" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;exitX=0.75;exitY=0;exitDx=0;exitDy=0;entryX=0.15;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="objstore" target="server">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <mxCell id="e_redis_api" value="&#171;subscribe&#187; delta" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;exitX=0.65;exitY=0;exitDx=0;exitDy=0;entryX=0.65;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="redis" target="api">
+        <mxCell id="e_srv_pg" value="&#171;SQL&#187; spatial read&#10;+ write state / observation" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;exitX=1;exitY=0.6;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="server" target="pg">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <mxCell id="e_redis_worker" value="&#171;dequeue&#187; job" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;exitX=0.4;exitY=1;exitDx=0;exitDy=0;entryX=0.4;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="redis" target="worker">
+        <mxCell id="e_user_srv" value="&#171;REST + WebSocket&#187;" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#2E9E57;fontColor=#0f4023;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="user" target="server">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <mxCell id="e_worker_redis" value="&#171;publish&#187; delta" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;exitX=0.65;exitY=0;exitDx=0;exitDy=0;entryX=0.65;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="worker" target="redis">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-
-        <mxCell id="e_obj_worker" value="&#171;S3&#187; get frame" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="objstore" target="worker">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-
-        <mxCell id="e_worker_pg" value="&#171;SQL&#187; write state / observation" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="worker" target="pg">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-
-        <mxCell id="e_api_pg" value="&#171;SQL&#187; spatial read" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="api" target="pg">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-
-        <mxCell id="e_user_api" value="&#171;REST + WebSocket&#187;" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#2E9E57;fontColor=#0f4023;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="user" target="api">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-
-        <mxCell id="e_admin_api" value="&#171;REST&#187; (planned)" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#9AA6AE;fontColor=#6b747c;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="admin" target="api">
+        <mxCell id="e_admin_srv" value="&#171;REST&#187; (planned)" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#9AA6AE;fontColor=#6b747c;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="admin" target="server">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
         <!-- foundation note -->
-        <mxCell id="note" value="packages/contracts — shared TS types + zod + the ENU projection mirrored from the sim: the coordinate spine every component speaks." style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontColor=#6b747c;" vertex="1" parent="1">
-          <mxGeometry x="60" y="805" width="760" height="30" as="geometry" />
+        <mxCell id="note" value="packages/contracts (TS) — shared types + zod + the ENU projection mirrored from the sim; the server's vision reuses the same ORIGIN/MLAT/MLON via score_occupancy.py. The coordinate spine every component speaks." style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontColor=#6b747c;" vertex="1" parent="1">
+          <mxGeometry x="60" y="720" width="820" height="30" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>

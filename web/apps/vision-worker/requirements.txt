@@ -1,7 +1,10 @@
-# PARKDRONE vision worker
+# PARKDRONE server (FastAPI monolith: web edge + in-process vision)
 numpy>=1.24
 Pillow>=10.0
-redis>=5.0
 psycopg2-binary>=2.9
-# optional: only needed when frames are fetched from S3/MinIO (worker.py)
 boto3>=1.34
+# web edge
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+websockets>=12   # uvicorn WS server impl + the replay_ingest client
