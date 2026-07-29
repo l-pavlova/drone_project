@@ -79,12 +79,18 @@ hardening) remain.** See project memory `project-web-infra.md` for the running l
   `generate_world.py`/`score_occupancy.py`; **must** stay in lockstep — same ORIGIN/MLAT/MLON).
 - `packages/db` — Postgres+PostGIS migrations and the geojson→`bay` seeder (dev tooling, run via
   `pnpm db:migrate`/`db:seed`; not on the runtime path).
-- `apps/vision-worker` (Python) — **the whole server** (FastAPI monolith). Reuses
-  `vision/score_occupancy.py`'s `project`/`bay_features`/`classify` **verbatim** (via
-  `vision_core.py`/`pipeline.py`), and adds the web edge: ingest (`POST /api/v1/ingest/frame`,
-  per-drone API key), read (`/api/v1/bays` GeoJSON, `/summary`, `/bays/:id`), `WS /ws/occupancy`
-  push, and the dev toggle. Ingest → in-process `queue.Queue` → classify threads → `bay_state` +
-  direct WebSocket push. Entry point `parkdrone_vision.server` (uvicorn on :4000).
+- `apps/vision-worker` (Python) — **the whole server** (FastAPI monolith), organized by concern
+  into subpackages: `api/` (routes in `app.py`, drone auth, the WebSocket `hub.py`), `processing/`
+  (`jobs.py`'s in-process queue + classify threads, `pipeline.py`'s per-frame `process_frame`),
+  `db/` (`pool.py`'s connection pool, `vision_db.py` for bay geometry/observations/bay_state,
+  `web_db.py` for reads/ingest/mission/auth SQL), and `vision/scoring.py` (the classifier bridge).
+  `config.py`, `s3.py`, and the CLI entry points (`server.py`, `replay.py`, `replay_ingest.py`,
+  `register_drone.py`) stay at the package root. Reuses `vision/score_occupancy.py`'s
+  `project`/`bay_features`/`classify` **verbatim** (via `vision/scoring.py`/`processing/pipeline.py`),
+  and adds the web edge: ingest (`POST /api/v1/ingest/frame`, per-drone API key), read
+  (`/api/v1/bays` GeoJSON, `/summary`, `/bays/:id`), `WS /ws/occupancy` push, and the dev toggle.
+  Ingest → in-process `queue.Queue` → classify threads → `bay_state` + direct WebSocket push.
+  Entry point `parkdrone_vision.server` (uvicorn on :4000, serving `parkdrone_vision.api.app:app`).
 - `apps/web-user` (React + react-leaflet) — the parking map (drone "survey-readout" UI identity).
 - `infra/docker-compose.yml` — postgis + minio (no Redis).
 

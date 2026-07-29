@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchBays, fetchSummary } from "../api/client";
 import { BayMap } from "../components/BayMap";
 import { CarIcon, LocateIcon, Spinner } from "../components/Icons";
+import { SurveyReadout } from "../components/SurveyReadout";
 import { bayStatus, type BayFC, type BayProps, type ZoneSummary } from "../lib/types";
 import { FMI_DEFAULT, getPosition, nearestFree, type NearestTarget, type UserPos } from "../lib/geo";
 import { useOccupancySocket } from "../hooks/useOccupancySocket";
+import styles from "./App.module.css";
 
 export default function App() {
   const [fc, setFc] = useState<BayFC | null>(null);
@@ -69,68 +71,34 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className={styles.app}>
       {fc ? (
         <BayMap fc={fc} live={live} userPos={userPos} focusKey={focusKey} target={target} />
       ) : (
-        <div className="loading">Loading map…</div>
+        <div className={styles.loading}>Loading map…</div>
       )}
 
-      {/* survey readout — the ground-station panel */}
-      <section className="readout" aria-label="Parking availability">
-        <div className="eyebrow">
-          <span className="wordmark">PARKDRONE</span>
-          <span className={`status ${connected ? "live" : "idle"}`}>
-            <i className="beacon" />
-            {connected ? "SURVEYING" : "IDLE"}
-          </span>
-        </div>
-        <div className="locus">SOFIA · {zones[0]?.zona ?? "—"}</div>
-
-        <div className="figure">{counts.free}</div>
-        <div className="figure-label">free spaces</div>
-
-        <div
-          className="meter"
-          role="img"
-          aria-label={`${counts.free} free, ${counts.occupied} occupied`}
-        >
-          <span className="seg free" style={{ flexGrow: counts.free || 0.001 }} />
-          <span className="seg occ" style={{ flexGrow: counts.occupied || 0.001 }} />
-        </div>
-        <div className="meter-legend">
-          <span>
-            <b>{counts.free}</b> free
-          </span>
-          <span>
-            <b>{counts.occupied}</b> occupied
-          </span>
-        </div>
-
-        <div className="coverage">
-          COVERAGE <b>{counts.free + counts.occupied}</b> / {surveyTotal} BAYS
-        </div>
-      </section>
+      <SurveyReadout connected={connected} zones={zones} counts={counts} surveyTotal={surveyTotal} />
 
       {/* toasts */}
-      {error && <div className="toast warn">Failed to load bays.</div>}
-      {geoMsg && <div className="toast warn">{geoMsg}</div>}
+      {error && <div className={`${styles.toast} ${styles.warn}`}>Failed to load bays.</div>}
+      {geoMsg && <div className={`${styles.toast} ${styles.warn}`}>{geoMsg}</div>}
       {target && !geoMsg && (
-        <div className="toast ok">
+        <div className={`${styles.toast} ${styles.ok}`}>
           Nearest free bay <b>{target.bayId}</b> · {Math.round(target.distance)} m away
-          <button className="toast-x" onClick={() => setTarget(null)}>
+          <button className={styles.toastX} onClick={() => setTarget(null)}>
             ✕
           </button>
         </div>
       )}
 
       {/* Google-Maps-style FAB controls, bottom-right */}
-      <div className="fab-stack">
-        <button className="fab" title="Locate me" onClick={() => void locateMe()}>
+      <div className={styles.fabStack}>
+        <button className={styles.fab} title="Locate me" onClick={() => void locateMe()}>
           <LocateIcon />
         </button>
         <button
-          className="fab car"
+          className={`${styles.fab} ${styles.car}`}
           title="Find nearest free spot"
           disabled={busy || !fc}
           onClick={() => void findNearest()}

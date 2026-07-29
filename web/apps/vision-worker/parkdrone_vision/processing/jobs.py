@@ -15,7 +15,8 @@ import threading
 
 from botocore.exceptions import ClientError
 
-from . import db, s3, web_db
+from .. import s3
+from ..db import vision_db, web_db
 from .pipeline import process_frame
 
 # S3 error codes meaning "the frame image is gone" (e.g. expired under the
@@ -37,7 +38,7 @@ def start_workers(n: int, bays, hub, loop) -> None:
 
 
 def _worker_loop(bays, hub, loop) -> None:
-    conn = db.connect()
+    conn = vision_db.connect()
     while True:
         job = _q.get()
         try:

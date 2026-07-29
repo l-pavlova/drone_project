@@ -29,11 +29,13 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse
 
-from . import db, jobs, s3, web_db
+from .. import s3
+from ..config import API_PORT, CLASSIFY_THREADS, ENABLE_DEV_ROUTES
+from ..db import vision_db, web_db
+from ..db.pool import borrow, close_pool, init_pool
+from ..processing import jobs
 from .auth import require_drone
-from .config import API_PORT, CLASSIFY_THREADS, ENABLE_DEV_ROUTES
 from .hub import Hub
-from .pool import borrow, close_pool, init_pool
 
 # FMI block origin — matches the ENU ORIGIN used across the project (and dev.ts).
 FMI = {"lon": 23.3298956, "lat": 42.6747105}
@@ -42,8 +44,8 @@ FMI = {"lon": 23.3298956, "lat": 42.6747105}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_pool()
-    conn = db.connect()
-    bays = db.load_bays_enu(conn)
+    conn = vision_db.connect()
+    bays = vision_db.load_bays_enu(conn)
     conn.close()
 
     loop = asyncio.get_running_loop()
@@ -52,7 +54,7 @@ async def lifespan(app: FastAPI):
     app.state.loop = loop
 
     # crash recovery: rebuild the in-memory queue from unscored frame rows
-    rconn = db.connect()
+    rconn = vision_db.connect()
     recovered = jobs.recover(rconn)
     rconn.close()
 

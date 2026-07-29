@@ -8,8 +8,8 @@ import json
 import psycopg2
 import psycopg2.extras
 
-from .config import DATABASE_URL
-from .vision_core import to_enu
+from ..config import DATABASE_URL
+from ..vision.scoring import to_enu
 
 
 def connect():

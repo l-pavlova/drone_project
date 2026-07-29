@@ -15,9 +15,9 @@ import sys
 import numpy as np
 from PIL import Image
 
-from . import db
 from .config import SIM_OUTPUT_ROOT
-from .pipeline import process_frame
+from .db import vision_db as db
+from .processing.pipeline import process_frame
 
 
 def main():

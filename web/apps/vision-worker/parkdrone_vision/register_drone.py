@@ -8,8 +8,8 @@ The plaintext key is shown ONCE; only its SHA-256 hash is stored.
 import secrets
 import sys
 
-from . import db
-from .auth import hash_api_key
+from .api.auth import hash_api_key
+from .db import vision_db as db
 
 
 def main() -> None:

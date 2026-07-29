@@ -7,8 +7,8 @@ import hashlib
 
 from fastapi import Header, HTTPException
 
-from . import web_db
-from .pool import borrow
+from ..db import web_db
+from ..db.pool import borrow
 
 
 def hash_api_key(key: str) -> str:

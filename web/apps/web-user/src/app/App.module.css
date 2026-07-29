@@ -1,0 +1,43 @@
+.app { position: relative; height: 100%; overflow: hidden; }
+.loading {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-family: var(--mono); color: var(--muted); letter-spacing: 1px;
+}
+
+/* ---- FAB controls (bottom-right) ---- */
+.fabStack {
+  position: absolute; right: 18px; bottom: 30px; z-index: 1200;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.fab {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--asphalt); color: var(--paint); cursor: pointer;
+  display: grid; place-items: center;
+  border: 1px solid rgba(236, 241, 237, 0.1);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  transition: transform 0.08s ease, background 0.15s ease;
+}
+.fab:hover { background: var(--asphalt-2); }
+.fab:active { transform: scale(0.93); }
+.fab svg { width: 25px; height: 25px; fill: currentColor; }
+.fab.car { background: var(--telemetry); color: #04211d; border-color: transparent; }
+.fab.car:hover { background: #17cbbb; }
+.fab:disabled { opacity: 0.5; cursor: default; }
+.fab:focus-visible { outline: 2px solid var(--telemetry); outline-offset: 3px; }
+
+/* ---- toasts (bottom-center) ---- */
+.toast {
+  position: absolute; left: 50%; bottom: 30px; transform: translateX(-50%);
+  z-index: 1200; display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; border-radius: 10px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.3px; color: var(--paint);
+  background: var(--asphalt); border: 1px solid rgba(236, 241, 237, 0.12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); max-width: 90vw;
+}
+.toast.ok b { color: var(--zelena); }
+.toast.warn { color: #ffd27a; }
+.toastX {
+  background: transparent; border: none; color: var(--muted);
+  cursor: pointer; font-size: 13px; padding: 0 2px;
+}
+.toastX:hover { color: var(--paint); }

@@ -1,4 +1,5 @@
 // Material-style glyphs (currentColor fill) used by the map FAB controls.
+import styles from "./Icons.module.css";
 
 export function LocateIcon() {
   return (
@@ -17,5 +18,13 @@ export function CarIcon() {
 }
 
 export function Spinner() {
-  return <span className="spinner" aria-hidden />;
+  return <span className={styles.spinner} aria-hidden />;
+}
+
+export function ChevronIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden>
+      <path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
+    </svg>
+  );
 }

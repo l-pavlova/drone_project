@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from psycopg2.pool import ThreadedConnectionPool
 
-from .config import DATABASE_URL
+from ..config import DATABASE_URL
 
 _pool: ThreadedConnectionPool | None = None
 

@@ -1,7 +1,8 @@
 # PARKDRONE vision worker (Python)
 
-Consumes frame jobs off Redis, classifies per-bay occupancy, writes state to
-Postgres, and publishes occupancy deltas back to the API for WebSocket fan-out.
+A single FastAPI process: the web edge (ingest, reads, WebSocket push, dev toggle) and the CV
+classifier, in one process. Frame jobs move through an in-process `queue.Queue` drained by
+dedicated classify threads — no Redis, no separate worker.
 
 It **reuses the calibrated classifier verbatim** from the project's offline vision
 stage (`vision/score_occupancy.py`): `project`, `bay_features`, `classify`, the
@@ -9,9 +10,17 @@ stage (`vision/score_occupancy.py`): `project`, `bay_features`, `classify`, the
 loop is new — one frame at a time instead of a whole `poses.json` batch, and
 decoupled from `ground_truth.json` (production has no ground truth).
 
+## Layout
+
+- `api/` — FastAPI routes (`app.py`), drone API-key auth (`auth.py`), the WebSocket fan-out hub (`hub.py`)
+- `processing/` — the in-process job queue + classify thread pool (`jobs.py`), per-frame scoring pipeline (`pipeline.py`)
+- `db/` — connection pool (`pool.py`), vision-side Postgres access: bay geometry/observations/bay_state (`vision_db.py`), web-edge SQL: reads/ingest/mission/auth (`web_db.py`)
+- `vision/scoring.py` — bridge to the offline classifier
+- root — `config.py`, `s3.py` (object store), and the CLI entry points below
+
 ## Streaming model vs. the batch script
 
-- `vision_core.score_frame(img, bays, pose)` → single-view classification of every
+- `vision.scoring.score_frame(img, bays, pose)` → single-view classification of every
   bay whose lengthwise core is ≥ `MIN_VIS` visible in this frame. Each becomes one
   **observation** row (append-only history).
 - `bay_state` (current occupancy) is a **majority vote over that bay's accumulated
@@ -25,8 +34,8 @@ decoupled from `ground_truth.json` (production has no ground truth).
 python -m venv .venv && . .venv/Scripts/activate     # or your env
 pip install -r requirements.txt
 
-# live worker (needs Redis + Postgres + object store)
-python -m parkdrone_vision.worker
+# the server (needs Postgres + object store; see top-level CLAUDE.md for full dev setup)
+python -m parkdrone_vision.server
 
 # golden test: replay a sim world through the streaming scorer and compare
 # bay_state to the committed occupancy_results.json

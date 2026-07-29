@@ -16,6 +16,7 @@ import type { BayFC, BayProps, BayStatus } from "../lib/types";
 import { bayStatus } from "../lib/types";
 import type { NearestTarget, UserPos } from "../lib/geo";
 import type { LiveState } from "../hooks/useOccupancySocket";
+import styles from "./BayMap.module.css";
 
 const ORIGIN: LatLngExpression = [42.6747105, 23.3298956];
 
@@ -93,7 +94,7 @@ export function BayMap({
   );
 
   return (
-    <MapContainer center={ORIGIN} zoom={17} className="map" preferCanvas zoomControl={false}>
+    <MapContainer center={ORIGIN} zoom={17} className={styles.map} preferCanvas zoomControl={false}>
       <ZoomControl position="bottomleft" />
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
@@ -141,7 +142,7 @@ export function BayMap({
           radius={10}
           pathOptions={{ color: TELEMETRY, fillColor: COLOR.free, fillOpacity: 1, weight: 3 }}
         >
-          <Tooltip permanent direction="top" offset={[0, -8]} className="tele-tip">
+          <Tooltip permanent direction="top" offset={[0, -8]} className={styles.teleTip}>
             NEAREST FREE · {Math.round(target.distance)} m
           </Tooltip>
         </CircleMarker>
@@ -172,9 +173,9 @@ export function BayMap({
 
 function BayPopup({ props, status }: { props: BayProps; status: BayStatus }) {
   return (
-    <div className="popup">
+    <div className={styles.popup}>
       <strong>Bay {props.bay_id}</strong>
-      <div className={`badge ${status}`}>{status.toUpperCase()}</div>
+      <div className={`${styles.badge} ${styles[status]}`}>{status.toUpperCase()}</div>
       <dl>
         <dt>Street</dt><dd>{props.street ?? "—"}</dd>
         <dt>Zone</dt><dd>{props.zona ?? "—"}</dd>

@@ -6,14 +6,14 @@ Delta fan-out is no longer Redis pub/sub: process_frame just returns the deltas
 and the caller broadcasts them (the FastAPI hub in production, nothing in the
 replay test).
 """
-from . import db
-from .vision_core import score_frame
+from ..db import vision_db
+from ..vision.scoring import score_frame
 
 
 def process_frame(conn, world, frame_idx, img_arr, pose, bays, frame_id=None, gt=None):
     scores = score_frame(img_arr, bays, pose)
-    db.insert_observations(conn, world, frame_idx, scores, gt=gt)
+    vision_db.insert_observations(conn, world, frame_idx, scores, gt=gt)
     touched = [s["bay_id"] for s in scores]
-    deltas = db.recompute_states(conn, world, touched, frame_idx)
+    deltas = vision_db.recompute_states(conn, world, touched, frame_idx)
     conn.commit()
     return {"scored": len(scores), "deltas": deltas}

@@ -10,8 +10,8 @@ import os
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-# parkdrone_vision -> vision-worker -> apps -> web -> <repo root> -> vision
-_VISION_DIR = os.path.normpath(os.path.join(_HERE, "..", "..", "..", "..", "vision"))
+# parkdrone_vision/vision -> parkdrone_vision -> vision-worker -> apps -> web -> <repo root> -> vision
+_VISION_DIR = os.path.normpath(os.path.join(_HERE, "..", "..", "..", "..", "..", "vision"))
 if _VISION_DIR not in sys.path:
     sys.path.insert(0, _VISION_DIR)
 
