@@ -21,6 +21,14 @@ export function Spinner() {
   return <span className={styles.spinner} aria-hidden />;
 }
 
+export function NavigateIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden>
+      <path d="M12 2 4.5 20.29l.71.71L12 18l6.79 3 .71-.71z" />
+    </svg>
+  );
+}
+
 export function ChevronIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden>

@@ -10,10 +10,10 @@ from ..db import vision_db
 from ..vision.scoring import score_frame
 
 
-def process_frame(conn, world, frame_idx, img_arr, pose, bays, frame_id=None, gt=None):
+def process_frame(conn, survey_area, frame_idx, img_arr, pose, bays, frame_id=None, gt=None):
     scores = score_frame(img_arr, bays, pose)
-    vision_db.insert_observations(conn, world, frame_idx, scores, gt=gt)
+    vision_db.insert_observations(conn, survey_area, frame_idx, scores, gt=gt)
     touched = [s["bay_id"] for s in scores]
-    deltas = vision_db.recompute_states(conn, world, touched, frame_idx)
+    deltas = vision_db.recompute_states(conn, survey_area, touched, frame_idx)
     conn.commit()
     return {"scored": len(scores), "deltas": deltas}

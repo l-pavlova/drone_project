@@ -1,4 +1,4 @@
-import type { BayFC, ZoneSummary } from "../lib/types";
+import type { BayFC, RouteResult, ZoneSummary } from "../lib/types";
 
 export async function fetchBays(bbox?: string, zona?: string): Promise<BayFC> {
   const q = new URLSearchParams();
@@ -12,5 +12,21 @@ export async function fetchBays(bbox?: string, zona?: string): Promise<BayFC> {
 export async function fetchSummary(): Promise<{ zones: ZoneSummary[] }> {
   const res = await fetch("/api/v1/summary");
   if (!res.ok) throw new Error(`GET /summary -> ${res.status}`);
+  return res.json();
+}
+
+/** Road route between two points. 502 means the router is unavailable — the
+ *  caller falls back to the straight-line hint rather than showing an error. */
+export async function fetchRoute(
+  from: { lat: number; lon: number },
+  to: { lat: number; lon: number },
+  signal?: AbortSignal,
+): Promise<RouteResult> {
+  const q = new URLSearchParams({
+    from: `${from.lon},${from.lat}`,
+    to: `${to.lon},${to.lat}`,
+  });
+  const res = await fetch(`/api/v1/route?${q.toString()}`, { signal });
+  if (!res.ok) throw new Error(`GET /route -> ${res.status}`);
   return res.json();
 }

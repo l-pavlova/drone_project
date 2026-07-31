@@ -1,9 +1,9 @@
-"""End-to-end harness: replay a sim world's frames through the LIVE server
+"""End-to-end harness: replay a sim survey area's frames through the LIVE server
 (ingest -> in-process queue -> classify threads -> WebSocket push) and assert the
 pushed deltas + final /bays state match the offline result. Python port of
 apps/api/src/scripts/replay-ingest.ts; hits the same HTTP/WS contract.
 
-    API_KEY=<key> python -m parkdrone_vision.replay_ingest [world] [api_base]
+    API_KEY=<key> python -m parkdrone_vision.replay_ingest [survey_area] [api_base]
 """
 import asyncio
 import json
@@ -52,13 +52,13 @@ def _post_frame(url, api_key, png, meta_str, filename):
 
 
 async def main() -> None:
-    world = sys.argv[1] if len(sys.argv) > 1 else "fmi_block"
+    survey_area = sys.argv[1] if len(sys.argv) > 1 else "fmi_block"
     api_base = sys.argv[2] if len(sys.argv) > 2 else "http://localhost:4000"
     api_key = os.environ.get("API_KEY")
     if not api_key:
         raise SystemExit("set API_KEY (from register_drone)")
     drone_id = os.environ.get("DRONE_ID", "drone-1")
-    out_dir = os.path.join(SIM_OUTPUT_ROOT, world)
+    out_dir = os.path.join(SIM_OUTPUT_ROOT, survey_area)
 
     with open(os.path.join(out_dir, "poses.json"), encoding="utf-8") as f:
         poses = json.load(f)
@@ -91,7 +91,7 @@ async def main() -> None:
     # 2) start a mission
     mission = await loop.run_in_executor(
         None, _post_json, f"{api_base}/api/v1/ingest/mission/start",
-        {"world": world, "area": "verification", "frames_expected": len(poses)}, api_key,
+        {"survey_area": survey_area, "area": "verification", "frames_expected": len(poses)}, api_key,
     )
     print("mission", mission["mission_id"])
 
@@ -101,7 +101,7 @@ async def main() -> None:
         with open(os.path.join(out_dir, f"frame_{i:03d}.png"), "rb") as f:
             png = f.read()
         meta = json.dumps(
-            {"drone_id": drone_id, "world": world, "mission_id": mission["mission_id"], "pose": pose}
+            {"drone_id": drone_id, "survey_area": survey_area, "mission_id": mission["mission_id"], "pose": pose}
         )
         status = await loop.run_in_executor(
             None, _post_frame, f"{api_base}/api/v1/ingest/frame", api_key, png, meta, f"frame_{i}.png"

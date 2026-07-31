@@ -25,7 +25,7 @@ python get_roads.py                        # OSM street centerlines for the bloc
 ```bash
 python generate_world.py [half_m] [occ_frac]   # default 75 0.5 -> worlds/fmi_block.wbt + worlds/ground_truth.json
 ```
-This reads `../data/block_bays.geojson` (plus `block_roads.geojson` if present), projects to local metres, and emits the world (ground, OSM streets as Webots `Road` protos, painted bays, real car models — 7 vehicle Simple protos — on a known-occupancy subset, follow-drone viewpoint) plus `ground_truth.json` (bay_id -> occupied). Car/model randoms come from a separate `random.Random(7)` stream so `ground_truth.json` stays stable. `DirectionalLight` has `castShadows FALSE` — shadow mapping paints streak artifacts on the road/ground in the nadir frames. Then run the world (see "Running Webots" below). The route (`worlds/route.json`) is an open-path rural-postman walk of the OSM street centerlines of every street that has bays: disconnected coverage components are joined by shortest road transits (MST), odd-degree nodes are evened out with a minimum-weight matching (exact blossom if `networkx` is installed, stdlib fallback otherwise; two virtual endpoints make it an open path whose start is the endpoint nearest the origin), then a Hierholzer Euler walk flies every coverage edge once with deadheads only along the matched repeats — waypoints every 10 m because the camera footprint at 30 m is only ~25×15 m. The controller `controllers/parkdrone/parkdrone.py` takes off to 30 m, flies that route (square-lawnmower fallback if route.json is missing), and writes `output/<world>/frame_###.png` + `output/<world>/poses.json` at each waypoint (plus timed diagnostic `snap_###.png`). Worlds are per-scale file sets: `generate_world.py [half_m] [occ_frac] [name]` writes `<name>.wbt` + `<name>.route.json` + `<name>.ground_truth.json` (default name `fmi_block` keeps legacy `route.json`/`ground_truth.json`); the `.wbt` passes its route file to the controller via `controllerArgs`, which also keys the output subfolder. E.g. the 1 km world: `python generate_world.py 500 0.5 fmi_block_1km`. The local-metre frame is pinned by `ORIGIN` in `generate_world.py` — do NOT let it drift when re-cutting data at other sizes.
+This reads `../data/block_bays.geojson` (plus `block_roads.geojson` if present), projects to local metres, and emits the world (ground, OSM streets as Webots `Road` protos, painted bays, real car models — 7 vehicle Simple protos — on a known-occupancy subset, follow-drone viewpoint) plus `ground_truth.json` (bay_id -> occupied). Car/model randoms come from a separate `random.Random(7)` stream so `ground_truth.json` stays stable. `DirectionalLight` has `castShadows FALSE` — shadow mapping paints streak artifacts on the road/ground in the nadir frames. Then run the world (see "Running Webots" below). The route (`worlds/route.json`) is an open-path rural-postman walk of the OSM street centerlines of every street that has bays: disconnected coverage components are joined by shortest road transits (MST), odd-degree nodes are evened out with a minimum-weight matching (exact blossom if `networkx` is installed, stdlib fallback otherwise; two virtual endpoints make it an open path whose start is the endpoint nearest the origin), then a Hierholzer Euler walk flies every coverage edge once with deadheads only along the matched repeats — waypoints every 10 m because the camera footprint at 30 m is only ~25×15 m. The controller `controllers/parkdrone/parkdrone.py` takes off to 30 m, flies that route (square-lawnmower fallback if route.json is missing), and writes `output/<survey_area>/frame_###.png` + `output/<survey_area>/poses.json` at each waypoint (plus timed diagnostic `snap_###.png`). Worlds are per-scale file sets: `generate_world.py [half_m] [occ_frac] [name]` writes `<name>.wbt` + `<name>.route.json` + `<name>.ground_truth.json` (default name `fmi_block` keeps legacy `route.json`/`ground_truth.json`); the `.wbt` passes its route file to the controller via `controllerArgs`, which also keys the output subfolder. E.g. the 1 km world: `python generate_world.py 500 0.5 fmi_block_1km`. The local-metre frame is pinned by `ORIGIN` in `generate_world.py` — do NOT let it drift when re-cutting data at other sizes.
 
 ### 3. Flight-log analysis (real-flight debugging, separate from sim)
 ```bash
@@ -42,7 +42,7 @@ Webots is installed at `C:\Program Files\Webots\msys64\mingw64\bin\webots.exe`. 
 Critical run-time gotchas (each cost real debugging time):
 - **Capture stdout by PIPING, not file redirect.** Webots block-buffers stdout to a file and loses it when the process is killed (timeout). Piping to `grep`/`head` flushes line-by-line; `head -N` also stops the otherwise-infinite controller loop.
 - **Kill stray Webots first.** A leftover instance causes a port conflict and the next run hangs with zero output: `taskkill //F //IM webots-bin.exe; taskkill //F //IM webotsw.exe; taskkill //F //IM python.exe`.
-- The controller writes `frame_###.png` / `poses.json` to `sim/output/<world>/` (world name derived from the route file passed in `controllerArgs`), so disk output is the reliable source of truth even if console is lost. Pre-2026-07-04 runs live loose in `sim/output/`.
+- The controller writes `frame_###.png` / `poses.json` to `sim/output/<survey_area>/` (survey area name derived from the route file passed in `controllerArgs`), so disk output is the reliable source of truth even if console is lost. Pre-2026-07-04 runs live loose in `sim/output/`.
 - `EXTERNPROTO` for `Mavic2Pro.proto` is pinned to **R2023b** via `WEBOTS_VER` in `generate_world.py`; change it if your Webots release differs, then regenerate the world. Controller device names (`camera`, `inertial unit`, `gps`, `gyro`, `camera roll`, `camera pitch`, `front/rear left/right propeller`) assume that proto.
 
 ## Architecture (the big picture)
@@ -92,6 +92,10 @@ hardening) remain.** See project memory `project-web-infra.md` for the running l
   Ingest → in-process `queue.Queue` → classify threads → `bay_state` + direct WebSocket push.
   Entry point `parkdrone_vision.server` (uvicorn on :4000, serving `parkdrone_vision.api.app:app`).
 - `apps/web-user` (React + react-leaflet) — the parking map (drone "survey-readout" UI identity).
+  Styling convention: **CSS Modules, one `Component.module.css` per component** (no shared
+  per-component classes in `styles/global.css` — that file is trimmed to CSS variables/reset/base
+  sizing only). Use `:global(...)` only for classes owned by a third party we don't render
+  ourselves (e.g. Leaflet's injected `.leaflet-popup-content`).
 - `infra/docker-compose.yml` — postgis + minio (no Redis).
 
 ### Architecture invariants (do not regress)
@@ -104,11 +108,17 @@ hardening) remain.** See project memory `project-web-infra.md` for the running l
   holds. Read/ingest handlers are sync `def` (Starlette threadpool) so blocking psycopg2/boto3 never
   touch the loop; only the WS endpoint is async.
 - **Durability without a broker:** an in-memory queue loses in-flight jobs on restart, so on startup
-  the server re-enqueues frames with `status='queued'` (rebuilt from the `frame` table + S3). A
-  frame whose image has expired from the store is marked `failed` so recovery won't loop on it.
+  the server re-enqueues jobs with `status='queued'` (rebuilt by joining `frame_job` to `frame`,
+  plus S3). A frame whose image has expired from the store is marked `failed` so recovery won't
+  loop on it.
+- **`frame` and `frame_job` are one thing each.** `frame` is the append-only ingest ledger (pose,
+  payload pointer, provenance — never UPDATEd); `frame_job` is the 1:1 classify work state
+  (`status`, `enqueued_at`, `finished_at`). Both are written in one transaction before the job is
+  enqueued; a duplicate ingest creates no job row. `ON DELETE CASCADE` means clearing a survey
+  area's `frame` rows still clears its jobs.
 - **Bay ids: int in `block_bays.geojson`, string everywhere in the web tier**.
-- Frame ingest is idempotent on `UNIQUE(drone_id, world, i)` — a re-send does NOT re-enqueue; to
-  reprocess a world, clear the `frame` table first.
+- Frame ingest is idempotent on `UNIQUE(drone_id, survey_area, i)` — a re-send does NOT re-enqueue; to
+  reprocess a survey area, clear the `frame` table first.
 - The server classifies **all** visible bays (production has no ground truth); `gt` is eval-only.
 
 ### Run it (dev)
@@ -131,7 +141,7 @@ Verification harnesses (all Python, run from `apps/vision-worker`):
   server needed.
 - Full stack E2E: register a drone `python -m parkdrone_vision.register_drone drone-1`, then
   `API_KEY=<key> python -m parkdrone_vision.replay_ingest fmi_block` (expect WS deltas received +
-  final `/bays` matching the offline result). To re-run, first clear the world's `frame` rows
+  final `/bays` matching the offline result). To re-run, first clear the survey area's `frame` rows
   (idempotency skips duplicates).
 
 ### Dev/test occupancy toggle (drive the dashboard by hand)

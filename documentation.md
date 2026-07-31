@@ -108,7 +108,7 @@ byte-identical routes).
 
 ## 4. World building (`sim/generate_world.py`)
 
-`python generate_world.py [window_half_m] [occupied_fraction] [world_name]`
+`python generate_world.py [window_half_m] [occupied_fraction] [survey_area]`
 reads the bay and road GeoJSON, keeps a square window of the given half-size
 around the origin, and emits a complete Webots world plus its metadata:
 
@@ -162,7 +162,7 @@ changes to car placement never change the ground truth.
 
 The same generator covers all scales; each world is an independent file set
 with its own route and ground truth, and the controller writes its captures to
-a per-world output folder (`sim/output/<world>/frame_###.png`, `poses.json`):
+a per-survey-area output folder (`sim/output/<survey_area>/frame_###.png`, `poses.json`):
 
 | world | half-size | bays | cars | routed streets | route | waypoints |
 |---|---|---|---|---|---|---|
@@ -526,7 +526,7 @@ by an off-the-shelf equivalent, and what changes.
   detection-to-bay matching maths is identical.
 - **The vision stage transfers by design.** The detector consumes
   georeferenced nadir frames plus poses; whether those come from
-  `sim/output/<world>/` or from the real camera is transparent to it.
+  `sim/output/<survey_area>/` or from the real camera is transparent to it.
   Simulated frames additionally serve as pre-training/validation data with
   perfect labels (with the usual sim-to-real domain gap — see 10.3).
 

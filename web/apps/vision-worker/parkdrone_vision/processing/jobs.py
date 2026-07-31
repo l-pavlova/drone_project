@@ -45,7 +45,7 @@ def _worker_loop(bays, hub, loop) -> None:
             img = s3.get_frame_array(job.get("image_path") or job["image_uri"])
             res = process_frame(
                 conn,
-                job["world"],
+                job["survey_area"],
                 job["frame_idx"],
                 img,
                 job["pose"],

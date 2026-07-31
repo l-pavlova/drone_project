@@ -44,7 +44,7 @@ S3_BUCKET = os.environ.get("S3_BUCKET", "parkdrone-frames")
 S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY", "minioadmin")
 S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY", "minioadmin")
 
-# Where the sim writes output/<world>/ (frames + poses.json). Used by replay.
+# Where the sim writes output/<survey_area>/ (frames + poses.json). Used by replay.
 SIM_OUTPUT_ROOT = os.environ.get(
     "SIM_OUTPUT_ROOT", os.path.join(REPO_ROOT, "sim", "output")
 )
@@ -57,3 +57,15 @@ ENABLE_DEV_ROUTES = os.environ.get("ENABLE_DEV_ROUTES", "true").lower() != "fals
 # Dedicated classify threads draining the in-process job queue (numpy releases
 # the GIL during array ops, so these parallelise real CV work off the event loop).
 CLASSIFY_THREADS = int(os.environ.get("CLASSIFY_THREADS", "4"))
+
+# ---- driving directions (GET /api/v1/route -> routing.py) -------------------
+# The browser never calls the router itself; we proxy, so user coordinates stay
+# on our origin and the provider is swappable. Defaults to the public OSRM demo
+# server (rate-limited — fine for the demo); point OSRM_BASE at a self-hosted
+# OSRM for production.
+OSRM_BASE = os.environ.get("OSRM_BASE", "https://router.project-osrm.org")
+OSRM_TIMEOUT_S = float(os.environ.get("OSRM_TIMEOUT_S", "6"))
+# The map re-routes as the driver moves, so cache on quantised coordinates
+# instead of hammering the upstream router.
+ROUTE_CACHE_TTL_S = float(os.environ.get("ROUTE_CACHE_TTL_S", "60"))
+ROUTE_CACHE_MAX = int(os.environ.get("ROUTE_CACHE_MAX", "256"))

@@ -8,7 +8,7 @@ keeps a square window around the centre, and writes:
   worlds/ground_truth.json    - bay_id -> occupied (for detection evaluation)
 
 Usage:
-    python generate_world.py [window_half_m] [occupied_fraction] [world_name]
+    python generate_world.py [window_half_m] [occupied_fraction] [survey_area]
     python generate_world.py 75 0.5                    # default fmi_block.wbt
     python generate_world.py 500 0.5 fmi_block_1km     # separate big world:
         writes fmi_block_1km.wbt + fmi_block_1km.route.json +

@@ -37,7 +37,7 @@ pip install -r requirements.txt
 # the server (needs Postgres + object store; see top-level CLAUDE.md for full dev setup)
 python -m parkdrone_vision.server
 
-# golden test: replay a sim world through the streaming scorer and compare
+# golden test: replay a sim survey area through the streaming scorer and compare
 # bay_state to the committed occupancy_results.json
 python -m parkdrone_vision.replay fmi_block
 ```

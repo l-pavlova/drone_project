@@ -3,16 +3,16 @@
 PARKDRONE vision stage v1: per-bay occupancy from captured nadir frames.
 
 Georeferencing-first approach: bay polygons (data/block_bays.geojson) and the
-drone pose per frame (sim/output/<world>/poses.json) live in the same pinned
+drone pose per frame (sim/output/<survey_area>/poses.json) live in the same pinned
 ENU frame as the world, so each bay can be PROJECTED into each frame. For
 every bay we pick the best view (bay fully inside the frame, closest to the
 image centre), classify the bay crop occupied/free, and score the predictions
-against sim/worlds/<world>.ground_truth.json.
+against sim/worlds/<survey_area>.ground_truth.json.
 
-    python score_occupancy.py [world_name]      # default fmi_block_4st
+    python score_occupancy.py [survey_area]      # default fmi_block_4st
 
-Writes sim/output/<world>/occupancy_results.json and annotated debug frames to
-sim/output/<world>/debug/. The v1.5 classifier is deliberately simple (painted
+Writes sim/output/<survey_area>/occupancy_results.json and annotated debug frames to
+sim/output/<survey_area>/debug/. The v1.5 classifier is deliberately simple (painted
 bays are near-white; a parked car covers the paint): paint/dark fractions plus
 brightness and texture thresholds, evaluated on the lengthwise CORE of the bay
 (a neighbour's car can only overhang past the bay's short ends, so the core
@@ -27,11 +27,11 @@ from PIL import Image, ImageDraw
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..")
 
-WORLD = sys.argv[1] if len(sys.argv) > 1 else "fmi_block_4st"
-OUT = os.path.join(ROOT, "sim", "output", WORLD)
+SURVEY_AREA = sys.argv[1] if len(sys.argv) > 1 else "fmi_block_4st"
+OUT = os.path.join(ROOT, "sim", "output", SURVEY_AREA)
 GT_FILE = os.path.join(ROOT, "sim", "worlds",
-                       "ground_truth.json" if WORLD == "fmi_block"
-                       else f"{WORLD}.ground_truth.json")
+                       "ground_truth.json" if SURVEY_AREA == "fmi_block"
+                       else f"{SURVEY_AREA}.ground_truth.json")
 BAYS = os.path.join(ROOT, "data", "block_bays.geojson")
 
 # camera intrinsics of the Mavic2Pro proto camera (see parkdrone.py startup log)
@@ -69,7 +69,7 @@ def project(px, py, pose):
 
 
 def load_bays():
-    """Bays that exist in this world's ground truth, as ENU polygons."""
+    """Bays that exist in this survey area's ground truth, as ENU polygons."""
     gt = json.load(open(GT_FILE, encoding="utf-8"))
     feats = json.load(open(BAYS, encoding="utf-8"))["features"]
     bays = []
@@ -225,7 +225,7 @@ def main():
     fp = sum(1 for r in results.values() if r["pred"] and not r["gt"])
     fn = sum(1 for r in results.values() if not r["pred"] and r["gt"])
     n = len(results)
-    print(f"world {WORLD}: {len(bays)} bays, {n} classified, {len(uncovered)} uncovered")
+    print(f"survey area {SURVEY_AREA}: {len(bays)} bays, {n} classified, {len(uncovered)} uncovered")
     print(f"confusion: TP={tp} TN={tn} FP={fp} FN={fn}")
     if n:
         print(f"accuracy {100*(tp+tn)/n:.1f}%   "
@@ -240,7 +240,7 @@ def main():
                   f"bright={r['core_brightness']:.0f} std={r['core_std']:.0f} "
                   f"vis={r['vis']} frame={r['frame']} off={r['center_off_px']}px")
 
-    json.dump({"world": WORLD, "results": results, "uncovered": uncovered},
+    json.dump({"survey_area": SURVEY_AREA, "results": results, "uncovered": uncovered},
               open(os.path.join(OUT, "occupancy_results.json"), "w"), indent=1)
 
     # ---- debug overlays: frames containing errors (or first 3 if none)

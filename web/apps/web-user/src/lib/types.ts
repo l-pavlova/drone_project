@@ -30,6 +30,15 @@ export interface ZoneSummary {
   unknown: number;
 }
 
+/** GET /api/v1/route — road route from the driver to a bay (server proxies OSRM). */
+export interface RouteResult {
+  distance_m: number;
+  duration_s: number;
+  coordinates: [number, number][]; // [lon, lat], GeoJSON order
+  provider: string;
+  cached: boolean;
+}
+
 export type BayStatus = "free" | "occupied" | "unknown";
 
 /** Occupancy TTL: a bay not re-surveyed within this window is "unknown", not free. */

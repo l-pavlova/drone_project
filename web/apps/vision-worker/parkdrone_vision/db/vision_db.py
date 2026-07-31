@@ -32,7 +32,7 @@ def load_bays_enu(conn):
     return bays
 
 
-def insert_observations(conn, world, frame_idx, scores, gt=None):
+def insert_observations(conn, survey_area, frame_idx, scores, gt=None):
     """Append one observation row per scored bay (single view)."""
     if not scores:
         return
@@ -48,7 +48,7 @@ def insert_observations(conn, world, frame_idx, scores, gt=None):
                 s["bay_id"],
                 s["occupied"],
                 frame_idx,
-                world,
+                survey_area,
                 1 if s["occupied"] else 0,  # votes_occupied (this view)
                 1,                          # views (this view)
                 fl(f.get("vis")),
@@ -65,7 +65,7 @@ def insert_observations(conn, world, frame_idx, scores, gt=None):
         psycopg2.extras.execute_values(
             cur,
             """INSERT INTO observation
-                 (bay_id, occupied, frame_idx, world, votes_occupied, views, vis,
+                 (bay_id, occupied, frame_idx, survey_area, votes_occupied, views, vis,
                   center_off_px, core_paint_frac, core_dark_frac, core_chroma,
                   core_brightness, core_std, gt)
                VALUES %s""",
@@ -73,7 +73,7 @@ def insert_observations(conn, world, frame_idx, scores, gt=None):
         )
 
 
-def recompute_states(conn, world, bay_ids, frame_idx):
+def recompute_states(conn, survey_area, bay_ids, frame_idx):
     """Recompute bay_state (majority vote) for the given bays; upsert and return
     the deltas for bays whose occupancy flipped or became known for the first time.
 
@@ -85,8 +85,8 @@ def recompute_states(conn, world, bay_ids, frame_idx):
             cur.execute(
                 """SELECT count(*) AS n,
                           coalesce(sum(CASE WHEN occupied THEN 1 ELSE 0 END), 0) AS occ
-                     FROM observation WHERE bay_id = %s AND world = %s""",
-                (bay_id, world),
+                     FROM observation WHERE bay_id = %s AND survey_area = %s""",
+                (bay_id, survey_area),
             )
             n, occ = cur.fetchone()
             if n == 0:

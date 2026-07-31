@@ -18,6 +18,14 @@
 .badge.occupied { background: var(--signal); }
 .badge.unknown { background: var(--muted); }
 
+/* Google-Maps hand-off from a free bay's popup */
+.dirLink {
+  display: inline-block; margin-top: 7px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.5px;
+  color: #0d7f6f; text-decoration: none; font-weight: 600;
+}
+.dirLink:hover { text-decoration: underline; }
+
 @media (max-width: 480px) {
   /* ~30% shorter bay popup on phones: tighter type, spacing, and badge.
      leaflet-popup-content is Leaflet's own wrapper, not ours — must stay global. */

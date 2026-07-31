@@ -5,6 +5,7 @@ separate vision worker, and Redis.
                                   ├─ jobs.enqueue → in-process queue → classify
   read  (PostGIS GeoJSON/summary) │                 threads (jobs.py) → hub push
   dev toggle ─────────────────────┘
+  route proxy ── OSRM driving directions to a free bay (routing.py)
   WS /ws/occupancy ── hub fan-out to browsers
 
 Read/ingest/dev handlers are sync `def`, so Starlette runs them in its
@@ -23,13 +24,14 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     UploadFile,
     WebSocket,
     WebSocketDisconnect,
 )
 from fastapi.responses import JSONResponse
 
-from .. import s3
+from .. import routing, s3
 from ..config import API_PORT, CLASSIFY_THREADS, ENABLE_DEV_ROUTES
 from ..db import vision_db, web_db
 from ..db.pool import borrow, close_pool, init_pool
@@ -79,13 +81,13 @@ def health():
 
 @app.post("/api/v1/ingest/mission/start", status_code=201)
 def mission_start(body: dict, drone_id: str = Depends(require_drone)):
-    world = body.get("world")
-    if not world:
-        raise HTTPException(status_code=400, detail="world required")
+    survey_area = body.get("survey_area")
+    if not survey_area:
+        raise HTTPException(status_code=400, detail="survey_area required")
     mission_id = str(uuid.uuid4())
     with borrow(commit=True) as conn:
         web_db.insert_mission(
-            conn, mission_id, drone_id, world,
+            conn, mission_id, drone_id, survey_area,
             body.get("area"), body.get("frames_expected"),
         )
     return {"mission_id": mission_id}
@@ -111,18 +113,18 @@ def ingest_frame(
     if meta_obj.get("drone_id") != drone_id:
         raise HTTPException(status_code=403, detail="drone_id mismatch")
 
-    world = meta_obj["world"]
+    survey_area = meta_obj["survey_area"]
     pose = meta_obj["pose"]
     mission_id = meta_obj.get("mission_id")
 
     # Store bytes first (matches the retired Node order), then the frame row.
-    key = f"{world}/{drone_id}/frame_{pose['i']:03d}.png"
+    key = f"{survey_area}/{drone_id}/frame_{pose['i']:03d}.png"
     image_uri = s3.put_frame(key, frame.file.read())
 
     frame_id = str(uuid.uuid4())
     with borrow(commit=True) as conn:
         fid, duplicate = web_db.insert_frame(
-            conn, frame_id, drone_id, mission_id, world, pose, image_uri
+            conn, frame_id, drone_id, mission_id, survey_area, pose, image_uri
         )
         if duplicate:
             return JSONResponse(
@@ -134,7 +136,7 @@ def ingest_frame(
     jobs.enqueue(
         {
             "frame_id": frame_id,
-            "world": world,
+            "survey_area": survey_area,
             "frame_idx": pose["i"],
             "pose": pose,
             "image_uri": image_uri,
@@ -174,6 +176,38 @@ def get_bay(bay_id: str):
     if d is None:
         raise HTTPException(status_code=404, detail="bay not found")
     return d
+
+
+# ---- driving directions (public) -------------------------------------------
+
+def _lonlat(raw: str, what: str) -> tuple[float, float]:
+    parts = raw.split(",")
+    if len(parts) != 2:
+        raise HTTPException(status_code=400, detail=f"{what} must be lon,lat")
+    try:
+        lon, lat = float(parts[0]), float(parts[1])
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"{what} must be finite numbers")
+    # also rejects NaN/inf, since every comparison against them is False
+    if not (-180.0 <= lon <= 180.0 and -90.0 <= lat <= 90.0):
+        raise HTTPException(status_code=400, detail=f"{what} out of range")
+    return lon, lat
+
+
+@app.get("/api/v1/route")
+def get_route(origin: str = Query(..., alias="from"), to: str = Query(...)):
+    """Road route from the driver to a bay, proxied to OSRM (see routing.py).
+
+    Both params are `lon,lat` (GeoJSON order, like the rest of the API). Sync
+    `def`, so the blocking urllib call runs in Starlette's threadpool.
+    """
+    flon, flat = _lonlat(origin, "from")
+    tlon, tlat = _lonlat(to, "to")
+    try:
+        return routing.driving_route(flon, flat, tlon, tlat)
+    except routing.RoutingError as exc:
+        # 502 is expected and handled: the map falls back to a straight line
+        raise HTTPException(status_code=502, detail=str(exc))
 
 
 # ---- dev/test manual occupancy toggle --------------------------------------

@@ -4,7 +4,7 @@ The FastAPI ingest handler writes frame bytes here (`put_frame`) and stores only
 the returned s3:// uri in the frame row; the classify threads read them back
 (`get_frame_array`). Lifted out of the old worker.py so both sides share one
 client. A 1-day expiry lifecycle rule on the bucket keeps only the latest run
-per world (see infra/docker-compose.yml).
+per survey area (see infra/docker-compose.yml).
 """
 import io
 

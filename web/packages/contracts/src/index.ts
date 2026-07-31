@@ -14,7 +14,7 @@ export function toBayId(raw: string | number): BayId {
 
 // ---------------------------------------------------------------------------
 // Pose — one captured frame's drone state. Matches a record in
-// sim/output/<world>/poses.json (parkdrone.py). `cam_*` are optional (only
+// sim/output/<survey_area>/poses.json (parkdrone.py). `cam_*` are optional (only
 // present when the Webots proto exposes those gimbal sensors).
 // ---------------------------------------------------------------------------
 export const poseSchema = z.object({
@@ -37,7 +37,7 @@ export type Pose = z.infer<typeof poseSchema>;
 // ---------------------------------------------------------------------------
 export const ingestFrameMetaSchema = z.object({
   drone_id: z.string().min(1),
-  world: z.string().min(1),
+  survey_area: z.string().min(1),
   mission_id: z.string().min(1).optional(),
   pose: poseSchema,
 });
@@ -45,7 +45,7 @@ export type IngestFrameMeta = z.infer<typeof ingestFrameMetaSchema>;
 
 export const missionStartSchema = z.object({
   drone_id: z.string().min(1),
-  world: z.string().min(1),
+  survey_area: z.string().min(1),
   area: z.string().optional(),
   frames_expected: z.number().int().nonnegative().optional(),
 });
@@ -107,7 +107,7 @@ export const observationSchema = z.object({
   bay_id: z.string(),
   occupied: z.boolean(),
   frame_idx: z.number().int(),
-  world: z.string(),
+  survey_area: z.string(),
   votes_occupied: z.number().int().nonnegative(),
   views: z.number().int().nonnegative(),
   vis: z.number(),
@@ -127,7 +127,7 @@ export type Observation = z.infer<typeof observationSchema>;
  */
 export const frameScoredSchema = z.object({
   frame_id: z.string().nullable().optional(),
-  world: z.string(),
+  survey_area: z.string(),
   frame_idx: z.number().int(),
   // full per-bay observations are optional on the pub/sub hot path; the WS
   // fan-out only needs `changed`. The worker omits them to keep messages small.

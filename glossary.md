@@ -63,7 +63,8 @@ the documentation; the thesis chapters will be held to this glossary.*
 
 | English | Български | Бележки |
 |---|---|---|
-| world (Webots) | свят | „светът fmi_block“ |
+| world (Webots) | свят | само за 3D сцената на Webots (`.wbt`); „светът fmi_block“ |
+| survey area | обследвана област | градският участък, който един патрул покрива; в кода и в БД — `survey_area`. ⚠ не „свят“: светът е симулацията, обследваната област е реалният квартал (вж. `world`) |
 | window (study area) | прозорец / изследвана област | |
 | scale | мащаб | |
 | frame (image) | кадър | |

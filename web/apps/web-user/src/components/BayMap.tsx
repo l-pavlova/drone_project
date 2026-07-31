@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   Circle,
   CircleMarker,
@@ -11,24 +11,27 @@ import {
   ZoomControl,
   useMap,
 } from "react-leaflet";
-import type { LatLngExpression } from "leaflet";
-import type { BayFC, BayProps, BayStatus } from "../lib/types";
+import { latLngBounds, type LatLngExpression } from "leaflet";
+import type { BayFC, BayFeature, BayProps, BayStatus, RouteResult } from "../lib/types";
 import { bayStatus } from "../lib/types";
-import type { NearestTarget, UserPos } from "../lib/geo";
+import { bayCentroid, directionsUrl, type NearestTarget, type UserPos } from "../lib/geo";
 import type { LiveState } from "../hooks/useOccupancySocket";
 import styles from "./BayMap.module.css";
 
 const ORIGIN: LatLngExpression = [42.6747105, 23.3298956];
 
-/** Imperatively drives the map: recenters on locate, frames user+target on route. */
+/** Imperatively drives the map: recenters on locate, frames the journey once a
+ *  target (and then its road route) arrives. */
 function MapView({
   userPos,
   focusKey,
   target,
+  routePositions,
 }: {
   userPos: UserPos | null;
   focusKey: number;
   target: NearestTarget | null;
+  routePositions: LatLngExpression[] | null;
 }) {
   const map = useMap();
 
@@ -38,9 +41,21 @@ function MapView({
     }
   }, [focusKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Frame at most twice per target — straight-line guess, then the real route.
+  // Re-routes while driving must not keep yanking the view out from under you.
+  const framedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!target) return;
-    if (userPos) {
+    if (!target) {
+      framedFor.current = null;
+      return;
+    }
+    const key = `${target.bayId}:${routePositions ? "route" : "direct"}`;
+    if (framedFor.current === key) return;
+    framedFor.current = key;
+
+    if (routePositions && routePositions.length > 1) {
+      map.fitBounds(latLngBounds(routePositions), { padding: [70, 70], maxZoom: 18 });
+    } else if (userPos) {
       map.fitBounds(
         [
           [userPos.lat, userPos.lon],
@@ -51,7 +66,7 @@ function MapView({
     } else {
       map.flyTo([target.lat, target.lon], 18);
     }
-  }, [target]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [target, routePositions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;
 }
@@ -74,12 +89,14 @@ export function BayMap({
   userPos,
   focusKey,
   target,
+  route,
 }: {
   fc: BayFC;
   live: Map<string, LiveState>;
   userPos: UserPos | null;
   focusKey: number;
   target: NearestTarget | null;
+  route: RouteResult | null;
 }) {
   // Ring conversion is stable; recompute only when the feature set changes.
   const rings = useMemo(
@@ -91,6 +108,15 @@ export function BayMap({
         ),
       })),
     [fc],
+  );
+
+  // GeoJSON [lon,lat] -> Leaflet [lat,lon]
+  const routePositions = useMemo(
+    () =>
+      route
+        ? route.coordinates.map(([lon, lat]) => [lat, lon] as LatLngExpression)
+        : null,
+    [route],
   );
 
   return (
@@ -118,14 +144,45 @@ export function BayMap({
             }}
           >
             <Popup>
-              <BayPopup props={props} status={status} />
+              <BayPopup
+                feature={fc.features[i]!}
+                props={props}
+                status={status}
+                userPos={userPos}
+              />
             </Popup>
           </Polygon>
         );
       })}
 
-      {/* line from the user to the chosen free bay */}
-      {userPos && target && (
+      {/* the driving route: dark casing under a telemetry-coloured line */}
+      {routePositions && (
+        <>
+          <Polyline
+            positions={routePositions}
+            pathOptions={{
+              color: "#0b3a35",
+              weight: 8,
+              opacity: 0.5,
+              lineCap: "round",
+              lineJoin: "round",
+            }}
+          />
+          <Polyline
+            positions={routePositions}
+            pathOptions={{
+              color: TELEMETRY,
+              weight: 4.5,
+              opacity: 0.95,
+              lineCap: "round",
+              lineJoin: "round",
+            }}
+          />
+        </>
+      )}
+
+      {/* fallback while the route loads, or if the router is unavailable */}
+      {!routePositions && userPos && target && (
         <Polyline
           positions={[
             [userPos.lat, userPos.lon],
@@ -166,12 +223,27 @@ export function BayMap({
         </>
       )}
 
-      <MapView userPos={userPos} focusKey={focusKey} target={target} />
+      <MapView
+        userPos={userPos}
+        focusKey={focusKey}
+        target={target}
+        routePositions={routePositions}
+      />
     </MapContainer>
   );
 }
 
-function BayPopup({ props, status }: { props: BayProps; status: BayStatus }) {
+function BayPopup({
+  feature,
+  props,
+  status,
+  userPos,
+}: {
+  feature: BayFeature;
+  props: BayProps;
+  status: BayStatus;
+  userPos: UserPos | null;
+}) {
   return (
     <div className={styles.popup}>
       <strong>Bay {props.bay_id}</strong>
@@ -183,6 +255,16 @@ function BayPopup({ props, status }: { props: BayProps; status: BayStatus }) {
         <dt>Updated</dt>
         <dd>{props.updated_at ? new Date(props.updated_at).toLocaleTimeString() : "never surveyed"}</dd>
       </dl>
+      {status === "free" && (
+        <a
+          className={styles.dirLink}
+          href={directionsUrl(userPos, bayCentroid(feature))}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Directions ▸
+        </a>
+      )}
     </div>
   );
 }

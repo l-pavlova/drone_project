@@ -62,6 +62,55 @@ export function getPosition(): Promise<UserPos> {
   });
 }
 
+/** Continuous geolocation, used while navigating so the route follows the
+ *  driver. Returns an unsubscribe that clears the watch. */
+export function watchPosition(
+  onPos: (p: UserPos) => void,
+  onError?: (e: Error) => void,
+): () => void {
+  if (!navigator.geolocation) {
+    onError?.(new Error("geolocation not supported"));
+    return () => {};
+  }
+  const id = navigator.geolocation.watchPosition(
+    (p) =>
+      onPos({
+        lat: p.coords.latitude,
+        lon: p.coords.longitude,
+        accuracy: p.coords.accuracy,
+      }),
+    (err) => onError?.(new Error(err.message || "location denied")),
+    { enableHighAccuracy: true, timeout: 15_000, maximumAge: 5_000 },
+  );
+  return () => navigator.geolocation.clearWatch(id);
+}
+
+/** Google Maps driving-directions deep link — opens the native Maps app on
+ *  mobile, google.com/maps on desktop. Our hand-off for actual navigation. */
+export function directionsUrl(
+  from: { lat: number; lon: number } | null,
+  to: { lat: number; lon: number },
+): string {
+  const q = new URLSearchParams({
+    api: "1",
+    destination: `${to.lat},${to.lon}`,
+    travelmode: "driving",
+  });
+  if (from) q.set("origin", `${from.lat},${from.lon}`);
+  return `https://www.google.com/maps/dir/?${q.toString()}`;
+}
+
+export function formatDistance(m: number): string {
+  return m < 950 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`;
+}
+
+export function formatDuration(s: number): string {
+  const min = Math.round(s / 60);
+  if (min < 1) return "< 1 min";
+  if (min < 60) return `~${min} min`;
+  return `~${Math.floor(min / 60)} h ${min % 60} min`;
+}
+
 /** Nearest free bay to a position, using the merged (live) occupancy state. */
 export function nearestFree(
   features: BayFeature[],

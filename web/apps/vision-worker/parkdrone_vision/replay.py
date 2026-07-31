@@ -1,8 +1,8 @@
-"""Golden test: replay a sim world's frames through the STREAMING scorer and
+"""Golden test: replay a sim survey area's frames through the STREAMING scorer and
 assert the resulting bay_state matches the committed occupancy_results.json
 (and, in eval mode, the accuracy vs. ground_truth.json).
 
-    python -m parkdrone_vision.replay [world]     # default fmi_block
+    python -m parkdrone_vision.replay [survey_area]     # default fmi_block
 
 This proves the worker's per-frame extraction preserves the offline classifier:
 the same frames + the same thresholds must yield the same per-bay predictions.
@@ -21,8 +21,8 @@ from .processing.pipeline import process_frame
 
 
 def main():
-    world = sys.argv[1] if len(sys.argv) > 1 else "fmi_block"
-    out_dir = os.path.join(SIM_OUTPUT_ROOT, world)
+    survey_area = sys.argv[1] if len(sys.argv) > 1 else "fmi_block"
+    out_dir = os.path.join(SIM_OUTPUT_ROOT, survey_area)
     poses = json.load(open(os.path.join(out_dir, "poses.json"), encoding="utf-8"))
     expected = json.load(
         open(os.path.join(out_dir, "occupancy_results.json"), encoding="utf-8")
@@ -30,18 +30,18 @@ def main():
 
     conn = db.connect()
     with conn.cursor() as cur:
-        cur.execute("DELETE FROM observation WHERE world = %s", (world,))
+        cur.execute("DELETE FROM observation WHERE survey_area = %s", (survey_area,))
         cur.execute("DELETE FROM bay_state")
     conn.commit()
 
     bays = db.load_bays_enu(conn)
-    print(f"replay {world}: {len(poses)} frames, {len(bays)} bays")
+    print(f"replay {survey_area}: {len(poses)} frames, {len(bays)} bays")
 
     for pose in poses:
         i = pose["i"]
         path = os.path.join(out_dir, f"frame_{i:03d}.png")
         img = np.array(Image.open(path).convert("RGB"))
-        res = process_frame(conn, world, i, img, pose, bays)
+        res = process_frame(conn, survey_area, i, img, pose, bays)
 
     # ---- compare final bay_state to the offline result (intersection = the
     #      bays the offline script scored; the worker also scores non-GT bays).

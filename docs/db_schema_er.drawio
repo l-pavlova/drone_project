@@ -1,0 +1,293 @@
+<mxfile host="app.diagrams.net" agent="parkdrone" version="24.0.0">
+  <diagram name="PARKDRONE — DB ER Diagram" id="parkdrone-db-er">
+    <mxGraphModel dx="1100" dy="820" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1320" pageHeight="1060" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- title -->
+        <mxCell id="title" value="PARKDRONE — Web Tier Database (Postgres 16 + PostGIS 3.4)" style="text;html=1;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#14181D;" vertex="1" parent="1">
+          <mxGeometry x="60" y="24" width="700" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="Schema of web/packages/db/migrations/0001_init.sql. Postgres is the system of record: the S3/MinIO bucket holds only transient frame pixels and the job queue is in-process, so everything durable lives here. Crow's-foot notation; the dashed link is a logical join with no foreign key." style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#6b747c;" vertex="1" parent="1">
+          <mxGeometry x="60" y="58" width="1000" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ============================ drone ============================ -->
+        <mxCell id="e_drone" value="drone  ·  fleet registry / ingest auth" style="swimlane;html=1;startSize=26;fontStyle=1;fontSize=12;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=0;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#EAF2FB;strokeColor=#3B6FB0;fontColor=#1a3a5c;" vertex="1" parent="1">
+          <mxGeometry x="60" y="120" width="320" height="126" as="geometry" />
+        </mxCell>
+        <mxCell id="drone_1" value="PK · drone_id : text" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontStyle=1;fontColor=#1a3a5c;" vertex="1" parent="e_drone">
+          <mxGeometry y="26" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="drone_2" value="name : text  NOT NULL" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_drone">
+          <mxGeometry y="46" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="drone_3" value="api_key_hash : text  NOT NULL  — hash only" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_drone">
+          <mxGeometry y="66" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="drone_4" value="created_at : timestamptz  NOT NULL" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_drone">
+          <mxGeometry y="86" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="drone_5" value="last_seen : timestamptz  — liveness" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_drone">
+          <mxGeometry y="106" width="320" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ============================ mission ============================ -->
+        <mxCell id="e_mission" value="mission  ·  one survey flight" style="swimlane;html=1;startSize=26;fontStyle=1;fontSize=12;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=0;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#EAF2FB;strokeColor=#3B6FB0;fontColor=#1a3a5c;" vertex="1" parent="1">
+          <mxGeometry x="60" y="320" width="320" height="186" as="geometry" />
+        </mxCell>
+        <mxCell id="mis_1" value="PK · mission_id : text" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontStyle=1;fontColor=#1a3a5c;" vertex="1" parent="e_mission">
+          <mxGeometry y="26" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="mis_2" value="FK · drone_id : text  NOT NULL" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_mission">
+          <mxGeometry y="46" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="mis_3" value="survey_area : text  NOT NULL" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_mission">
+          <mxGeometry y="66" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="mis_4" value="area : text" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_mission">
+          <mxGeometry y="86" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="mis_5" value="started_at : timestamptz  NOT NULL" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_mission">
+          <mxGeometry y="106" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="mis_6" value="ended_at : timestamptz" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_mission">
+          <mxGeometry y="126" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="mis_7" value="frames_expected : integer" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_mission">
+          <mxGeometry y="146" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="mis_8" value="frames_done : integer  NOT NULL DEFAULT 0" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_mission">
+          <mxGeometry y="166" width="320" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ============================ frame ============================ -->
+        <mxCell id="e_frame" value="frame  ·  ingest ledger (append-only)" style="swimlane;html=1;startSize=26;fontStyle=1;fontSize=12;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=0;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#FDE9E4;strokeColor=#E14B2E;fontColor=#5c1c10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="570" width="320" height="286" as="geometry" />
+        </mxCell>
+        <mxCell id="frm_1" value="PK · frame_id : text  — uuid4" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontStyle=1;fontColor=#5c1c10;" vertex="1" parent="e_frame">
+          <mxGeometry y="26" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="frm_2" value="FK · UK · drone_id : text  NOT NULL" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
+          <mxGeometry y="46" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="frm_3" value="FK · mission_id : text  NULL" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
+          <mxGeometry y="66" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="frm_4" value="UK · survey_area : text  NOT NULL" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
+          <mxGeometry y="86" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="frm_5" value="UK · i : integer  NOT NULL  — frame index" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
+          <mxGeometry y="106" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="frm_6" value="x : double precision  NOT NULL  — ENU m" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
+          <mxGeometry y="126" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="frm_7" value="y : double precision  NOT NULL  — ENU m" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
+          <mxGeometry y="146" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="frm_8" value="alt : double precision  NOT NULL" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
+          <mxGeometry y="166" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="frm_9" value="yaw : double precision  NOT NULL  — rad" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
+          <mxGeometry y="186" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="frm_10" value="roll : double precision" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
+          <mxGeometry y="206" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="frm_11" value="pitch : double precision" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
+          <mxGeometry y="226" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="frm_12" value="image_uri : text  NOT NULL  — s3://…" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
+          <mxGeometry y="246" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="frm_14" value="received_at : timestamptz  NOT NULL  · never UPDATEd" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
+          <mxGeometry y="266" width="320" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ============================ bay ============================ -->
+        <mxCell id="e_bay" value="bay  ·  static geometry (seeded)" style="swimlane;html=1;startSize=26;fontStyle=1;fontSize=12;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=0;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#EEF1F3;strokeColor=#6b7686;fontColor=#14181D;" vertex="1" parent="1">
+          <mxGeometry x="480" y="120" width="340" height="186" as="geometry" />
+        </mxCell>
+        <mxCell id="bay_1" value="PK · bay_id : text" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontStyle=1;fontColor=#14181D;" vertex="1" parent="e_bay">
+          <mxGeometry y="26" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="bay_2" value="zona : text  — Sofia parking zone" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_bay">
+          <mxGeometry y="46" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="bay_3" value="street : text" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_bay">
+          <mxGeometry y="66" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="bay_4" value="park_txt : text" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_bay">
+          <mxGeometry y="86" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="bay_5" value="bearing_deg : double precision" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_bay">
+          <mxGeometry y="106" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="bay_6" value="public : boolean  NOT NULL DEFAULT false" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_bay">
+          <mxGeometry y="126" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="bay_7" value="geom : geometry(Polygon, 4326)  NOT NULL  · GiST" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_bay">
+          <mxGeometry y="146" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="bay_8" value="centroid : geometry(Point, 4326)  NOT NULL  · GiST" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_bay">
+          <mxGeometry y="166" width="340" height="20" as="geometry" />
+        </mxCell>
+
+
+        <!-- ============================ frame_job ============================ -->
+        <mxCell id="e_fjob" value="frame_job  ·  durable classify queue" style="swimlane;html=1;startSize=26;fontStyle=1;fontSize=12;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=0;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#FDE9E4;strokeColor=#E14B2E;fontColor=#5c1c10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="900" width="320" height="106" as="geometry" />
+        </mxCell>
+        <mxCell id="fjob_1" value="PK,FK · frame_id : text  ·  ON DELETE CASCADE" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#5c1c10;fontStyle=1" vertex="1" parent="e_fjob">
+          <mxGeometry y="26" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="fjob_2" value="status : text  NOT NULL  CHECK queued|processed|failed" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_fjob">
+          <mxGeometry y="46" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="fjob_3" value="enqueued_at : timestamptz  NOT NULL DEFAULT now()" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_fjob">
+          <mxGeometry y="66" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="fjob_4" value="finished_at : timestamptz  ·  NULL until terminal" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_fjob">
+          <mxGeometry y="86" width="320" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ============================ observation ============================ -->
+        <mxCell id="e_obs" value="observation  ·  append-only evidence" style="swimlane;html=1;startSize=26;fontStyle=1;fontSize=12;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=0;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#E4F7F4;strokeColor=#0F9E90;fontColor=#06403a;" vertex="1" parent="1">
+          <mxGeometry x="480" y="550" width="340" height="346" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_1" value="PK · id : bigserial" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontStyle=1;fontColor=#06403a;" vertex="1" parent="e_obs">
+          <mxGeometry y="26" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_2" value="FK · bay_id : text  NOT NULL" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_obs">
+          <mxGeometry y="46" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_3" value="occupied : boolean  NOT NULL  — this view" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_obs">
+          <mxGeometry y="66" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_4" value="frame_idx : integer  NOT NULL" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_obs">
+          <mxGeometry y="86" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_5" value="survey_area : text  NOT NULL  — vote scope" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_obs">
+          <mxGeometry y="106" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_6" value="votes_occupied : integer  NOT NULL DEFAULT 0" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_obs">
+          <mxGeometry y="126" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_7" value="views : integer  NOT NULL DEFAULT 0" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_obs">
+          <mxGeometry y="146" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_8" value="vis : real  — fraction of bay visible" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_obs">
+          <mxGeometry y="166" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_9" value="center_off_px : real" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_obs">
+          <mxGeometry y="186" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_10" value="core_paint_frac : real" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_obs">
+          <mxGeometry y="206" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_11" value="core_dark_frac : real" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_obs">
+          <mxGeometry y="226" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_12" value="core_chroma : real" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_obs">
+          <mxGeometry y="246" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_13" value="core_brightness : real" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_obs">
+          <mxGeometry y="266" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_14" value="core_std : real" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_obs">
+          <mxGeometry y="286" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_15" value="gt : boolean  — eval only, NULL in prod" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#6b747c;" vertex="1" parent="e_obs">
+          <mxGeometry y="306" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_16" value="observed_at : timestamptz  NOT NULL" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_obs">
+          <mxGeometry y="326" width="340" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ============================ bay_state ============================ -->
+        <mxCell id="e_state" value="bay_state  ·  THE PRODUCT (current occupancy)" style="swimlane;html=1;startSize=26;fontStyle=1;fontSize=12;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=0;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#E6F6EC;strokeColor=#2E9E57;fontColor=#0f4023;" vertex="1" parent="1">
+          <mxGeometry x="920" y="140" width="330" height="146" as="geometry" />
+        </mxCell>
+        <mxCell id="st_1" value="PK · FK · bay_id : text" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontStyle=1;fontColor=#0f4023;" vertex="1" parent="e_state">
+          <mxGeometry y="26" width="330" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_2" value="occupied : boolean  NOT NULL" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_state">
+          <mxGeometry y="46" width="330" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_3" value="confidence : real  NOT NULL DEFAULT 0" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_state">
+          <mxGeometry y="66" width="330" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_4" value="last_frame : integer  — frame index" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_state">
+          <mxGeometry y="86" width="330" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_5" value="updated_at : timestamptz  NOT NULL" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_state">
+          <mxGeometry y="106" width="330" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_6" value="source : text  CHECK vision|manual" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_state">
+          <mxGeometry y="126" width="330" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ============================ schema_migrations ============================ -->
+        <mxCell id="e_migr" value="schema_migrations  ·  migrate-runner ledger" style="swimlane;html=1;startSize=26;fontStyle=1;fontSize=12;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=0;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#F1F3F5;strokeColor=#9AA6AE;fontColor=#6b747c;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="920" y="800" width="330" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="migr_1" value="name : text PK  — applied migration filename; applied_at : timestamptz (no FK; not in the .sql)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#6b747c;" vertex="1" parent="e_migr">
+          <mxGeometry y="26" width="330" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ============================ relationships ============================ -->
+        <mxCell id="r_drone_mission" value="1 : N  flies" style="edgeStyle=entityRelationEdgeStyle;html=1;fontSize=10;rounded=0;startArrow=ERone;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#3B6FB0;fontColor=#1a3a5c;labelBackgroundColor=#ffffff;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="e_drone" target="e_mission">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_mission_frame" value="0..1 : N  collects" style="edgeStyle=entityRelationEdgeStyle;html=1;fontSize=10;rounded=0;startArrow=ERzeroToOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#3B6FB0;fontColor=#1a3a5c;labelBackgroundColor=#ffffff;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="e_mission" target="e_frame">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_drone_frame" value="1 : N  uploads" style="edgeStyle=entityRelationEdgeStyle;html=1;fontSize=10;rounded=0;startArrow=ERone;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#3B6FB0;fontColor=#1a3a5c;labelBackgroundColor=#ffffff;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="e_drone" target="e_frame">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="20" y="183" />
+              <mxPoint x="20" y="733" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r_bay_state" value="1 : 0..1  current occupancy" style="edgeStyle=entityRelationEdgeStyle;html=1;fontSize=10;rounded=0;startArrow=ERone;startFill=0;endArrow=ERzeroToOne;endFill=0;strokeColor=#2E9E57;fontColor=#0f4023;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="e_bay" target="e_state">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_bay_obs" value="1 : N  evidence" style="edgeStyle=entityRelationEdgeStyle;html=1;fontSize=10;rounded=0;startArrow=ERone;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#0F9E90;fontColor=#06403a;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="e_bay" target="e_obs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_frame_job" value="1 : 1  classify work state" style="edgeStyle=entityRelationEdgeStyle;html=1;fontSize=10;rounded=0;startArrow=ERone;startFill=0;endArrow=ERone;endFill=0;strokeColor=#E14B2E;fontColor=#5c1c10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="e_frame" target="e_fjob">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_frame_obs" value="scored into — logical join&#10;(survey_area, i) = (survey_area, frame_idx), no FK" style="edgeStyle=entityRelationEdgeStyle;html=1;fontSize=10;rounded=0;dashed=1;startArrow=ERone;startFill=0;endArrow=ERzeroToMany;endFill=0;strokeColor=#9AA6AE;fontColor=#6b747c;labelBackgroundColor=#ffffff;verticalAlign=bottom;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="e_frame" target="e_obs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ============================ notes ============================ -->
+        <mxCell id="n_state" value="No row at all = UNKNOWN (there is no third enum value).&#10;Reads are LEFT JOIN bay_state USING (bay_id); /summary counts&#10;unknown as s.occupied IS NULL. Always DERIVED, never incremented:&#10;each frame re-aggregates all of a bay's observations (majority vote,&#10;confidence = max(occ, n-occ)/n) and upserts the result." style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#0f4023;fillColor=#F3FBF6;strokeColor=#BEE3CC;spacingLeft=8;spacingTop=6;spacingRight=6;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="920" y="310" width="330" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="n_bay" value="Seeded from data/block_bays.geojson (1698 bays) by pnpm db:seed.&#10;Geometry is WGS84 only — the ENU-metre projection lives in memory&#10;(load_bays_enu → to_enu) and must stay in lockstep with&#10;sim/generate_world.py and packages/contracts.&#10;GiST indexes push bbox (geom &amp;&amp; ST_MakeEnvelope) and nearest-bay&#10;(centroid &lt;-&gt; ST_MakePoint … LIMIT 1) down into PostGIS." style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#33383d;fillColor=#F7F9FA;strokeColor=#D5DBDF;spacingLeft=8;spacingTop=6;spacingRight=6;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="480" y="326" width="340" height="104" as="geometry" />
+        </mxCell>
+        <mxCell id="n_frame" value="UNIQUE (drone_id, survey_area, i) makes ingest idempotent — a re-sent frame&#10;overwrites its S3 object but is NOT re-enqueued. status is the durability&#10;mechanism that replaced Redis: the row is committed BEFORE the job is&#10;enqueued, so a crash in between leaves status='queued' and startup&#10;recovery rebuilds the job from this row + image_uri. A frame whose image&#10;expired from the bucket is marked 'failed' so recovery stops retrying it." style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#5c1c10;fillColor=#FEF6F3;strokeColor=#F5CFC4;spacingLeft=8;spacingTop=6;spacingRight=6;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="60" y="906" width="640" height="104" as="geometry" />
+        </mxCell>
+        <mxCell id="n_obs" value="One row per bay per frame, keeping the raw classifier features so a&#10;misclassification can be explained without the image. Feeds the vote&#10;AND the bay-detail history. gt is populated only by the offline replay&#10;harness — production has no ground truth." style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#06403a;fillColor=#F2FBFA;strokeColor=#BFE7E2;spacingLeft=8;spacingTop=6;spacingRight=6;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="860" y="550" width="390" height="76" as="geometry" />
+        </mxCell>
+
+        <!-- legend -->
+        <mxCell id="legend" value="Legend" style="rounded=1;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=12;fontStyle=1;fillColor=#EAF2FB;strokeColor=#3B6FB0;fontColor=#1a3a5c;spacingLeft=10;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="860" y="650" width="390" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_txt" value="PK primary key   ·   FK foreign key   ·   UK unique constraint&#10;&#10;Blue = fleet / telemetry     Grey = static seeded geometry&#10;Orange = ingest ledger + job queue     Teal = evidence&#10;Green = the product served to users&#10;&#10;Solid crow's foot = enforced FK.  Dashed = logical join only.&#10;Indexes are listed in docs/db_schema_er.md." style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#33383d;spacingLeft=10;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="866" y="676" width="380" height="100" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
