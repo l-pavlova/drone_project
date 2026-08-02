@@ -12,7 +12,7 @@
     "typecheck": "pnpm -r typecheck",
     "db:migrate": "pnpm --filter @parkdrone/db migrate",
     "db:seed": "pnpm --filter @parkdrone/db seed",
-    "quickstart": "bash scripts/quickstart.sh",
+    "quickstart": "node scripts/quickstart.mjs",
     "infra:up": "docker compose --env-file .env -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose --env-file .env -f infra/docker-compose.yml down"
   },
