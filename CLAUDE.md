@@ -214,6 +214,42 @@ behind admin auth in P7. To see a stall by hand: run the server with `CLASSIFY_T
 and watch `jobs.queued` / `oldest_queued_age_s` climb; restarting normally then shows
 `recovered_on_start` and drains it.
 
+### Live sim uplink (watch a flight land on the map in real time)
+`sim_uplink.py` is a **sidecar**, not part of the server: it watches
+`sim/output/<area>/` and POSTs each frame as the flight writes it, so the map updates while the
+drone is still flying instead of after a manual `replay_ingest`.
+```bash
+cd web && pnpm quickstart --fly fmi_block_4st     # stack + uplink + START the flight headless
+cd web && pnpm quickstart --uplink fmi_block_4st  # stack + uplink; you start Webots yourself
+# or standalone, next to a running Webots flight:
+cd web/apps/vision-worker && API_KEY=$(cat ../../.quickstart/drone-1.key) \
+  python -m parkdrone_vision.sim_uplink fmi_block_4st --idle-exit 60
+```
+`--fly <world>` runs `sim/worlds/<world>.wbt` headless (`--batch --mode=fast --minimize`) and
+implies `--uplink <world>`, since the controller keys its output folder off the route file — the
+survey area *is* the world name. It kills stray Webots first, pipes Webots' stdout instead of
+redirecting it (the block-buffering gotcha above), stops it by image name on Ctrl-C/`--stop`, and
+gives the uplink `--idle-exit 120` so the mission closes when the patrol ends. Two guards, both
+checked before anything starts: a missing world fails in 0.2 s, and it **refuses to fly a world
+whose `sim/output/<world>/` holds `occupancy_results.json`** — that is a scored golden fixture and
+a new flight would overwrite the frames it was computed from (move the folder aside to opt in).
+Note a folder with existing captures makes the controller **resume**, not re-fly.
+- **The controller stays offline by design.** `parkdrone.py` is one control loop; a blocking POST
+  inside it costs physics steps, and a hung server would fly the drone into a wall. It keeps
+  writing frames + `poses.json` to disk and knows nothing about the web tier.
+- **What makes it race-free:** the controller saves `frame_###.png` *before* appending the pose and
+  rewriting `poses.json`, so a pose appearing in the file proves its image is complete. The
+  rewrite itself is non-atomic, so a partial read is normal and simply retried next poll.
+- Flags: `--idle-exit S` (close the mission and exit after S seconds with no new frame),
+  `--poll S`, `--from N`, `--once`. `frames_expected` comes from `sim/worlds/<area>.route.json`, so
+  the ops dashboard's mission progress bar is a real plan-vs-actual.
+- **Re-flying the same survey area does NOT reprocess** — ingest is idempotent on
+  `(drone, survey_area, frame_idx)`, so the uplink reports duplicates and warns once. Clear that
+  area's `frame` rows first if you mean to score a new flight.
+- Its stdout is UTF-8 **and line-buffered**: it runs for the length of a patrol (>1 h on the 1 km
+  route) with its output redirected, and Python block-buffers a redirected stream — same lesson as
+  the Webots stdout gotcha above.
+
 ### Dev/test occupancy toggle (drive the dashboard by hand)
 Manual override endpoints (mounted only when `ENABLE_DEV_ROUTES=true` — they have no auth, so the
 default is off; `.env.example` opts local dev in) upsert `bay_state` and push a

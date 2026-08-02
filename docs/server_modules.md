@@ -96,7 +96,11 @@ Entry points (package root, not on the request path):
 | `python -m parkdrone_vision.register_drone <id>` | `register_drone.py` | mints an API key, stores **only** its SHA-256 |
 | `python -m parkdrone_vision.replay <area>` | `replay.py` | golden test: frames → `pipeline.process_frame` → compare to `occupancy_results.json` (no server) |
 | `API_KEY=… python -m parkdrone_vision.replay_ingest <area>` | `replay_ingest.py` | full-stack E2E over the real HTTP/WS contract |
+| `API_KEY=… python -m parkdrone_vision.sim_uplink <area>` | `sim_uplink.py` | **live sidecar**: watches `sim/output/<area>/` and POSTs frames as a Webots flight writes them, so the map fills in mid-patrol. Reads only — the flight controller stays free of network code, and disk remains the source of truth for its resume logic |
 | `python -m parkdrone_vision.cleanup` | `cleanup.py` | one frame-retention sweep by hand (the server also runs it every `CLEANUP_INTERVAL_S`); exits 1 if it found expired frames still queued |
+
+Both ingest tools share `ingest_client.py` — one implementation of the multipart body, since that
+is the wire format real drone firmware will have to reproduce.
 
 The whole stack — infra, migrations, seed, server, both UIs — comes up with
 `pnpm quickstart` from `web/` (`scripts/quickstart.sh`).

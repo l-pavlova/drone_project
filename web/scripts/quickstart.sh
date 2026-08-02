@@ -5,6 +5,10 @@
 #   pnpm quickstart              # infra + migrate/seed + server + both UIs
 #   pnpm quickstart --replay     # ...then replay a survey through the live stack
 #   pnpm quickstart --no-admin   # skip the ops dashboard (--no-web skips both UIs)
+#   pnpm quickstart --uplink fmi_block   # also watch a LIVE Webots flight and
+#                                        # post its frames as they hit disk
+#   pnpm quickstart --fly fmi_block_4st  # ...and START that flight headless too:
+#                                        # one command for sim -> API -> map
 #   pnpm quickstart --stop       # stop the app processes AND the docker infra
 #
 # What it starts, in dependency order:
@@ -13,6 +17,8 @@
 #   3. the FastAPI server (:4000) — web edge + in-process vision
 #   4. the driver-facing map (:5173) and the ops dashboard (:5174), both
 #      proxying /api and /ws to :4000
+#   5. with --fly: the sim uplink, then Webots headless on that world, so the
+#      map paints itself while the drone flies
 #
 # It is idempotent: re-running skips what is already up (compose is declarative,
 # migrations are ledgered, the seeder upserts). Ctrl-C stops the app processes
@@ -23,7 +29,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SIM_DIR="$(cd "$ROOT/../sim" && pwd)"
 RUN_DIR="$ROOT/.quickstart"          # logs + pids, gitignored
+WEBOTS="${WEBOTS:-/c/Program Files/Webots/msys64/mingw64/bin/webots.exe}"
 SERVER_LOG="$RUN_DIR/server.log"
 WEB_LOG="$RUN_DIR/web.log"
 ADMIN_LOG="$RUN_DIR/admin.log"
@@ -31,18 +39,26 @@ DRONE_ID="${DRONE_ID:-drone-1}"
 REPLAY_AREA="${REPLAY_AREA:-fmi_block}"
 COMPOSE=(docker compose --env-file "$ROOT/.env" -f "$ROOT/infra/docker-compose.yml")
 
-WITH_WEB=1; WITH_ADMIN=1; WITH_SEED=1; DO_REPLAY=0; DO_STOP=0
-for arg in "$@"; do
-  case "$arg" in
+WITH_WEB=1; WITH_ADMIN=1; WITH_SEED=1; DO_REPLAY=0; DO_STOP=0; UPLINK_AREA=""; FLY_WORLD=""
+while [ $# -gt 0 ]; do
+  case "$1" in
     --no-web)   WITH_WEB=0; WITH_ADMIN=0 ;;
     --no-admin) WITH_ADMIN=0 ;;
-    --no-seed) WITH_SEED=0 ;;
-    --replay)  DO_REPLAY=1 ;;
-    --stop)    DO_STOP=1 ;;
-    -h|--help) sed -n '2,20p' "${BASH_SOURCE[0]}"; exit 0 ;;
-    *) echo "unknown flag: $arg (try --help)" >&2; exit 2 ;;
+    --no-seed)  WITH_SEED=0 ;;
+    --replay)   DO_REPLAY=1 ;;
+    --uplink)   shift; UPLINK_AREA="${1:-}"
+                [ -n "$UPLINK_AREA" ] || { echo "--uplink needs a survey area" >&2; exit 2; } ;;
+    --fly)      shift; FLY_WORLD="${1:-}"
+                [ -n "$FLY_WORLD" ] || { echo "--fly needs a world name" >&2; exit 2; } ;;
+    --stop)     DO_STOP=1 ;;
+    -h|--help)  sed -n '2,24p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    *) echo "unknown flag: $1 (try --help)" >&2; exit 2 ;;
   esac
+  shift
 done
+# The controller keys its output folder off the route file, so a world's survey
+# area IS its name — flying implies watching that area unless told otherwise.
+[ -n "$FLY_WORLD" ] && [ -z "$UPLINK_AREA" ] && UPLINK_AREA="$FLY_WORLD"
 
 say()  { printf '\033[36m==>\033[0m %s\n' "$*"; }
 ok()   { printf '\033[32m  ok\033[0m %s\n' "$*"; }
@@ -108,11 +124,45 @@ free_port() {
   die "port $port is still in use"
 }
 
+# Webots spawns its own process tree and our $! is only the pipeline subshell, so
+# it is stopped by image name — the same taskkill the manual runs use.
+stop_webots() {
+  rm -f "$RUN_DIR/webots.pid"
+  taskkill //F //IM webots-bin.exe >/dev/null 2>&1 || true
+  taskkill //F //IM webotsw.exe    >/dev/null 2>&1 || true
+  return 0
+}
+
 mkdir -p "$RUN_DIR"
+
+# Validate --fly BEFORE standing anything up: a typo'd world name should cost a
+# second, not a full stack start.
+if [ -n "$FLY_WORLD" ] && [ "$DO_STOP" = 0 ]; then
+  [ -f "$SIM_DIR/worlds/$FLY_WORLD.wbt" ] ||
+    die "no such world: $SIM_DIR/worlds/$FLY_WORLD.wbt (generate it with sim/generate_world.py)"
+  [ -x "$WEBOTS" ] ||
+    die "Webots not found at $WEBOTS — set WEBOTS=/path/to/webots.exe"
+  # A scored output folder is a verification FIXTURE: `replay.py` compares the
+  # live pipeline against its occupancy_results.json, and a new flight would
+  # overwrite the very frames that result was computed from. Refuse rather than
+  # silently invalidate it; moving the folder aside is the explicit opt-in.
+  if [ -f "$SIM_DIR/output/$FLY_WORLD/occupancy_results.json" ]; then
+    die "sim/output/$FLY_WORLD/ holds a scored golden fixture (occupancy_results.json).
+  Flying would overwrite the frames it was computed from. Move it aside first:
+      mv sim/output/$FLY_WORLD sim/output/$FLY_WORLD.old"
+  fi
+  # The flight RESUMES from poses.json if the folder already has captures — that
+  # is the controller's own behaviour, not something this script overrides.
+  if [ -f "$SIM_DIR/output/$FLY_WORLD/poses.json" ]; then
+    echo "  note: sim/output/$FLY_WORLD/ already has captures — the controller will"
+    echo "        resume the patrol from there (delete the folder to re-fly from wp0)"
+  fi
+fi
 
 if [ "$DO_STOP" = 1 ]; then
   say "stopping app processes"
-  stop_service server; stop_service web; stop_service admin
+  [ -f "$RUN_DIR/webots.pid" ] && stop_webots
+  stop_service server; stop_service web; stop_service admin; stop_service uplink
   # also catch survivors of a crashed run, whose pidfile is gone
   free_port 4000; free_port 5173; free_port 5174
   say "stopping docker infra"
@@ -208,7 +258,43 @@ if [ "$WITH_ADMIN" = 1 ]; then
   wait_for 60 "ops dashboard" curl -fsS http://localhost:5174/
 fi
 
-# ---- 7. optional replay ----------------------------------------------------
+# ---- 7. optional live uplink -----------------------------------------------
+# Sidecar, not part of the stack: it watches sim/output/<area>/ and posts frames
+# as the flight writes them. Started here so `quickstart --uplink <area>` is all
+# you need running beside Webots.
+if [ -n "$UPLINK_AREA" ]; then
+  stop_service uplink
+  say "starting sim uplink for '$UPLINK_AREA'"
+  # With --fly we know the patrol ends, so let the uplink close its mission once
+  # the frames stop coming; a bare --uplink waits indefinitely instead.
+  idle_args=()
+  [ -n "$FLY_WORLD" ] && idle_args=(--idle-exit 120)
+  ( cd "$ROOT/apps/vision-worker" &&
+    API_KEY="$API_KEY" exec "$PY" -m parkdrone_vision.sim_uplink "$UPLINK_AREA" \
+      "${idle_args[@]}" >"$RUN_DIR/uplink.log" 2>&1 ) &
+  echo $! >"$RUN_DIR/uplink.pid"
+  ok "uplink running — tail .quickstart/uplink.log (waits for the flight to start)"
+fi
+
+# ---- 8. optional Webots flight ---------------------------------------------
+if [ -n "$FLY_WORLD" ]; then
+  # A leftover instance takes the port and the next run hangs with zero output.
+  taskkill //F //IM webots-bin.exe >/dev/null 2>&1 || true
+  taskkill //F //IM webotsw.exe    >/dev/null 2>&1 || true
+
+  say "flying '$FLY_WORLD' in Webots (headless)"
+  # Webots BLOCK-buffers stdout to a file and loses it when killed, so its output
+  # goes through a PIPE — the documented workaround (see CLAUDE.md). That also
+  # means $! is the subshell, not webots itself, which is why stop_webots kills
+  # by image name rather than by pid.
+  ( cd "$SIM_DIR" &&
+    "$WEBOTS" --batch --mode=fast --minimize --stdout --stderr "worlds/$FLY_WORLD.wbt" 2>&1 |
+      cat >"$RUN_DIR/webots.log" ) &
+  echo $! >"$RUN_DIR/webots.pid"
+  ok "flight started — frames land in sim/output/$FLY_WORLD/ and stream straight to the map"
+fi
+
+# ---- 9. optional replay ----------------------------------------------------
 if [ "$DO_REPLAY" = 1 ]; then
   say "replaying survey '$REPLAY_AREA' through the live stack"
   (cd "$ROOT/apps/vision-worker" && API_KEY="$API_KEY" "$PY" -m parkdrone_vision.replay_ingest "$REPLAY_AREA") || true
@@ -224,7 +310,7 @@ $([ "$WITH_ADMIN" = 1 ] && echo "    ops         http://localhost:5174")
     api         http://localhost:4000/api/v1/bays
     metrics     http://localhost:4000/api/v1/metrics   (prometheus: /metrics)
     minio       http://localhost:9001
-    logs        .quickstart/{server,web,admin}.log
+    logs        .quickstart/{server,web,admin,uplink,webots}.log
 
   Drive it by hand:
     curl -X POST http://localhost:4000/api/v1/dev/occupy   # needs ENABLE_DEV_ROUTES=true
@@ -239,7 +325,7 @@ $([ "$WITH_ADMIN" = 1 ] && echo "    ops         http://localhost:5174")
 
 EOF
 
-shutdown() { echo; say "shutting down"; stop_service server; stop_service web; stop_service admin; ok "app processes stopped"; exit 0; }
+shutdown() { echo; say "shutting down"; [ -f "$RUN_DIR/webots.pid" ] && stop_webots; stop_service server; stop_service web; stop_service admin; stop_service uplink; ok "app processes stopped"; exit 0; }
 trap shutdown INT TERM
 
 # Stay in the foreground streaming the server log — this is the thing worth

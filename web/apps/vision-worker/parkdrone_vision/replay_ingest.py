@@ -9,47 +9,12 @@ import asyncio
 import json
 import os
 import sys
-import urllib.error
-import urllib.request
-import uuid
 
 from .config import SIM_OUTPUT_ROOT
+from .ingest_client import get_json as _get_json
+from .ingest_client import post_frame as _post_frame
+from .ingest_client import post_json as _post_json
 from .vision.scoring import pose_idx
-
-
-def _post_json(url, obj, api_key=None):
-    req = urllib.request.Request(url, data=json.dumps(obj).encode(), method="POST")
-    req.add_header("content-type", "application/json")
-    if api_key:
-        req.add_header("x-api-key", api_key)
-    with urllib.request.urlopen(req) as resp:
-        return json.loads(resp.read())
-
-
-def _get_json(url):
-    with urllib.request.urlopen(url) as resp:
-        return json.loads(resp.read())
-
-
-def _post_frame(url, api_key, png, meta_str, filename):
-    boundary = uuid.uuid4().hex
-    body = (
-        f'--{boundary}\r\nContent-Disposition: form-data; name="meta"\r\n\r\n'
-        f"{meta_str}\r\n"
-    ).encode()
-    body += (
-        f'--{boundary}\r\nContent-Disposition: form-data; name="frame"; '
-        f'filename="{filename}"\r\nContent-Type: image/png\r\n\r\n'
-    ).encode()
-    body += png + b"\r\n" + f"--{boundary}--\r\n".encode()
-    req = urllib.request.Request(url, data=body, method="POST")
-    req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
-    req.add_header("x-api-key", api_key)
-    try:
-        with urllib.request.urlopen(req) as resp:
-            return resp.status
-    except urllib.error.HTTPError as e:
-        return e.code
 
 
 async def main() -> None:

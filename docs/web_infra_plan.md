@@ -149,6 +149,34 @@ rebuilt from Postgres on restart.
   drone was offline (matches the current disk-based capture model, where the sim writes frames locally
   and could upload after landing).
 
+#### Who posts, in the sim (built 2026-08-03)
+
+Real firmware will hold this contract itself. The **sim does not**: `sim/controllers/parkdrone/
+parkdrone.py` has no network code at all, and deliberately so — it is one control loop, every
+millisecond spent in a socket is a physics step not taken, and a hung server would fly the drone
+into a wall. Instead:
+
+- **`parkdrone_vision/sim_uplink.py`** is a sidecar that watches `sim/output/<area>/` and POSTs each
+  frame as the flight writes it, so the map fills in mid-patrol instead of after a manual replay.
+  `pnpm quickstart --uplink <area>` starts it; `--fly <world>` also launches Webots headless on that
+  world, making one command cover sim → API → map.
+- **What makes it race-free** is an ordering the controller already had: it saves `frame_###.png`
+  *before* appending the pose and rewriting `poses.json`, so a pose in the file proves its image is
+  complete on disk. (The rewrite itself is non-atomic, so torn reads happen and are retried.)
+- `frames_expected` comes from `sim/worlds/<area>.route.json`, which is what makes the admin
+  dashboard's mission progress a real plan-vs-actual rather than a guess.
+- Disk stays the source of truth — the uplink only reads, so the controller's resume-from-`poses.json`
+  behaviour is untouched, and a crashed uplink loses nothing.
+- Both the uplink and `replay_ingest` post through **`ingest_client.py`**: one implementation of the
+  multipart body, because that body is the wire format the real drone will have to reproduce.
+- Re-flying an area does **not** reprocess it — ingest is idempotent on `(drone, survey_area,
+  frame_idx)`, so the uplink reports duplicates and warns once. Clearing that area's `frame` rows
+  first is the opt-in.
+
+When firmware posts directly, this sidecar is what its uplink loop should be modelled on — with the
+addition that a real drone must buffer to local storage while the link is down, which is precisely
+what the disk-first design here already emulates.
+
 ### REST endpoints (consumer-facing, read)
 - `GET /api/v1/bays?bbox=&zona=` — bay geometry + current state as GeoJSON FeatureCollection
   (each feature = bay polygon + `occupied`, `confidence`, `updated_at`). Feeds the map on first load.
@@ -427,6 +455,12 @@ Because this is a from-scratch system, verification is per-phase, driven end-to-
 - **Ingest→push loop:** a script replays `poses.json` + `frame_###.png` to `POST /ingest/frame` in
   order; a WebSocket test client asserts it receives `bay_delta` messages and that final map state
   equals the batch result. This simulates a live patrol without the drone.
+- **Live-flight loop (added 2026-08-03):** `pnpm quickstart --fly <world>` runs Webots headless with
+  the uplink watching, so the whole chain — flight → disk → POST → classify → WebSocket → map — is
+  exercised at real flight cadence rather than at replay speed. Verified twice: a synthetic flight
+  (34 captures fed one every 1.2 s) reached 34 queued / 0 failed and matched the offline result
+  43/43, and a real headless `fmi_block_4st` flight streamed live captures while airborne with
+  mission progress tracking against the route's 97 waypoints.
 - **Dashboard smoke:** load the React app against the replay, confirm bays render green/red/grey and
   flip live as deltas arrive; verify stale-bay handling by withholding some frames.
 - **Admin smoke:** confirm fleet/mission counters, ingestion metrics, and (eval-mode) accuracy/confusion

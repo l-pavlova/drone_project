@@ -64,7 +64,7 @@
         </mxCell>
 
         <!-- ===== dependencies ===== -->
-        <mxCell id="e_drone_srv" value="&#171;HTTP&#187; POST /ingest/frame&#10;(frame + pose, API key)" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="drone" target="server">
+        <mxCell id="e_drone_srv" value="&#171;HTTP&#187; POST /ingest/frame&#10;(frame + pose, API key)&#10;real firmware posts directly; the sim posts&#10;through the sim_uplink sidecar, which keeps&#10;the flight controller free of network I/O" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="drone" target="server">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 

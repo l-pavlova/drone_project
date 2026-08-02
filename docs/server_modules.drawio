@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net" agent="parkdrone" version="24.0.0">
   <diagram name="PARKDRONE — Server Module Map" id="parkdrone-server-modules">
-    <mxGraphModel dx="1400" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1060" math="0" shadow="0">
+    <mxGraphModel dx="1400" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1120" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -14,8 +14,8 @@
         </mxCell>
 
         <!-- ===== external clients ===== -->
-        <mxCell id="drone" value="&#171;component&#187;&#10;Drone / Webots sim&#10;frames + poses" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=11;fillColor=#EEF1F3;strokeColor=#9AA6AE;fontColor=#14181D;spacingLeft=8;" vertex="1" parent="1">
-          <mxGeometry x="40" y="170" width="170" height="60" as="geometry" />
+        <mxCell id="drone" value="&#171;component&#187;&#10;Drone / Webots sim&#10;frames + poses&#10;&lt;i&gt;sim posts via sim_uplink&lt;/i&gt;" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=11;fillColor=#EEF1F3;strokeColor=#9AA6AE;fontColor=#14181D;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="164" width="170" height="72" as="geometry" />
         </mxCell>
         <mxCell id="browser" value="&#171;component&#187;&#10;web-user&#10;React + Leaflet" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=11;fillColor=#E6F6EC;strokeColor=#2E9E57;fontColor=#0f4023;spacingLeft=8;" vertex="1" parent="1">
           <mxGeometry x="40" y="300" width="170" height="60" as="geometry" />
@@ -104,7 +104,7 @@
 
         <!-- ===== entry points ===== -->
         <mxCell id="pkg_entry" value="entry points &amp; harnesses (not on the request path)" style="shape=folder;tabWidth=290;tabHeight=20;tabPosition=left;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontStyle=1;fillColor=#F7F8F9;strokeColor=#9AA6AE;fontColor=#33383d;spacingLeft=8;spacingTop=2;" vertex="1" parent="1">
-          <mxGeometry x="250" y="870" width="830" height="120" as="geometry" />
+          <mxGeometry x="250" y="870" width="830" height="180" as="geometry" />
         </mxCell>
         <mxCell id="m_server" value="&lt;b&gt;server.py&lt;/b&gt;&#10;uvicorn on API_PORT&#10;serves api.app:app" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#9AA6AE;fontColor=#33383d;" vertex="1" parent="1">
           <mxGeometry x="265" y="908" width="190" height="66" as="geometry" />
@@ -117,6 +117,9 @@
         </mxCell>
         <mxCell id="m_replay_ing" value="&lt;b&gt;replay_ingest.py&lt;/b&gt;&#10;full-stack E2E over the&#10;real HTTP / WS contract" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#9AA6AE;fontColor=#33383d;" vertex="1" parent="1">
           <mxGeometry x="865" y="908" width="190" height="66" as="geometry" />
+        </mxCell>
+        <mxCell id="m_uplink" value="&lt;b&gt;sim_uplink.py&lt;/b&gt; — live sidecar&#10;watches sim/output/&lt;area&gt;/ and POSTs each frame as a Webots flight writes it (map fills in mid-patrol).&#10;Reads only: the flight controller has NO network code, so a slow server can never cost it a physics step.&#10;Both it and replay_ingest post through ingest_client.py — one copy of the multipart wire format." style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=9;fillColor=#FFFFFF;strokeColor=#9AA6AE;fontColor=#33383d;" vertex="1" parent="1">
+          <mxGeometry x="265" y="984" width="790" height="52" as="geometry" />
         </mxCell>
 
         <!-- ===== backing services ===== -->
@@ -365,7 +368,7 @@
           <mxGeometry x="1150" y="345" width="230" height="70" as="geometry" />
         </mxCell>
         <mxCell id="legend" value="Legend — bold red solid = thread crossing · dashed = uses / calls · folder = Python subpackage · cylinder = data store. Per-module write-up: docs/server_modules.md · schema: docs/db_schema_er.md · system level: web/docs/architecture.drawio." style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontColor=#6b747c;" vertex="1" parent="1">
-          <mxGeometry x="40" y="1010" width="1320" height="20" as="geometry" />
+          <mxGeometry x="40" y="1070" width="1320" height="20" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>

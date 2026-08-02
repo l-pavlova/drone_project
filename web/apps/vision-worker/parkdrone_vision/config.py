@@ -63,12 +63,15 @@ SIM_OUTPUT_ROOT = os.environ.get(
     "SIM_OUTPUT_ROOT", os.path.join(REPO_ROOT, "sim", "output")
 )
 
-# Where generate_world.py leaves <area>.ground_truth.json. Eval only: when the
-# directory has no labels for a survey area (a real deployment), observations
-# are recorded with gt = NULL and accuracy is reported as unknown.
-GROUND_TRUTH_ROOT = os.environ.get(
-    "GROUND_TRUTH_ROOT", os.path.join(REPO_ROOT, "sim", "worlds")
+# Where generate_world.py leaves <area>.wbt and its sidecar files: the route
+# (waypoint count = a mission's frames_expected, read by sim_uplink) and the
+# ground-truth labels.
+SIM_WORLDS_ROOT = os.environ.get(
+    "SIM_WORLDS_ROOT", os.path.join(REPO_ROOT, "sim", "worlds")
 )
+# Eval only: when there are no labels for a survey area (a real deployment),
+# observations are recorded with gt = NULL and accuracy is reported as unknown.
+GROUND_TRUTH_ROOT = os.environ.get("GROUND_TRUTH_ROOT", SIM_WORLDS_ROOT)
 
 # ---- FastAPI server --------------------------------------------------------
 # Kept on :4000 so the web-user vite proxy target is unchanged.
