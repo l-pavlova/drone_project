@@ -5,10 +5,11 @@
 
 ## Status
 
-Phases 1–5 built and verified end-to-end. **P6 (admin analytics) is under way:** its prerequisite
-metrics endpoint is built and verified (2026-08-02, see Segment 3); what remains is the
-`apps/web-admin` UI on top of it. Then P7 (prod hardening), gated on the open items under
-"Security follow-ups".
+Phases 1–5 built and verified end-to-end. **P6 (admin analytics) is under way:** the prerequisite
+metrics endpoint and the first cut of `apps/web-admin` — live ops on :5174 — are built (2026-08-02,
+see Segment 3). What remains of P6 is the analytics half: model quality, occupancy history, the
+frame browser and the admin controls, each of which needs new endpoints over `observation`. Then P7
+(prod hardening), gated on the open items under "Security follow-ups".
 
 A `pnpm quickstart` script (`web/scripts/quickstart.sh`) brings the whole stack up in one command
 — infra, migrations, seed, server, dashboard, a registered dev drone — for full-app testing.
@@ -272,8 +273,34 @@ classifier trustworthy, what's the occupancy picture over time. Auth-gated (admi
   failed frame, decommission a drone key.
 
 ### Structure
-- `apps/web-admin/` — separate Vite React app (or a routed section of a shared app) behind admin auth.
-  Charting via Recharts/visx. Reuses the same typed API client package.
+- `apps/web-admin/` — **built 2026-08-02** as a separate Vite React app on **:5174** (a separate
+  deployment boundary, so P7's auth gate is infrastructure rather than a route guard, and no admin
+  code ships in the driver's bundle). It proxies `/api` to :4000 like `web-user`.
+  - **Shipped (first cut — live ops):** pipeline panel (queue depth, in-flight, p50/p95 latency,
+    failure rate, mean classify cost), ingest panel (rate + client-side sparkline + last-frame
+    age), fleet panel (open missions with plan-vs-actual progress and idle time), coverage bar,
+    and a per-process panel (lifetime classified/failed/recovered/deltas). One alert banner driven
+    by thresholds in `lib/format.ts`, a window filter (1m/5m/15m/1h) that re-parameterises the
+    endpoint, and a poll beacon that keeps the last good reading visible when the server is
+    unreachable. Every panel is fed by `GET /api/v1/metrics` alone — no new server code.
+  - **Model accuracy (added 2026-08-03):** a panel showing `state_accuracy` (voted bay verdicts vs
+    `gt` — the product-level number) and `view_accuracy` (single looks, before voting cancels a bad
+    one), each with its correct/total counts. This required closing a gap: `observation.gt` was
+    plumbed but **nothing ever wrote it**, so the column was always NULL. Labels are now resolved
+    inside `processing/pipeline.py` via `vision/ground_truth.py`, which reads
+    `sim/worlds/<area>.ground_truth.json` — so live ingest and the offline golden test both record
+    them and accuracy is measured on the path production actually runs. Migration
+    `0007_observation_gt_index.sql` adds a partial index on the labelled rows, so the query cost
+    tracks the eval set rather than the forever-growing history. Verified end-to-end: a replay of
+    `fmi_block` reports 100% on both, 43 bays / 76 labelled views, matching the golden test.
+  - **Not built yet:** the rest of model quality (precision/recall + confusion matrix, and the
+    no-ground-truth production proxies: confidence distribution, vote-vs-view agreement, flip
+    instability), occupancy analytics over `observation`, the frame/debug-overlay browser, and the
+    admin controls (manual override, re-queue, decommission key). Each needs new endpoints.
+  - No charting library: the one chart is a hand-rolled SVG sparkline, which keeps the bundle at
+    ~156 kB. Reach for Recharts/visx when the analytics panels land, not before.
+  - No shared component package with `web-user` yet — the overlap is CSS variables and two
+    formatting helpers. Extract one when a third consumer appears.
 
 ---
 

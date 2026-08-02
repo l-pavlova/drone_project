@@ -14,8 +14,9 @@ The snapshot has two halves, and the split is not arbitrary:
     totals outlive the DB's retention window, so they are counted in memory.
     They reset on restart, which is correct: they describe *this* process.
   * **durable** (``db.web_db``) — job outcomes, ingest times, fleet/mission
-    progress and bay coverage. Survive a restart; bounded by the frame retention
-    sweep, so the queries stay cheap.
+    progress, bay coverage and model accuracy where ground truth exists. Survive
+    a restart; bounded by the frame retention sweep (and, for accuracy, by a
+    partial index on the labelled rows), so the queries stay cheap.
 
 No Prometheus client library: the exposition format is a few lines of text and
 the dependency would buy nothing. Note the metric-type honesty — the durable
@@ -69,6 +70,7 @@ def snapshot(conn, window_s: int = DEFAULT_WINDOW_S, hub=None) -> dict:
         "latency": web_db.classify_latency(conn, window_s),
         "fleet": web_db.fleet_health(conn, window_s),
         "coverage": web_db.coverage_counts(conn),
+        "model": web_db.model_accuracy(conn),
         "config": {
             "occupancy_window_s": OCCUPANCY_WINDOW_S,
             "frame_retention_s": FRAME_RETENTION_S,
@@ -107,6 +109,11 @@ _SERIES = [
     ("parkdrone_bays_occupied", "gauge", "Bays currently occupied (fresh state)", ("coverage", "bays_occupied")),
     ("parkdrone_bays_free", "gauge", "Bays currently free (fresh state)", ("coverage", "bays_free")),
     ("parkdrone_bays_unknown", "gauge", "Bays with no fresh state", ("coverage", "bays_unknown")),
+    # Absent, not zero, where there is no ground truth to score against.
+    ("parkdrone_model_state_accuracy", "gauge", "Voted bay state vs ground truth, 0-1", ("model", "state_accuracy")),
+    ("parkdrone_model_view_accuracy", "gauge", "Single-view classifications vs ground truth, 0-1", ("model", "view_accuracy")),
+    ("parkdrone_model_bays_scored", "gauge", "Bays carrying a ground-truth label", ("model", "bays_scored")),
+    ("parkdrone_model_views_scored", "gauge", "Labelled single-view classifications", ("model", "views_scored")),
 ]
 
 

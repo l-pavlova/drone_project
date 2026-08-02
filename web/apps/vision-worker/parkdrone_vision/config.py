@@ -63,6 +63,13 @@ SIM_OUTPUT_ROOT = os.environ.get(
     "SIM_OUTPUT_ROOT", os.path.join(REPO_ROOT, "sim", "output")
 )
 
+# Where generate_world.py leaves <area>.ground_truth.json. Eval only: when the
+# directory has no labels for a survey area (a real deployment), observations
+# are recorded with gt = NULL and accuracy is reported as unknown.
+GROUND_TRUTH_ROOT = os.environ.get(
+    "GROUND_TRUTH_ROOT", os.path.join(REPO_ROOT, "sim", "worlds")
+)
+
 # ---- FastAPI server --------------------------------------------------------
 # Kept on :4000 so the web-user vite proxy target is unchanged.
 API_PORT = int(os.environ.get("API_PORT", "4000"))

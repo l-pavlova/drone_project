@@ -1,0 +1,52 @@
+.panel {
+  padding: 16px 18px 18px;
+  background: linear-gradient(180deg, rgba(28, 34, 42, 0.9), rgba(20, 24, 29, 0.9));
+  border: 1px solid rgba(236, 241, 237, 0.08);
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(236, 241, 237, 0.07);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 2.4px;
+  text-transform: uppercase;
+  color: var(--paint);
+}
+
+.note {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* Status dot never carries meaning alone — the tone it shows is always also
+   spelled out in the tile values or the banner above. */
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: currentColor;
+}
+.good { color: var(--zelena); }
+.idle { color: var(--muted); }
+.warn { color: var(--amber); }
+.critical { color: var(--signal); }

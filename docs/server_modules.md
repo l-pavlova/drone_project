@@ -33,6 +33,7 @@ flowchart TB
 
         subgraph vision["vision/ — classifier bridge"]
             scoring["<b>scoring.py</b><br/>score_frame() per-bay over one frame<br/>re-exports project / bay_features / classify"]
+            gt["<b>ground_truth.py</b> — eval only<br/>labels_for(area) → sim/worlds/*.ground_truth.json<br/>no file → gt NULL → accuracy unknown"]
         end
 
         subgraph dbp["db/ — all SQL"]
@@ -68,6 +69,7 @@ flowchart TB
     jobs -->|"run_coroutine_threadsafe<br/>(broadcast)"| hub
     jobs -->|"mark processed/failed<br/>unscored_frames()"| webdb
     pipeline --> scoring
+    pipeline -->|"labels_for(area)"| gt
     pipeline --> visdb
     scoring --> so
 
@@ -94,6 +96,10 @@ Entry points (package root, not on the request path):
 | `python -m parkdrone_vision.register_drone <id>` | `register_drone.py` | mints an API key, stores **only** its SHA-256 |
 | `python -m parkdrone_vision.replay <area>` | `replay.py` | golden test: frames → `pipeline.process_frame` → compare to `occupancy_results.json` (no server) |
 | `API_KEY=… python -m parkdrone_vision.replay_ingest <area>` | `replay_ingest.py` | full-stack E2E over the real HTTP/WS contract |
+| `python -m parkdrone_vision.cleanup` | `cleanup.py` | one frame-retention sweep by hand (the server also runs it every `CLEANUP_INTERVAL_S`); exits 1 if it found expired frames still queued |
+
+The whole stack — infra, migrations, seed, server, both UIs — comes up with
+`pnpm quickstart` from `web/` (`scripts/quickstart.sh`).
 
 ## What each module does
 
@@ -104,20 +110,21 @@ Entry points (package root, not on the request path):
 | `app.py` | The FastAPI app and every route. **Ingest**: `POST /api/v1/ingest/mission/start`, `…/{id}/end`, `…/frame`. **Reads**: `GET /api/v1/bays` (GeoJSON, optional `bbox`/`zona`), `/summary`, `/bays/{id}`. **Directions**: `GET /api/v1/route`. **Metrics**: `GET /api/v1/metrics` (JSON, optional `window_s`), `GET /metrics` (Prometheus). **Dev toggle**: `POST /api/v1/dev/occupy\|free` (mounted unless `ENABLE_DEV_ROUTES=false`). **Realtime**: `WS /ws/occupancy`. Its `lifespan` opens the pool, loads bays as ENU rings, runs crash recovery, then starts the classify threads. Also normalises the pose's `frame_idx` once, at the edge, so nothing downstream needs a legacy-`i` fallback. |
 | `auth.py` | `require_drone` FastAPI dependency: reads `x-api-key`, matches its SHA-256 against `drone.api_key_hash`, bumps `last_seen`, returns `drone_id`. 401 missing / 403 unknown. |
 | `hub.py` | WebSocket fan-out. `broadcast(deltas)` tags each as `{type:"bay_delta", …}` and sends to every client, dropping dead sockets. A 500-entry replay deque plus a monotonic cursor lets a reconnecting client resume with `?since=`. |
-| `metrics.py` | Operational snapshot for the admin dashboard and any scraper. Two halves: **in-process** (`jobs.stats()` — queue depth, in-flight, process-lifetime totals, mean classify time; these exist nowhere else and reset with the process) and **durable** (`web_db` — job status counts, oldest-queued age, ingest rates, enqueue→finish latency percentiles, fleet/mission progress, bay coverage). `prometheus(snap)` renders the numeric subset as text exposition — no client library; windowed DB figures are exported as gauges, only the lifetime process totals as counters. |
+| `metrics.py` | Operational snapshot for the admin dashboard and any scraper. Two halves: **in-process** (`jobs.stats()` — queue depth, in-flight, process-lifetime totals, mean classify time; these exist nowhere else and reset with the process) and **durable** (`web_db` — job status counts, oldest-queued age, ingest rates, enqueue→finish latency percentiles, fleet/mission progress, bay coverage, and model accuracy where ground truth exists — `state_accuracy` after the vote, `view_accuracy` before it, both `null` rather than `0` without labels). `prometheus(snap)` renders the numeric subset as text exposition — no client library; windowed DB figures are exported as gauges, only the lifetime process totals as counters. |
 
 ### `processing/` — frame → occupancy
 
 | Module | Responsibility |
 | --- | --- |
 | `jobs.py` | The job queue: a `queue.Queue` drained by `CLASSIFY_THREADS` daemon threads, each owning its **own** long-lived psycopg2 connection (connections aren't thread-shareable). Each job: fetch the image → `process_frame` → mark the job processed → schedule `hub.broadcast` on the event loop. A missing-image `ClientError` marks the job `failed` so recovery won't loop on it; any other exception is logged and the thread survives. `recover(conn)` rebuilds the queue from `frame_job.status='queued'` on boot. `stats()` exposes the live counters (depth, in-flight, processed/failed/recovered/deltas, mean classify time) that `api/metrics.py` reports. |
-| `pipeline.py` | 6 lines that are the whole scoring transaction: `score_frame` → `insert_observations` → `recompute_states` → commit → return deltas. Shared verbatim by the live threads and the offline `replay.py`, which is what makes the golden test meaningful. |
+| `pipeline.py` | The whole scoring transaction: resolve eval labels → `score_frame` → `insert_observations` → `recompute_states` → commit → return deltas. Shared verbatim by the live threads and the offline `replay.py`, which is what makes the golden test meaningful. Labels are looked up here rather than in each caller (`ground_truth.labels_for`, overridable with an explicit `gt=`) because they are a property of the survey area — so live ingest and replay both record them and accuracy is measured on the production path. |
 
 ### `vision/` — the classifier bridge
 
 | Module | Responsibility |
 | --- | --- |
 | `scoring.py` | Puts `<repo>/vision` on `sys.path` and imports `score_occupancy` (side-effect free — its `main()` is guarded). Re-exports `project`, `bay_features`, `classify`, `to_enu`, `pose_idx` so the web tier **never re-implements the calibrated thresholds**. Adds `score_frame(img, bays, pose)`: for each bay, project its ring to pixels, skip if the bbox misses the frame or the core isn't visible enough, else classify and record the centre offset. |
+| `ground_truth.py` | **Eval only.** `labels_for(survey_area)` → `{bay_id: occupied}` read from `sim/worlds/<area>.ground_truth.json` (plus the legacy bare `ground_truth.json` for `fmi_block`), which is what makes `observation.gt` — and therefore the accuracy figures on `/metrics` — non-empty. Caches hits **and misses**, since production is the miss case and must not re-stat the filesystem once per frame. The survey-area name arrives from the drone over HTTP and is about to become a file path, so it is whitelisted (`^[A-Za-z0-9_-]{1,64}$`), not escaped. No file → `gt = NULL` → accuracy reported as unknown, which is the correct production answer. |
 
 ### `db/` — all SQL in one place
 
@@ -131,7 +138,7 @@ Entry points (package root, not on the request path):
 
 | Module | Responsibility |
 | --- | --- |
-| `config.py` | Walks up from CWD for the nearest `.env` (process env always wins) and exposes `DATABASE_URL`, the S3 settings, `SIM_OUTPUT_ROOT`, `API_PORT`, `ENABLE_DEV_ROUTES`, `CLASSIFY_THREADS`, and the OSRM/cache knobs. |
+| `config.py` | Walks up from CWD for the nearest `.env` (process env always wins) and exposes `DATABASE_URL`, the S3 settings, `SIM_OUTPUT_ROOT`, `API_PORT`, `ENABLE_DEV_ROUTES`, `CLASSIFY_THREADS`, `GROUND_TRUTH_ROOT`, and the OSRM/cache knobs. |
 | `s3.py` | The single boto3 client both sides share: `put_frame` (ingest writes bytes, stores only the `s3://` uri on the frame row) and `get_frame_array` (classify threads read back an HxWx3 RGB array; also accepts a local path, which is how replay works). |
 | `routing.py` | Proxies driving directions to OSRM so the driver's coordinates stay on our origin and the provider is swappable. Quantised-coordinate TTL cache absorbs the map's re-routes; `urllib` only (no new dependency), with a one-shot unverified retry for Windows' flaky cert revocation. Raises `RoutingError` → 502, and the map falls back to a straight line. |
 

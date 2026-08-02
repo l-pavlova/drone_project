@@ -98,6 +98,14 @@ hardening) remain.** See project memory `project-web-infra.md` for the running l
   per-component classes in `styles/global.css` — that file is trimmed to CSS variables/reset/base
   sizing only). Use `:global(...)` only for classes owned by a third party we don't render
   ourselves (e.g. Leaflet's injected `.leaflet-popup-content`).
+- `apps/web-admin` (React, no map) — the **ops dashboard** on :5174: pipeline health, ingest rate,
+  fleet/mission progress, coverage. Same visual identity and CSS-Modules convention as `web-user`;
+  no shared component package yet (the two apps overlap only in CSS variables — copy, don't
+  abstract, until a third consumer exists). It reads **only** `GET /api/v1/metrics`, polled every
+  3 s (`hooks/useMetrics.ts`); the sparkline series is accumulated client-side from those polls,
+  which is why it is labelled "since this page opened" — the endpoint returns gauges, not history.
+  Health thresholds (stall/failure/idle) live in one place, `lib/format.ts`, so the tiles, the
+  fleet table and the alert banner cannot disagree.
 - `infra/docker-compose.yml` — postgis + minio.
 
 ### Architecture invariants (do not regress)
@@ -138,17 +146,24 @@ hardening) remain.** See project memory `project-web-infra.md` for the running l
   see `docs/web_infra_plan.md`. Throughput is not the reason to: ~103 frames/s per classify thread
   against ~0.5 frames/s per drone.
 - The server classifies **all** visible bays (production has no ground truth); `gt` is eval-only.
+  Labels are resolved inside `processing/pipeline.py` from
+  `sim/worlds/<area>.ground_truth.json` (`vision/ground_truth.py`, `GROUND_TRUTH_ROOT`, cached
+  including misses, survey-area name whitelisted since it reaches a file path from HTTP). An area
+  with no file records `gt = NULL` and reports accuracy as unknown — that is the production case,
+  not a failure.
 - `score_frame` takes an optional `BayIndex` and rejects bays outside the camera footprint before
   projecting them (footprint half-width is `alt*tan(FOV/2)`). Results are identical — the test is
   conservative — but per-frame cost stops scaling with the size of the bay dataset.
 
 ### Run it (dev)
-One command brings the whole stack up for a full-app test — infra, migrations, seed, server,
-dashboard, plus a registered dev drone whose API key lands in `web/.quickstart/drone-1.key`:
+One command brings the whole stack up for a full-app test — infra, migrations, seed, server, both
+UIs (driver map :5173, ops dashboard :5174), plus a registered dev drone whose API key lands in
+`web/.quickstart/drone-1.key`:
 ```bash
 cd web && npm i -g pnpm    # corepack isn't on PATH here
-pnpm quickstart            # add --replay to also drive a survey through the live stack,
-                           # --no-web to skip the dashboard, --stop to tear everything down
+pnpm quickstart            # --replay drives a survey through the live stack,
+                           # --no-admin skips the ops UI, --no-web skips both UIs,
+                           # --stop tears everything down
 ```
 It is idempotent and self-healing: it creates `.env` with generated credentials on first run,
 waits on real readiness probes (`pg_isready`, MinIO health, `/health`), and kills whatever stale
@@ -167,8 +182,9 @@ pnpm db:migrate && pnpm db:seed         # loads all 1698 bays
 # Needs fastapi/uvicorn/websockets/python-multipart + numpy/Pillow/psycopg2/boto3
 # (pip install -r apps/vision-worker/requirements.txt):
 (cd apps/vision-worker && python -m parkdrone_vision.server &)
-# Dashboard (:5173, proxies /api + /ws to :4000):
+# Dashboards (:5173 driver map, :5174 ops — both proxy /api + /ws to :4000):
 (cd apps/web-user && pnpm exec vite &)
+(cd apps/web-admin && pnpm exec vite &)
 ```
 Verification harnesses (all Python, run from `apps/vision-worker`):
 - Vision golden test: `python -m parkdrone_vision.replay fmi_block`
@@ -191,7 +207,9 @@ depth and in-flight, which exist only in this process's `queue.Queue`, plus life
 classified/failed/recovered/deltas and mean classify time (they reset per process, by design) — and
 **durable** queries in `db/web_db.py`: `frame_job` status counts + `oldest_queued_age_s` (the stall
 signal), ingest rates, enqueue→finish latency avg/p50/p95 + failure rate, fleet/active-mission
-progress, and bay coverage. Both endpoints are unauthenticated like every other read route; they go
+progress, bay coverage, and **model accuracy** (`state_accuracy` = voted bay verdicts vs `gt`, the
+product-level number; `view_accuracy` = single looks before voting; both `null` where there is no
+ground truth, never 0). Both endpoints are unauthenticated like every other read route; they go
 behind admin auth in P7. To see a stall by hand: run the server with `CLASSIFY_THREADS=0`, ingest,
 and watch `jobs.queued` / `oldest_queued_age_s` climb; restarting normally then shows
 `recovered_on_start` and drains it.

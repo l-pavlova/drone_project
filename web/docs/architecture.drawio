@@ -56,8 +56,11 @@
           <mxGeometry x="300" y="600" width="230" height="78" as="geometry" />
         </mxCell>
 
-        <mxCell id="admin" value="&#171;component&#187;&#10;Admin Dashboard&#10;(planned)" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=12;fillColor=#F1F3F5;strokeColor=#9AA6AE;fontColor=#6b747c;dashed=1;spacingLeft=8;" vertex="1" parent="1">
+        <mxCell id="admin" value="&#171;component&#187;&#10;Ops Dashboard&#10;React — :5174" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=12;fillColor=#E4F7F4;strokeColor=#0F9E90;fontColor=#06403a;spacingLeft=8;" vertex="1" parent="1">
           <mxGeometry x="590" y="600" width="230" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="admin_note" value="pipeline health · ingest rate · fleet/missions&#10;coverage · model accuracy. Separate app, so no&#10;admin code ships to drivers and P7 auth is a&#10;deployment boundary. Analytics panels (occupancy&#10;history, frame browser, controls) still to come." style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#6b747c;" vertex="1" parent="1">
+          <mxGeometry x="840" y="600" width="250" height="80" as="geometry" />
         </mxCell>
 
         <!-- ===== dependencies ===== -->
@@ -81,7 +84,7 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <mxCell id="e_admin_srv" value="&#171;REST&#187; (planned)" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#9AA6AE;fontColor=#6b747c;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="admin" target="server">
+        <mxCell id="e_admin_srv" value="&#171;REST&#187; /api/v1/metrics&#10;polled · also /metrics (Prometheus)" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#0F9E90;fontColor=#06403a;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="admin" target="server">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 

@@ -1,0 +1,90 @@
+.wrap {
+  position: relative;
+  width: 100%;
+  height: 110px;
+  margin-top: 4px;
+  cursor: crosshair;
+}
+
+.svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.line {
+  fill: none;
+  stroke: var(--telemetry);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.area {
+  fill: rgba(20, 184, 166, 0.12);
+  stroke: none;
+}
+
+.crosshair {
+  stroke: rgba(236, 241, 237, 0.28);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+  vector-effect: non-scaling-stroke;
+}
+
+/* 9px hover mark, ringed in the surface colour so it reads over the line */
+.dot {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--telemetry);
+  box-shadow: 0 0 0 2px var(--asphalt);
+  pointer-events: none;
+}
+
+.tip {
+  position: absolute;
+  top: -6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 9px;
+  transform: translateX(8px);
+  background: rgba(10, 13, 16, 0.96);
+  border: 1px solid rgba(236, 241, 237, 0.12);
+  border-radius: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: var(--paint);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.tip[data-side="left"] { transform: translateX(calc(-100% - 8px)); }
+.tip strong { font-size: 13px; font-weight: 600; }
+.tip span { color: var(--muted); }
+
+.peak {
+  position: absolute;
+  top: -14px;
+  right: 0;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 110px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 1px;
+  color: var(--muted);
+}

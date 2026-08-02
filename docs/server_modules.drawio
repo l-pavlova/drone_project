@@ -20,6 +20,9 @@
         <mxCell id="browser" value="&#171;component&#187;&#10;web-user&#10;React + Leaflet" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=11;fillColor=#E6F6EC;strokeColor=#2E9E57;fontColor=#0f4023;spacingLeft=8;" vertex="1" parent="1">
           <mxGeometry x="40" y="300" width="170" height="60" as="geometry" />
         </mxCell>
+        <mxCell id="admin" value="&#171;component&#187;&#10;web-admin&#10;React ops dashboard :5174" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=11;fillColor=#E4F7F4;strokeColor=#0F9E90;fontColor=#06403a;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="375" width="170" height="55" as="geometry" />
+        </mxCell>
         <mxCell id="operator" value="&#171;actor&#187;&#10;Operator shell" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=11;fillColor=#EEF1F3;strokeColor=#9AA6AE;fontColor=#14181D;spacingLeft=8;" vertex="1" parent="1">
           <mxGeometry x="40" y="905" width="170" height="60" as="geometry" />
         </mxCell>
@@ -33,14 +36,17 @@
         <mxCell id="pkg_api" value="api/  — HTTP + WebSocket edge" style="shape=folder;tabWidth=170;tabHeight=20;tabPosition=left;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontStyle=1;fillColor=#E4F7F4;strokeColor=#0F9E90;fontColor=#06403a;spacingLeft=8;spacingTop=2;" vertex="1" parent="1">
           <mxGeometry x="270" y="150" width="380" height="240" as="geometry" />
         </mxCell>
-        <mxCell id="m_app" value="&lt;b&gt;app.py&lt;/b&gt;&#10;FastAPI app + lifespan (pool · bays · recover · threads)&#10;ingest · reads (/bays /summary /bays/:id) · /route&#10;dev occupancy toggle · WS /ws/occupancy&#10;sync handlers → Starlette threadpool" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#0F9E90;fontColor=#06403a;" vertex="1" parent="1">
-          <mxGeometry x="285" y="188" width="350" height="90" as="geometry" />
+        <mxCell id="m_app" value="&lt;b&gt;app.py&lt;/b&gt;&#10;FastAPI app + lifespan (pool · bays · recover · threads)&#10;ingest · reads (/bays /summary /bays/:id) · /route&#10;metrics · dev occupancy toggle · WS /ws/occupancy&#10;sync handlers → Starlette threadpool" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#0F9E90;fontColor=#06403a;" vertex="1" parent="1">
+          <mxGeometry x="285" y="186" width="350" height="72" as="geometry" />
         </mxCell>
         <mxCell id="m_auth" value="&lt;b&gt;auth.py&lt;/b&gt;&#10;require_drone dependency&#10;x-api-key → SHA-256 → drone_id&#10;bumps last_seen · 401 / 403" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#0F9E90;fontColor=#06403a;" vertex="1" parent="1">
-          <mxGeometry x="285" y="292" width="168" height="82" as="geometry" />
+          <mxGeometry x="285" y="266" width="168" height="62" as="geometry" />
         </mxCell>
         <mxCell id="m_hub" value="&lt;b&gt;hub.py&lt;/b&gt;&#10;WS fan-out to browsers&#10;bay_delta tagging&#10;replay deque + ?since cursor" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#0F9E90;fontColor=#06403a;" vertex="1" parent="1">
-          <mxGeometry x="467" y="292" width="168" height="82" as="geometry" />
+          <mxGeometry x="467" y="266" width="168" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="m_metrics" value="&lt;b&gt;metrics.py&lt;/b&gt;&#10;GET /api/v1/metrics (JSON) · GET /metrics (Prometheus text, no client lib)&#10;in-process: queue depth · in-flight · lifetime totals    durable: job counts · oldest-queued age · ingest rate · latency p50/p95 · fleet · coverage · model accuracy" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=9;fillColor=#FFFFFF;strokeColor=#0F9E90;fontColor=#06403a;" vertex="1" parent="1">
+          <mxGeometry x="285" y="336" width="350" height="48" as="geometry" />
         </mxCell>
 
         <!-- ==== processing/ ==== -->
@@ -73,10 +79,13 @@
 
         <!-- ==== vision/ ==== -->
         <mxCell id="pkg_vision" value="vision/  — classifier bridge" style="shape=folder;tabWidth=170;tabHeight=20;tabPosition=left;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontStyle=1;fillColor=#FFF6E0;strokeColor=#C08A11;fontColor=#5a3f05;spacingLeft=8;spacingTop=2;" vertex="1" parent="1">
-          <mxGeometry x="680" y="420" width="380" height="130" as="geometry" />
+          <mxGeometry x="680" y="420" width="380" height="250" as="geometry" />
         </mxCell>
         <mxCell id="m_scoring" value="&lt;b&gt;scoring.py&lt;/b&gt;&#10;score_frame(img, bays, pose) — project each bay ring to pixels, skip off-frame / half-hidden, classify&#10;re-exports project · bay_features · classify · to_enu · pose_idx, so the tuned thresholds live in ONE place" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#C08A11;fontColor=#5a3f05;" vertex="1" parent="1">
           <mxGeometry x="695" y="458" width="350" height="76" as="geometry" />
+        </mxCell>
+        <mxCell id="m_gt" value="&lt;b&gt;ground_truth.py&lt;/b&gt; — EVAL ONLY&#10;labels_for(survey_area) → sim/worlds/&lt;area&gt;.ground_truth.json&#10;caches hits AND misses (production is the miss case) · area name whitelisted: it reaches a file path from HTTP&#10;no file → gt = NULL → accuracy reported as unknown, never as zero" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=9;fillColor=#FFFFFF;strokeColor=#C08A11;fontColor=#5a3f05;" vertex="1" parent="1">
+          <mxGeometry x="695" y="552" width="350" height="76" as="geometry" />
         </mxCell>
 
         <!-- ==== package root ==== -->
@@ -134,12 +143,15 @@
         <mxCell id="e_browser_hub" value="&#171;WebSocket&#187;&#10;/ws/occupancy?since=" style="endArrow=open;startArrow=open;startFill=0;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#2E9E57;fontColor=#0f4023;labelBackgroundColor=#ffffff;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" edge="1" parent="1" source="browser" target="m_hub">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="232" y="345" />
-              <mxPoint x="232" y="402" />
-              <mxPoint x="461" y="402" />
-              <mxPoint x="461" y="354" />
+              <mxPoint x="232" y="330" />
+              <mxPoint x="232" y="400" />
+              <mxPoint x="461" y="400" />
+              <mxPoint x="461" y="313" />
             </Array>
           </mxGeometry>
+        </mxCell>
+        <mxCell id="e_admin_metrics" value="&#171;REST&#187; /api/v1/metrics&#10;polled every 3 s" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#0F9E90;fontColor=#06403a;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="admin" target="m_metrics">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e_op_entry" value="python -m parkdrone_vision.…" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.6;entryDx=0;entryDy=0;" edge="1" parent="1" source="operator" target="pkg_entry">
           <mxGeometry relative="1" as="geometry" />
@@ -177,8 +189,8 @@
         <mxCell id="e_jobs_hub" value="&lt;b&gt;run_coroutine_threadsafe(hub.broadcast)&lt;/b&gt;&#10;crossing 2 — deltas back onto the loop" style="endArrow=block;endFill=1;html=1;strokeWidth=2;fontSize=10;strokeColor=#E14B2E;fontColor=#5c1c10;labelBackgroundColor=#EAF2FB;exitX=0;exitY=0.8;exitDx=0;exitDy=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_jobs" target="m_hub">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="668" y="260" />
-              <mxPoint x="668" y="313" />
+              <mxPoint x="668" y="255" />
+              <mxPoint x="668" y="282" />
             </Array>
           </mxGeometry>
         </mxCell>
@@ -202,6 +214,33 @@
             <Array as="points">
               <mxPoint x="660" y="562" />
               <mxPoint x="660" y="523" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ===== edges: metrics reads both halves ===== -->
+        <mxCell id="e_metrics_jobs" value="jobs.stats()&#10;depth + lifetime counters" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#E14B2E;fontColor=#5c1c10;labelBackgroundColor=#EAF2FB;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.9;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_metrics" target="m_jobs">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="658" y="360" />
+              <mxPoint x="658" y="269" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_metrics_webdb" value="job counts · ingest rates · latency&#10;fleet · coverage · model accuracy" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#6b7686;fontColor=#14181D;labelBackgroundColor=#EAF2FB;exitX=0.1;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.45;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_metrics" target="m_webdb">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="320" y="398" />
+              <mxPoint x="274" y="398" />
+              <mxPoint x="274" y="577" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_pipe_gt" value="labels_for(area)&#10;eval labels → observation.gt" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#C08A11;fontColor=#5a3f05;labelBackgroundColor=#ffffff;exitX=1;exitY=0.9;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_pipeline" target="m_gt">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1068" y="366" />
+              <mxPoint x="1068" y="590" />
             </Array>
           </mxGeometry>
         </mxCell>

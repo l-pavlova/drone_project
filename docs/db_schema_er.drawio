@@ -199,7 +199,7 @@
         <mxCell id="obs_14" value="core_std : real" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_obs">
           <mxGeometry y="286" width="340" height="20" as="geometry" />
         </mxCell>
-        <mxCell id="obs_15" value="gt : boolean  — eval only, NULL in prod" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#6b747c;" vertex="1" parent="e_obs">
+        <mxCell id="obs_15" value="gt : boolean  — eval label, NULL in prod" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#6b747c;" vertex="1" parent="e_obs">
           <mxGeometry y="306" width="340" height="20" as="geometry" />
         </mxCell>
         <mxCell id="obs_16" value="observed_at : timestamptz  NOT NULL" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_obs">
@@ -275,7 +275,7 @@
         <mxCell id="n_frame" value="UNIQUE (drone_id, survey_area, frame_idx) makes ingest idempotent — a re-sent frame&#10;overwrites its S3 object but is NOT re-enqueued. status is what makes the&#10;in-memory queue durable: the row is committed BEFORE the job is&#10;enqueued, so a crash in between leaves status='queued' and startup&#10;recovery rebuilds the job from this row + image_uri. A frame whose image&#10;expired from the bucket is marked 'failed' so recovery stops retrying it." style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#5c1c10;fillColor=#FEF6F3;strokeColor=#F5CFC4;spacingLeft=8;spacingTop=6;spacingRight=6;whiteSpace=wrap;" vertex="1" parent="1">
           <mxGeometry x="60" y="906" width="640" height="104" as="geometry" />
         </mxCell>
-        <mxCell id="n_obs" value="One row per bay per frame, keeping the raw classifier features so a&#10;misclassification can be explained without the image. Feeds the vote&#10;AND the bay-detail history. gt is populated only by the offline replay&#10;harness — production has no ground truth." style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#06403a;fillColor=#F2FBFA;strokeColor=#BFE7E2;spacingLeft=8;spacingTop=6;spacingRight=6;whiteSpace=wrap;" vertex="1" parent="1">
+        <mxCell id="n_obs" value="One row per bay per frame, keeping the raw classifier features so a&#10;misclassification can be explained without the image. Feeds the vote&#10;AND the bay-detail history. gt is written from sim/worlds/&lt;area&gt;.ground_truth.json&#10;on BOTH the live and replay paths (vision/ground_truth.py); a real deployment has&#10;no labels file, so gt stays NULL and /metrics reports accuracy as unknown.&#10;Partial index observation_gt_idx keeps the accuracy queries off the full history." style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#06403a;fillColor=#F2FBFA;strokeColor=#BFE7E2;spacingLeft=8;spacingTop=6;spacingRight=6;whiteSpace=wrap;" vertex="1" parent="1">
           <mxGeometry x="860" y="550" width="390" height="76" as="geometry" />
         </mxCell>
 

@@ -78,7 +78,7 @@ erDiagram
         real core_chroma
         real core_brightness
         real core_std
-        boolean gt "eval only, NULL in production"
+        boolean gt "eval label, NULL in production"
         timestamptz observed_at
     }
 
@@ -134,7 +134,10 @@ erDiagram
 | `bay_state_updated_idx` | `bay_state(updated_at DESC)` | recently-changed feeds |
 | `observation_bay_time_idx` | `observation(bay_id, observed_at DESC)` | bay-detail history |
 | `observation_survey_area_idx` | `observation(survey_area, observed_at DESC)` | per-survey_area analytics |
+| `observation_bay_area_time_idx` | `observation(bay_id, survey_area, observed_at DESC)` | the windowed occupancy vote, once per classified frame — bounded index range scan |
+| `observation_gt_idx` | `observation(bay_id, observed_at DESC) WHERE gt IS NOT NULL` | **partial** — the model-accuracy readings. Labelled rows are a small minority (none at all in production), so the index holds only them and accuracy queries cost what the eval set costs, not what the whole history costs |
 | `frame_job_status_idx` | `frame_job(status, enqueued_at)` | crash-recovery scan for `status='queued'`, over a narrow table |
+| `frame_received_idx` | `frame(received_at)` | the retention sweep, which would otherwise scan the whole ingest ledger every pass |
 | `frame_mission_idx` | `frame(mission_id)` | mission progress |
 | `mission_drone_idx` | `mission(drone_id, started_at DESC)` | flight history per drone |
 
@@ -168,5 +171,11 @@ erDiagram
 - **No FK between `frame` and `observation`** — they are joined only logically by
   `(survey_area, frame_idx)`, because observations must outlive frame rows
   you delete to reprocess a survey area.
-- **`observation.gt` is evaluation-only.** Production has no ground truth; the
-  column is populated only by the offline replay harness.
+- **`observation.gt` is evaluation-only, and now actually written.** It is filled
+  in `processing/pipeline.py` from `sim/worlds/<area>.ground_truth.json` via
+  `vision/ground_truth.py`, so live ingest and the offline replay both record it
+  — accuracy is measured on the path production runs, not on a test-only one. A
+  survey area with no labels file (every real deployment) records `NULL`, and the
+  `/metrics` accuracy figures then report `null` — unknown, never `0`. Before
+  2026-08-03 the column existed and was plumbed through `insert_observations` but
+  no caller ever passed a value, so it was NULL everywhere.

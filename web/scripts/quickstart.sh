@@ -2,19 +2,21 @@
 #
 # PARKDRONE quickstart — bring up everything needed for a full app test.
 #
-#   pnpm quickstart              # infra + migrate/seed + server + dashboard
+#   pnpm quickstart              # infra + migrate/seed + server + both UIs
 #   pnpm quickstart --replay     # ...then replay a survey through the live stack
+#   pnpm quickstart --no-admin   # skip the ops dashboard (--no-web skips both UIs)
 #   pnpm quickstart --stop       # stop the app processes AND the docker infra
 #
 # What it starts, in dependency order:
 #   1. docker compose: PostGIS (:5432) + MinIO (:9000/:9001)
 #   2. schema migrations + the 1698-bay seed
 #   3. the FastAPI server (:4000) — web edge + in-process vision
-#   4. the React dashboard (:5173, proxying /api and /ws to :4000)
+#   4. the driver-facing map (:5173) and the ops dashboard (:5174), both
+#      proxying /api and /ws to :4000
 #
 # It is idempotent: re-running skips what is already up (compose is declarative,
-# migrations are ledgered, the seeder upserts). Ctrl-C stops the two app
-# processes and leaves the containers running — `--stop` takes those down too.
+# migrations are ledgered, the seeder upserts). Ctrl-C stops the app processes
+# and leaves the containers running — `--stop` takes those down too.
 #
 # Git Bash on Windows is the target shell (project convention), but nothing here
 # is Windows-specific.
@@ -24,14 +26,16 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_DIR="$ROOT/.quickstart"          # logs + pids, gitignored
 SERVER_LOG="$RUN_DIR/server.log"
 WEB_LOG="$RUN_DIR/web.log"
+ADMIN_LOG="$RUN_DIR/admin.log"
 DRONE_ID="${DRONE_ID:-drone-1}"
 REPLAY_AREA="${REPLAY_AREA:-fmi_block}"
 COMPOSE=(docker compose --env-file "$ROOT/.env" -f "$ROOT/infra/docker-compose.yml")
 
-WITH_WEB=1; WITH_SEED=1; DO_REPLAY=0; DO_STOP=0
+WITH_WEB=1; WITH_ADMIN=1; WITH_SEED=1; DO_REPLAY=0; DO_STOP=0
 for arg in "$@"; do
   case "$arg" in
-    --no-web)  WITH_WEB=0 ;;
+    --no-web)   WITH_WEB=0; WITH_ADMIN=0 ;;
+    --no-admin) WITH_ADMIN=0 ;;
     --no-seed) WITH_SEED=0 ;;
     --replay)  DO_REPLAY=1 ;;
     --stop)    DO_STOP=1 ;;
@@ -108,9 +112,9 @@ mkdir -p "$RUN_DIR"
 
 if [ "$DO_STOP" = 1 ]; then
   say "stopping app processes"
-  stop_service server; stop_service web
+  stop_service server; stop_service web; stop_service admin
   # also catch survivors of a crashed run, whose pidfile is gone
-  free_port 4000; free_port 5173
+  free_port 4000; free_port 5173; free_port 5174
   say "stopping docker infra"
   if [ -f "$ROOT/.env" ]; then "${COMPOSE[@]}" down || true; fi
   ok "stopped (docker volumes kept — 'docker compose ... down -v' wipes the data)"
@@ -191,9 +195,17 @@ ok "API key written to .quickstart/$DRONE_ID.key"
 if [ "$WITH_WEB" = 1 ]; then
   stop_service web
   free_port 5173
-  say "starting dashboard on :5173"
+  say "starting driver map on :5173"
   start_service web "$ROOT/apps/web-user" "$WEB_LOG" "$PNPM" exec vite
-  wait_for 60 "dashboard" curl -fsS http://localhost:5173/
+  wait_for 60 "driver map" curl -fsS http://localhost:5173/
+fi
+
+if [ "$WITH_ADMIN" = 1 ]; then
+  stop_service admin
+  free_port 5174
+  say "starting ops dashboard on :5174"
+  start_service admin "$ROOT/apps/web-admin" "$ADMIN_LOG" "$PNPM" exec vite
+  wait_for 60 "ops dashboard" curl -fsS http://localhost:5174/
 fi
 
 # ---- 7. optional replay ----------------------------------------------------
@@ -207,11 +219,12 @@ cat <<EOF
 
   PARKDRONE is up.
 
-$([ "$WITH_WEB" = 1 ] && echo "    dashboard   http://localhost:5173")
+$([ "$WITH_WEB" = 1 ] && echo "    driver map  http://localhost:5173")
+$([ "$WITH_ADMIN" = 1 ] && echo "    ops         http://localhost:5174")
     api         http://localhost:4000/api/v1/bays
     metrics     http://localhost:4000/api/v1/metrics   (prometheus: /metrics)
     minio       http://localhost:9001
-    logs        .quickstart/server.log, .quickstart/web.log
+    logs        .quickstart/{server,web,admin}.log
 
   Drive it by hand:
     curl -X POST http://localhost:4000/api/v1/dev/occupy   # needs ENABLE_DEV_ROUTES=true
@@ -226,7 +239,7 @@ $([ "$WITH_WEB" = 1 ] && echo "    dashboard   http://localhost:5173")
 
 EOF
 
-shutdown() { echo; say "shutting down"; stop_service server; stop_service web; ok "app processes stopped"; exit 0; }
+shutdown() { echo; say "shutting down"; stop_service server; stop_service web; stop_service admin; ok "app processes stopped"; exit 0; }
 trap shutdown INT TERM
 
 # Stay in the foreground streaming the server log — this is the thing worth

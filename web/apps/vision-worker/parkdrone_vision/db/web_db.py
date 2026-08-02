@@ -273,6 +273,50 @@ def fleet_health(conn, window_s):
     }
 
 
+def model_accuracy(conn):
+    """Classifier accuracy where ground truth exists (sim/eval runs).
+
+    Two different questions, both worth showing, because they can disagree:
+
+    * **per view** — of all labelled (bay, frame) classifications, how many were
+      right. This is the raw classifier, single look, no voting.
+    * **per bay** — of the bays that carry a label, how many ended up in the
+      right *state* after the windowed majority vote. This is the number the
+      product is actually judged on, and it is normally higher: voting is what
+      cancels a bad view.
+
+    Both return None in production rather than 0 — there is no ground truth
+    there, and an accuracy of "unknown" must not render as a failing score.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """SELECT COUNT(*), COUNT(*) FILTER (WHERE occupied = gt)
+                 FROM observation WHERE gt IS NOT NULL"""
+        )
+        views, views_ok = cur.fetchone()
+        # One label per bay (its most recent), compared against the voted state.
+        cur.execute(
+            """WITH labelled AS (
+                 SELECT DISTINCT ON (bay_id) bay_id, gt
+                   FROM observation
+                  WHERE gt IS NOT NULL
+                  ORDER BY bay_id, observed_at DESC
+               )
+               SELECT COUNT(*), COUNT(*) FILTER (WHERE s.occupied = l.gt)
+                 FROM labelled l JOIN bay_state s USING (bay_id)"""
+        )
+        bays, bays_ok = cur.fetchone()
+    views, views_ok, bays, bays_ok = int(views), int(views_ok), int(bays), int(bays_ok)
+    return {
+        "views_scored": views,
+        "views_correct": views_ok,
+        "view_accuracy": round(views_ok / views, 4) if views else None,
+        "bays_scored": bays,
+        "bays_correct": bays_ok,
+        "state_accuracy": round(bays_ok / bays, 4) if bays else None,
+    }
+
+
 def coverage_counts(conn):
     """Bay totals split by freshness — the same rule every read path applies."""
     with conn.cursor() as cur:

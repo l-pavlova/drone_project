@@ -1,0 +1,47 @@
+.bar {
+  display: flex;
+  gap: 2px; /* surface gap: segment boundaries stay readable without colour */
+  height: 14px;
+  margin: 2px 0 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: rgba(236, 241, 237, 0.06);
+}
+
+.seg {
+  display: block;
+  min-width: 3px;
+  height: 100%;
+}
+
+.occupied { background: var(--signal); }
+.free { background: var(--zelena); }
+.unknown { background: rgba(154, 166, 174, 0.45); }
+
+.legend {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: 10px 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.name { color: var(--muted); letter-spacing: 0.8px; }
+.n { color: var(--paint); font-weight: 600; }
+.pct { color: var(--muted); min-width: 34px; text-align: right; }

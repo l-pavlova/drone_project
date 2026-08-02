@@ -1,0 +1,26 @@
+/* Variables, reset and base sizing only — every component owns its own
+   Component.module.css (same convention as apps/web-user). */
+:root {
+  --asphalt: #14181d;
+  --asphalt-2: #1c222a;
+  --paint: #ecf1ed;
+  --zelena: #35c46e;   /* free / healthy */
+  --signal: #ff5c3e;   /* occupied / critical */
+  --amber: #f5a524;    /* warning — validated against zelena/signal on asphalt */
+  --telemetry: #14b8a6; /* the drone accent: pipeline series, progress */
+  --muted: #9aa6ae;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+  --sans: "Space Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { min-height: 100%; margin: 0; }
+
+body {
+  font-family: var(--sans);
+  color: var(--paint);
+  /* the asphalt the whole product is painted on, with a faint overhead glow */
+  background:
+    radial-gradient(1100px 520px at 18% -8%, rgba(20, 184, 166, 0.08), transparent 60%),
+    var(--asphalt);
+}
