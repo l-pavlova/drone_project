@@ -6,9 +6,20 @@ export interface UserPos {
   accuracy: number;
 }
 
-/** Default you-are-here: the FMI block centroid (ENU origin). Used until real
- *  geolocation succeeds, so nearest-free works from the block out of the box. */
-export const FMI_DEFAULT: UserPos = { lat: 42.6747105, lon: 23.3298956, accuracy: 25 };
+/** Default you-are-here: on бул. Джеймс Баучер, in front of FMI. Used until real
+ *  geolocation succeeds, so nearest-free works from the block out of the box.
+ *
+ *  It is a point ON THE STREET, not the block centroid — a driver arrives along
+ *  the boulevard, and a default sitting on the bay cluster itself makes the
+ *  distances and the route look wrong. Derived by projecting the FMI address
+ *  geocode (42.6743496, 23.3305178) perpendicularly onto the Bourchier
+ *  centerline in data/block_roads.geojson; 35 m from the ENU origin, so it stays
+ *  well inside the surveyed fmi_block area.
+ *
+ *  UI-only. It is NOT the ENU origin, despite once sharing its value: that
+ *  constant lives in packages/contracts and must stay in lockstep with
+ *  generate_world.py / score_occupancy.py. */
+export const FMI_DEFAULT: UserPos = { lat: 42.674992, lon: 23.330087, accuracy: 25 };
 
 export interface NearestTarget {
   bayId: string;

@@ -155,6 +155,15 @@ export function BayMap({
         );
       })}
 
+      {/* Everything below the bays in intent but ABOVE them in draw order is
+          marked `interactive: false`. With preferCanvas all vectors share one
+          canvas, and Leaflet's Canvas._onClick walks the draw order keeping the
+          LAST interactive layer under the cursor — so a decorative overlay drawn
+          after the bays silently swallows their clicks (the 25 m accuracy circle
+          hid every bay around the driver). CSS pointer-events can't help: one
+          canvas, no per-shape elements. The you-are-here dot below stays
+          interactive because its tooltip is hover-triggered. */}
+
       {/* the driving route: dark casing under a telemetry-coloured line */}
       {routePositions && (
         <>
@@ -166,6 +175,7 @@ export function BayMap({
               opacity: 0.5,
               lineCap: "round",
               lineJoin: "round",
+              interactive: false,
             }}
           />
           <Polyline
@@ -176,6 +186,7 @@ export function BayMap({
               opacity: 0.95,
               lineCap: "round",
               lineJoin: "round",
+              interactive: false,
             }}
           />
         </>
@@ -188,16 +199,29 @@ export function BayMap({
             [userPos.lat, userPos.lon],
             [target.lat, target.lon],
           ]}
-          pathOptions={{ color: TELEMETRY, weight: 3, dashArray: "2 8", lineCap: "round" }}
+          pathOptions={{
+            color: TELEMETRY,
+            weight: 3,
+            dashArray: "2 8",
+            lineCap: "round",
+            interactive: false,
+          }}
         />
       )}
 
-      {/* the chosen nearest free bay */}
+      {/* the chosen nearest free bay — non-interactive so the bay it marks stays
+          clickable; a permanent tooltip needs no mouse events */}
       {target && (
         <CircleMarker
           center={[target.lat, target.lon]}
           radius={10}
-          pathOptions={{ color: TELEMETRY, fillColor: COLOR.free, fillOpacity: 1, weight: 3 }}
+          pathOptions={{
+            color: TELEMETRY,
+            fillColor: COLOR.free,
+            fillOpacity: 1,
+            weight: 3,
+            interactive: false,
+          }}
         >
           <Tooltip permanent direction="top" offset={[0, -8]} className={styles.teleTip}>
             NEAREST FREE · {Math.round(target.distance)} m
@@ -211,7 +235,7 @@ export function BayMap({
           <Circle
             center={[userPos.lat, userPos.lon]}
             radius={userPos.accuracy}
-            pathOptions={{ color: TELEMETRY, weight: 1, fillOpacity: 0.08 }}
+            pathOptions={{ color: TELEMETRY, weight: 1, fillOpacity: 0.08, interactive: false }}
           />
           <CircleMarker
             center={[userPos.lat, userPos.lon]}
