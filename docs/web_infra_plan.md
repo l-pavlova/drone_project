@@ -303,15 +303,34 @@ concerns above predates these concrete findings; this is the actionable list for
 3. ✅ **Done.** `ENABLE_DEV_ROUTES` now defaults to `false` (`config.py`); `.env.example` opts local
    dev in explicitly. Gating the endpoints behind the drone API key remains **open** — required
    before they're exposed beyond localhost.
-4. ⬜ **Open.** Once out of local dev, move DB/object-store credentials to a real secret store
-   rather than any `.env` file at all.
-5. ⬜ **Open — found 2026-08-02 during the sweep.** `config.py` still carries *code-level* fallback
-   defaults for the same secrets: `DATABASE_URL` defaults to `postgres://parkdrone:parkdrone@…`
-   (line 36) and `S3_ACCESS_KEY`/`S3_SECRET_KEY` default to `minioadmin` (lines 44–45). So a server
-   started without `.env` silently comes up on well-known credentials instead of refusing. Same
-   class as item 1, but fixing it changes startup behaviour for the CLI harnesses
-   (`replay`, `register_drone`), so it was left for a deliberate decision rather than folded into
-   this sweep.
+4. ⬜ **Open — the one that actually matters for prod.** Production will not reuse any value that
+   has ever been in this repo. Every credential (Postgres, the object store, the drone API keys)
+   gets generated fresh at deploy time and lives in a real secret store — not in a `.env` file, not
+   in the image, not in compose. The committed template exists only to stand up localhost. Until
+   that is wired up, treat the whole stack as dev-only and do not expose `:4000` or `:5432` beyond
+   the local machine.
+5. ✅ **Done (2026-08-02).** `config.py`'s *code-level* fallback defaults for the same secrets
+   (`DATABASE_URL` → `postgres://parkdrone:parkdrone@…`, `S3_ACCESS_KEY`/`S3_SECRET_KEY` →
+   `minioadmin`) are gone: those three now go through `config.required(name)`, which raises if the
+   variable is unset, so a server started without `.env` refuses instead of silently coming up on
+   well-known credentials. `required()` is called lazily at connect time (`db/pool.py`,
+   `db/vision_db.py`, `s3.py`) rather than at import, so the offline replay golden test — which
+   touches neither Postgres nor S3 — still runs with no environment at all.
+6. ✅ **Done (2026-08-02).** `.env.example` no longer ships usable passwords: they are the
+   placeholder `CHANGE_ME_local_dev`, replaced per-machine in the gitignored `.env`. The old
+   `parkdrone`/`minioadmin` literals were what GitGuardian flagged on PR #1 (the alert points at
+   commit `319a9c0` — the commit that *removed* them from `docker-compose.yml`; a scan reads the
+   diff, so a deletion still surfaces the string).
+7. **Decision (2026-08-02): the git history is kept as-is; the GitGuardian finding is accepted, not
+   rewritten.** The flagged values (`parkdrone`, `minioadmin`) are localhost-only dev placeholders
+   for a compose stack that was never reachable off the development machine, so there is no live
+   credential to revoke. They do remain in history — they enter at `c09c501` and run through
+   `ed29261`, five of those nine commits on `main` — and purging them would mean force-pushing a
+   rewritten `main`, which still would not un-publish the old SHAs from GitHub's PR refs without a
+   support-side GC. Not worth it for a dev placeholder. **What makes this safe is item 4, not the
+   rewrite:** production credentials will be newly generated and will never match anything in this
+   repo's history, so what is exposed here stays worthless. Resolve the incident in the GitGuardian
+   dashboard rather than in git.
 
 ---
 

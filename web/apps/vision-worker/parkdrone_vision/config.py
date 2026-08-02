@@ -32,17 +32,31 @@ def _load_dotenv() -> None:
 
 _load_dotenv()
 
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL", "postgres://parkdrone:parkdrone@localhost:5432/parkdrone"
-)
+def required(name: str) -> str:
+    """Read a credential-bearing setting; fail loud rather than default one.
+
+    Credentials get no fallback value here (same rule as
+    infra/docker-compose.yml's `${VAR:?}` guards): a built-in default is a
+    well-known password shipped in source, and it hides a missing .env until
+    something authenticates as the wrong identity. Called lazily at connect
+    time, so tooling that touches neither Postgres nor S3 (e.g. the offline
+    replay golden test) still imports this module fine.
+    """
+    val = os.environ.get(name)
+    if not val:
+        raise RuntimeError(
+            f"{name} is not set. Copy web/.env.example to web/.env and fill it in."
+        )
+    return val
+
 
 # Object store (frames). The server writes frame bytes here on ingest and the
 # classify threads read them back; the replay driver reads local files instead.
+# Endpoint/region/bucket are addresses, not secrets, so those keep defaults;
+# the access/secret pair goes through required().
 S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "http://localhost:9000")
 S3_REGION = os.environ.get("S3_REGION", "us-east-1")
 S3_BUCKET = os.environ.get("S3_BUCKET", "parkdrone-frames")
-S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY", "minioadmin")
-S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY", "minioadmin")
 
 # Where the sim writes output/<survey_area>/ (frames + poses.json). Used by replay.
 SIM_OUTPUT_ROOT = os.environ.get(

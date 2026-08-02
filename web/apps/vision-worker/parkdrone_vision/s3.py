@@ -12,11 +12,10 @@ import numpy as np
 from PIL import Image
 
 from .config import (
-    S3_ACCESS_KEY,
     S3_BUCKET,
     S3_ENDPOINT,
     S3_REGION,
-    S3_SECRET_KEY,
+    required,
 )
 
 _client = None
@@ -31,8 +30,8 @@ def client():
             "s3",
             endpoint_url=S3_ENDPOINT,
             region_name=S3_REGION,
-            aws_access_key_id=S3_ACCESS_KEY,
-            aws_secret_access_key=S3_SECRET_KEY,
+            aws_access_key_id=required("S3_ACCESS_KEY"),
+            aws_secret_access_key=required("S3_SECRET_KEY"),
         )
     return _client
 
