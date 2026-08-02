@@ -1,16 +1,27 @@
+# Local dev infrastructure: PostGIS + MinIO. (No Redis — the job queue is
+# in-process inside the Python server; see docs/web_monolith_rearchitecture_plan.md.)
+#
+# NO CREDENTIALS ARE BAKED INTO THIS FILE. Every secret is interpolated from
+# `web/.env` with the fail-loud `${VAR:?message}` form, so an unset variable
+# stops the stack with a readable error instead of silently standing up a
+# service on a well-known default password. Dev values live in `.env.example`;
+# `cp -n .env.example .env` is still all you need to get going locally.
+#
+# The npm scripts pass `--env-file .env` explicitly: Compose otherwise resolves
+# `.env` relative to the COMPOSE FILE's directory (`web/infra/`), not `web/`.
 services:
   postgres:
     image: postgis/postgis:16-3.4
     environment:
-      POSTGRES_USER: parkdrone
-      POSTGRES_PASSWORD: parkdrone
-      POSTGRES_DB: parkdrone
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in web/.env (see .env.example)}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in web/.env (see .env.example)}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in web/.env (see .env.example)}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U parkdrone"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -18,9 +29,12 @@ services:
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
+    # MinIO's root credentials ARE the S3 access/secret pair the server
+    # authenticates with, so they come from the same two variables rather than
+    # a third copy that could drift.
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in web/.env (see .env.example)}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?set S3_SECRET_KEY in web/.env (see .env.example)}
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -29,8 +43,8 @@ services:
 
   # Creates the frames bucket on startup so the server can assume it exists,
   # and sets a 1-day expiry lifecycle rule: frames are transient scoring input, so
-  # only the latest run per world is retained (keys overwrite in place) and any
-  # stale tail / abandoned-world frames age out within a day. `ilm rule add` is
+  # only the latest run per survey area is retained (keys overwrite in place) and any
+  # stale tail / abandoned-area frames age out within a day. `ilm rule add` is
   # idempotent enough here — a duplicate rule on restart is harmless.
   minio-init:
     image: minio/mc:latest
@@ -38,9 +52,9 @@ services:
       - minio
     entrypoint: >
       /bin/sh -c "
-      until (mc alias set local http://minio:9000 minioadmin minioadmin) do sleep 1; done;
-      mc mb -p local/parkdrone-frames;
-      mc ilm rule ls local/parkdrone-frames >/dev/null 2>&1 || mc ilm rule add local/parkdrone-frames --expire-days 1;
+      until (mc alias set local http://minio:9000 ${S3_ACCESS_KEY} ${S3_SECRET_KEY}) do sleep 1; done;
+      mc mb -p local/${S3_BUCKET};
+      mc ilm rule ls local/${S3_BUCKET} >/dev/null 2>&1 || mc ilm rule add local/${S3_BUCKET} --expire-days 1;
       exit 0;
       "
 

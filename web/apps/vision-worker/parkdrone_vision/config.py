@@ -52,8 +52,10 @@ SIM_OUTPUT_ROOT = os.environ.get(
 # ---- FastAPI server (the monolith replacing the Node API + Redis) ----------
 # Kept on :4000 so the web-user vite proxy target is unchanged.
 API_PORT = int(os.environ.get("API_PORT", "4000"))
-# Dev-only manual occupancy toggle; mount unless explicitly disabled.
-ENABLE_DEV_ROUTES = os.environ.get("ENABLE_DEV_ROUTES", "true").lower() != "false"
+# Dev-only manual occupancy toggle. OFF unless explicitly opted into: the
+# /api/v1/dev/occupy|free endpoints have NO auth, so anyone who can reach the
+# port could flip any bay's state. Local dev sets ENABLE_DEV_ROUTES=true in .env.
+ENABLE_DEV_ROUTES = os.environ.get("ENABLE_DEV_ROUTES", "false").lower() == "true"
 # Dedicated classify threads draining the in-process job queue (numpy releases
 # the GIL during array ops, so these parallelise real CV work off the event loop).
 CLASSIFY_THREADS = int(os.environ.get("CLASSIFY_THREADS", "4"))

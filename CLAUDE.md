@@ -123,7 +123,9 @@ hardening) remain.** See project memory `project-web-infra.md` for the running l
 
 ### Run it (dev)
 ```bash
-cd web && cp -n .env.example .env
+cd web && cp -n .env.example .env   # REQUIRED: compose has no baked-in credentials,
+                                    # it interpolates POSTGRES_*/S3_* from .env and
+                                    # fails loud if they're unset
 npm i -g pnpm            # corepack isn't on PATH here
 pnpm install
 pnpm infra:up           # postgis + minio (needs Docker Desktop running)
@@ -145,7 +147,8 @@ Verification harnesses (all Python, run from `apps/vision-worker`):
   (idempotency skips duplicates).
 
 ### Dev/test occupancy toggle (drive the dashboard by hand)
-Manual override endpoints (mounted unless `ENABLE_DEV_ROUTES=false`) upsert `bay_state` and push a
+Manual override endpoints (mounted only when `ENABLE_DEV_ROUTES=true` — they have no auth, so the
+default is off; `.env.example` opts local dev in) upsert `bay_state` and push a
 delta straight to the WebSocket hub, so the map updates live — no drone/vision needed:
 ```bash
 curl -X POST http://localhost:4000/api/v1/dev/occupy   # occupy the bay nearest FMI (default 17596)
