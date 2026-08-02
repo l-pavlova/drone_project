@@ -117,7 +117,7 @@ hardening) remain.** See project memory `project-web-infra.md` for the running l
   enqueued; a duplicate ingest creates no job row. `ON DELETE CASCADE` means clearing a survey
   area's `frame` rows still clears its jobs.
 - **Bay ids: int in `block_bays.geojson`, string everywhere in the web tier**.
-- Frame ingest is idempotent on `UNIQUE(drone_id, survey_area, i)` — a re-send does NOT re-enqueue; to
+- Frame ingest is idempotent on `UNIQUE(drone_id, survey_area, frame_idx)` — a re-send does NOT re-enqueue; to
   reprocess a survey area, clear the `frame` table first.
 - The server classifies **all** visible bays (production has no ground truth); `gt` is eval-only.
 

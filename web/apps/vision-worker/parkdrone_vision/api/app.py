@@ -36,6 +36,7 @@ from ..config import API_PORT, CLASSIFY_THREADS, ENABLE_DEV_ROUTES
 from ..db import vision_db, web_db
 from ..db.pool import borrow, close_pool, init_pool
 from ..processing import jobs
+from ..vision.scoring import pose_idx
 from .auth import require_drone
 from .hub import Hub
 
@@ -114,11 +115,17 @@ def ingest_frame(
         raise HTTPException(status_code=403, detail="drone_id mismatch")
 
     survey_area = meta_obj["survey_area"]
-    pose = meta_obj["pose"]
+    # Normalize the pose once, here at the edge: everything downstream (the
+    # frame row, the job payload, the rebuild in unscored_frames) then speaks
+    # the canonical `frame_idx` and needs no fallback of its own. Drone builds
+    # older than 2026-08-01 post the legacy `i`.
+    pose = dict(meta_obj["pose"])
+    pose["frame_idx"] = pose_idx(pose)
+    pose.pop("i", None)
     mission_id = meta_obj.get("mission_id")
 
     # Store bytes first (matches the retired Node order), then the frame row.
-    key = f"{survey_area}/{drone_id}/frame_{pose['i']:03d}.png"
+    key = f"{survey_area}/{drone_id}/frame_{pose['frame_idx']:03d}.png"
     image_uri = s3.put_frame(key, frame.file.read())
 
     frame_id = str(uuid.uuid4())
@@ -137,7 +144,7 @@ def ingest_frame(
         {
             "frame_id": frame_id,
             "survey_area": survey_area,
-            "frame_idx": pose["i"],
+            "frame_idx": pose["frame_idx"],
             "pose": pose,
             "image_uri": image_uri,
         }

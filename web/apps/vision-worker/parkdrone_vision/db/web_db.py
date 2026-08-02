@@ -183,7 +183,10 @@ def bump_mission_done(conn, mission_id):
 
 
 def insert_frame(conn, frame_id, drone_id, mission_id, survey_area, pose, image_uri):
-    """Idempotent frame insert on (drone_id, survey_area, i).
+    """Idempotent frame insert on (drone_id, survey_area, frame_idx).
+
+    `pose` is expected normalized (canonical `frame_idx` key) — the ingest
+    handler does that at the edge, so this layer stays stdlib-only.
 
     A new frame also gets its frame_job row (status 'queued') in the SAME
     transaction, so a committed ledger entry always has a recoverable job — the
@@ -195,12 +198,12 @@ def insert_frame(conn, frame_id, drone_id, mission_id, survey_area, pose, image_
     with conn.cursor() as cur:
         cur.execute(
             """INSERT INTO frame
-                 (frame_id, drone_id, mission_id, survey_area, i, x, y, alt, yaw, roll, pitch, image_uri)
+                 (frame_id, drone_id, mission_id, survey_area, frame_idx, x, y, alt, yaw, roll, pitch, image_uri)
                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-               ON CONFLICT (drone_id, survey_area, i) DO NOTHING
+               ON CONFLICT (drone_id, survey_area, frame_idx) DO NOTHING
                RETURNING frame_id""",
             (
-                frame_id, drone_id, mission_id, survey_area, pose["i"],
+                frame_id, drone_id, mission_id, survey_area, pose["frame_idx"],
                 pose["x"], pose["y"], pose["alt"], pose["yaw"],
                 pose.get("roll"), pose.get("pitch"), image_uri,
             ),
@@ -210,8 +213,8 @@ def insert_frame(conn, frame_id, drone_id, mission_id, survey_area, pose, image_
             cur.execute("INSERT INTO frame_job (frame_id) VALUES (%s)", (row[0],))
             return row[0], False
         cur.execute(
-            "SELECT frame_id FROM frame WHERE drone_id = %s AND survey_area = %s AND i = %s",
-            (drone_id, survey_area, pose["i"]),
+            "SELECT frame_id FROM frame WHERE drone_id = %s AND survey_area = %s AND frame_idx = %s",
+            (drone_id, survey_area, pose["frame_idx"]),
         )
         return cur.fetchone()[0], True
 
@@ -246,21 +249,21 @@ def unscored_frames(conn):
     """
     with conn.cursor() as cur:
         cur.execute(
-            """SELECT f.frame_id, f.survey_area, f.i, f.x, f.y, f.alt, f.yaw,
+            """SELECT f.frame_id, f.survey_area, f.frame_idx, f.x, f.y, f.alt, f.yaw,
                       f.roll, f.pitch, f.image_uri
                  FROM frame_job j JOIN frame f USING (frame_id)
                 WHERE j.status = 'queued' ORDER BY j.enqueued_at"""
         )
         rows = cur.fetchall()
     jobs = []
-    for frame_id, survey_area, i, x, y, alt, yaw, roll, pitch, image_uri in rows:
+    for frame_id, survey_area, frame_idx, x, y, alt, yaw, roll, pitch, image_uri in rows:
         jobs.append(
             {
                 "frame_id": frame_id,
                 "survey_area": survey_area,
-                "frame_idx": i,
-                "pose": {"i": i, "x": x, "y": y, "alt": alt, "yaw": yaw,
-                         "roll": roll, "pitch": pitch},
+                "frame_idx": frame_idx,
+                "pose": {"frame_idx": frame_idx, "x": x, "y": y, "alt": alt,
+                         "yaw": yaw, "roll": roll, "pitch": pitch},
                 "image_uri": image_uri,
             }
         )

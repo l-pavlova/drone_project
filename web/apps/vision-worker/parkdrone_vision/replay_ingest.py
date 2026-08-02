@@ -14,6 +14,7 @@ import urllib.request
 import uuid
 
 from .config import SIM_OUTPUT_ROOT
+from .vision.scoring import pose_idx
 
 
 def _post_json(url, obj, api_key=None):
@@ -97,7 +98,7 @@ async def main() -> None:
 
     # 3) stream every frame through the ingest endpoint
     for pose in poses:
-        i = pose["i"]
+        i = pose_idx(pose)
         with open(os.path.join(out_dir, f"frame_{i:03d}.png"), "rb") as f:
             png = f.read()
         meta = json.dumps(
