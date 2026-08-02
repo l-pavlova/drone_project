@@ -2,9 +2,8 @@
 bay_state -> return deltas. Shared by the in-process classify threads (jobs.py)
 and the offline replay golden test (replay.py).
 
-Delta fan-out is no longer Redis pub/sub: process_frame just returns the deltas
-and the caller broadcasts them (the FastAPI hub in production, nothing in the
-replay test).
+process_frame returns the deltas rather than publishing them itself; the caller
+broadcasts them (the FastAPI hub in production, nothing in the replay test).
 """
 from ..db import vision_db
 from ..vision.scoring import score_frame

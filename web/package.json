@@ -12,8 +12,8 @@
     "typecheck": "pnpm -r typecheck",
     "db:migrate": "pnpm --filter @parkdrone/db migrate",
     "db:seed": "pnpm --filter @parkdrone/db seed",
-    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
-    "infra:down": "docker compose -f infra/docker-compose.yml down"
+    "infra:up": "docker compose --env-file .env -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose --env-file .env -f infra/docker-compose.yml down"
   },
   "devDependencies": {
     "typescript": "^5.5.4"

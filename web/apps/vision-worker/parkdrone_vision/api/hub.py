@@ -1,9 +1,9 @@
-"""WebSocket fan-out hub (replaces the Node ws.ts + Redis pub/sub relay).
+"""WebSocket fan-out hub.
 
-Because the classifier now runs in this same process, deltas are pushed straight
-to connected browsers — no cross-process channel. `broadcast` is a coroutine on
-the server's event loop; the classify threads and the sync dev routes reach it
-via asyncio.run_coroutine_threadsafe(...). A small bounded replay buffer lets a
+The classifier runs in this same process, so deltas are pushed straight to
+connected browsers. `broadcast` is a coroutine on the server's event loop; the
+classify threads and the sync dev routes reach it via
+asyncio.run_coroutine_threadsafe(...). A small bounded replay buffer lets a
 reconnecting client catch up with ?since=<cursor>.
 """
 import json

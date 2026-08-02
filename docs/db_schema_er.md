@@ -87,7 +87,7 @@ erDiagram
         text drone_id FK
         text mission_id FK "nullable"
         text survey_area UK
-        integer i UK "UNIQUE(drone_id, survey_area, i)"
+        integer frame_idx UK "UNIQUE(drone_id, survey_area, frame_idx)"
         double x
         double y
         double alt
@@ -121,7 +121,7 @@ erDiagram
 | `bay_state` | **The product.** One row per bay, majority vote over `observation`. What the map and the WebSocket clients reflect. |
 | `observation` | Append-only evidence, one row per bay per frame, with the raw classifier features. Input to the vote *and* the audit trail. |
 | `frame` | Ingest ledger: the immutable fact that a drone uploaded these pixels from this pose. Append-only — nothing ever UPDATEs it. |
-| `frame_job` | The **durable classify queue** — the replacement for Redis's at-least-once delivery. 1:1 with `frame`, holding only the mutable work state. |
+| `frame_job` | The **durable classify queue** — what gives an in-memory queue at-least-once delivery. 1:1 with `frame`, holding only the mutable work state. |
 | `schema_migrations` | Applied-migration ledger maintained by the runner (not in the SQL file). |
 
 ## Indexes
@@ -152,7 +152,7 @@ erDiagram
 - **`bay_state` is always derived, never incremented.** Each frame re-aggregates
   all of a bay's observations (`count(*)` / `sum(occupied)`) and upserts the
   result, so replays and out-of-order frames converge to the same answer.
-- **`UNIQUE (drone_id, survey_area, i)` makes ingest idempotent.** A re-sent frame
+- **`UNIQUE (drone_id, survey_area, frame_idx)` makes ingest idempotent.** A re-sent frame
   overwrites its S3 object in place but is not re-enqueued; to reprocess a survey area,
   clear its `frame` rows first.
 - **`frame_job.status` is the durability mechanism.** `frame` + `frame_job` are
@@ -166,7 +166,7 @@ erDiagram
   columns instead of fifteen. A duplicate ingest creates **no** job row, which is
   what makes a re-send not re-enqueue work.
 - **No FK between `frame` and `observation`** — they are joined only logically by
-  `(survey_area, i)` ↔ `(survey_area, frame_idx)`, because observations must outlive frame rows
+  `(survey_area, frame_idx)`, because observations must outlive frame rows
   you delete to reprocess a survey area.
 - **`observation.gt` is evaluation-only.** Production has no ground truth; the
   column is populated only by the offline replay harness.

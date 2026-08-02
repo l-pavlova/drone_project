@@ -18,6 +18,7 @@ from PIL import Image
 from .config import SIM_OUTPUT_ROOT
 from .db import vision_db as db
 from .processing.pipeline import process_frame
+from .vision.scoring import pose_idx
 
 
 def main():
@@ -38,10 +39,10 @@ def main():
     print(f"replay {survey_area}: {len(poses)} frames, {len(bays)} bays")
 
     for pose in poses:
-        i = pose["i"]
-        path = os.path.join(out_dir, f"frame_{i:03d}.png")
+        idx = pose_idx(pose)
+        path = os.path.join(out_dir, f"frame_{idx:03d}.png")
         img = np.array(Image.open(path).convert("RGB"))
-        res = process_frame(conn, survey_area, i, img, pose, bays)
+        res = process_frame(conn, survey_area, idx, img, pose, bays)
 
     # ---- compare final bay_state to the offline result (intersection = the
     #      bays the offline script scored; the worker also scores non-GT bays).

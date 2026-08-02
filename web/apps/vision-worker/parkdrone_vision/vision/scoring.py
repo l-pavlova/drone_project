@@ -23,6 +23,10 @@ project = so.project
 bay_features = so.bay_features
 classify = so.classify
 to_enu = so.to_enu
+# Reading a pose's frame index is format knowledge, not classifier logic, but it
+# lives with the format (score_occupancy owns poses.json) and reaches the web
+# tier by the same one-place-only route as the rest.
+pose_idx = so.pose_idx
 
 
 def score_frame(img_arr, bays, pose):

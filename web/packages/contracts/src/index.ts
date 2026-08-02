@@ -16,20 +16,34 @@ export function toBayId(raw: string | number): BayId {
 // Pose — one captured frame's drone state. Matches a record in
 // sim/output/<survey_area>/poses.json (parkdrone.py). `cam_*` are optional (only
 // present when the Webots proto exposes those gimbal sensors).
+//
+// `frame_idx` was named `i` before 2026-08-01 (see migration 0004). The legacy
+// key is still accepted and normalized away here, so poses.json already on disk
+// and older drone builds keep validating; nothing downstream sees `i`. Mirrors
+// vision/score_occupancy.py:pose_idx.
 // ---------------------------------------------------------------------------
-export const poseSchema = z.object({
-  i: z.number().int().nonnegative(),
-  x: z.number(),
-  y: z.number(),
-  alt: z.number(),
-  yaw: z.number(),
-  roll: z.number(),
-  pitch: z.number(),
-  wp: z.tuple([z.number(), z.number()]),
-  cam_pitch: z.number().optional(),
-  cam_roll: z.number().optional(),
-  cam_yaw: z.number().optional(),
-});
+export const poseSchema = z.preprocess(
+  (v) => {
+    if (v && typeof v === "object" && !("frame_idx" in v) && "i" in v) {
+      const { i, ...rest } = v as Record<string, unknown>;
+      return { ...rest, frame_idx: i };
+    }
+    return v;
+  },
+  z.object({
+    frame_idx: z.number().int().nonnegative(),
+    x: z.number(),
+    y: z.number(),
+    alt: z.number(),
+    yaw: z.number(),
+    roll: z.number(),
+    pitch: z.number(),
+    wp: z.tuple([z.number(), z.number()]),
+    cam_pitch: z.number().optional(),
+    cam_roll: z.number().optional(),
+    cam_yaw: z.number().optional(),
+  }),
+);
 export type Pose = z.infer<typeof poseSchema>;
 
 // ---------------------------------------------------------------------------
@@ -122,7 +136,7 @@ export const observationSchema = z.object({
 export type Observation = z.infer<typeof observationSchema>;
 
 /**
- * Worker -> API delta payload published on Redis after a frame is scored.
+ * Delta payload produced after a frame is scored.
  * Carries the changed bay states plus the frame that produced them.
  */
 export const frameScoredSchema = z.object({

@@ -263,7 +263,11 @@ try:
 except (OSError, ValueError):
     poses = []
 if poses:
-    idx = max(p["i"] for p in poses) + 1
+    # `i` was this key's name before 2026-08-01; accept it so a patrol already
+    # in progress resumes instead of re-flying from waypoint 0. (This controller
+    # runs under Webots' own Python and cannot import vision/score_occupancy,
+    # so the fallback is spelled out here rather than shared.)
+    idx = max(p.get("frame_idx", p.get("i")) for p in poses) + 1
     print(f"[parkdrone] RESUME: {len(poses)} captures on disk -> "
           f"continuing at wp{idx}/{len(wps)}")
 step = 0
@@ -370,8 +374,9 @@ while robot.step(dt) != -1:
                 cam_warm -= 1
                 if cam_warm < 0:
                     capture(os.path.join(OUT, f"frame_{idx:03d}.png"))
-                    pose = {"i": idx, "x": x, "y": y, "alt": alt, "yaw": yaw,
-                            "roll": roll, "pitch": pitch, "wp": [tx, ty]}
+                    pose = {"frame_idx": idx, "x": x, "y": y, "alt": alt,
+                            "yaw": yaw, "roll": roll, "pitch": pitch,
+                            "wp": [tx, ty]}
                     if cam_pitch_pos is not None:
                         pose["cam_pitch"] = cam_pitch_pos.getValue()
                     if cam_roll_pos is not None:

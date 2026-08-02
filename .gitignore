@@ -11,4 +11,7 @@ sim/worlds/.*.wbproj
 # Claude Code local (per-machine) settings
 .claude/settings.local.json
 pics/*
-web/.env.example
+# web/.env.example is the committed TEMPLATE (dev placeholders only, no real
+# secrets) — CLAUDE.md's setup step copies it to web/.env, and docker-compose
+# now fails loud without those vars, so a fresh clone needs it. The real
+# web/.env stays ignored via web/.gitignore.

@@ -1,4 +1,4 @@
-"""Drone API-key auth as a FastAPI dependency (mirrors apps/api/src/auth.ts).
+"""Drone API-key auth as a FastAPI dependency.
 
 Reads `x-api-key`, matches its SHA-256 against drone.api_key_hash, bumps
 last_seen, and yields the drone_id. 401 on missing key, 403 on unknown key.

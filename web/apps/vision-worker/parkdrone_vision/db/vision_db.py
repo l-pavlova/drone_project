@@ -8,12 +8,12 @@ import json
 import psycopg2
 import psycopg2.extras
 
-from ..config import DATABASE_URL
+from ..config import required
 from ..vision.scoring import to_enu
 
 
 def connect():
-    return psycopg2.connect(DATABASE_URL)
+    return psycopg2.connect(required("DATABASE_URL"))
 
 
 def load_bays_enu(conn):

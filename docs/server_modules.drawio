@@ -1,0 +1,334 @@
+<mxfile host="app.diagrams.net" agent="parkdrone" version="24.0.0">
+  <diagram name="PARKDRONE — Server Module Map" id="parkdrone-server-modules">
+    <mxGraphModel dx="1400" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1060" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- title -->
+        <mxCell id="title" value="PARKDRONE Server — Module Map (inside the FastAPI monolith)" style="text;html=1;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#14181D;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="760" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="Zooms into the &quot;PARKDRONE Server&quot; component of web/docs/architecture.drawio. One Python process owns the HTTP/WS edge AND the vision CV. The api/ ↔ processing/ line is a THREAD boundary: api/ runs on request threads (plus the event loop for WS), processing/ on dedicated classify threads; jobs.enqueue and run_coroutine_threadsafe(hub.broadcast) are the only two crossings." style="text;html=1;align=left;verticalAlign=top;fontSize=11;fontColor=#6b747c;" vertex="1" parent="1">
+          <mxGeometry x="40" y="48" width="1010" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ===== external clients ===== -->
+        <mxCell id="drone" value="&#171;component&#187;&#10;Drone / Webots sim&#10;frames + poses" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=11;fillColor=#EEF1F3;strokeColor=#9AA6AE;fontColor=#14181D;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="170" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="browser" value="&#171;component&#187;&#10;web-user&#10;React + Leaflet" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=11;fillColor=#E6F6EC;strokeColor=#2E9E57;fontColor=#0f4023;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="300" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="operator" value="&#171;actor&#187;&#10;Operator shell" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=11;fillColor=#EEF1F3;strokeColor=#9AA6AE;fontColor=#14181D;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="905" width="170" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ===== the process ===== -->
+        <mxCell id="proc" value="&#171;process&#187;  parkdrone_vision — Python / FastAPI, single process on :4000" style="rounded=1;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=12;fontStyle=1;fillColor=#EAF2FB;strokeColor=#3B6FB0;fontColor=#1a3a5c;spacingLeft=10;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="250" y="110" width="830" height="720" as="geometry" />
+        </mxCell>
+
+        <!-- ==== api/ ==== -->
+        <mxCell id="pkg_api" value="api/  — HTTP + WebSocket edge" style="shape=folder;tabWidth=170;tabHeight=20;tabPosition=left;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontStyle=1;fillColor=#E4F7F4;strokeColor=#0F9E90;fontColor=#06403a;spacingLeft=8;spacingTop=2;" vertex="1" parent="1">
+          <mxGeometry x="270" y="150" width="380" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="m_app" value="&lt;b&gt;app.py&lt;/b&gt;&#10;FastAPI app + lifespan (pool · bays · recover · threads)&#10;ingest · reads (/bays /summary /bays/:id) · /route&#10;dev occupancy toggle · WS /ws/occupancy&#10;sync handlers → Starlette threadpool" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#0F9E90;fontColor=#06403a;" vertex="1" parent="1">
+          <mxGeometry x="285" y="188" width="350" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="m_auth" value="&lt;b&gt;auth.py&lt;/b&gt;&#10;require_drone dependency&#10;x-api-key → SHA-256 → drone_id&#10;bumps last_seen · 401 / 403" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#0F9E90;fontColor=#06403a;" vertex="1" parent="1">
+          <mxGeometry x="285" y="292" width="168" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="m_hub" value="&lt;b&gt;hub.py&lt;/b&gt;&#10;WS fan-out to browsers&#10;bay_delta tagging&#10;replay deque + ?since cursor" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#0F9E90;fontColor=#06403a;" vertex="1" parent="1">
+          <mxGeometry x="467" y="292" width="168" height="82" as="geometry" />
+        </mxCell>
+
+        <!-- ==== processing/ ==== -->
+        <mxCell id="pkg_proc" value="processing/  — frame → occupancy" style="shape=folder;tabWidth=180;tabHeight=20;tabPosition=left;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontStyle=1;fillColor=#FDE9E4;strokeColor=#E14B2E;fontColor=#5c1c10;spacingLeft=8;spacingTop=2;" vertex="1" parent="1">
+          <mxGeometry x="680" y="150" width="380" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="m_jobs" value="&lt;b&gt;jobs.py&lt;/b&gt;&#10;in-process queue.Queue&#10;N classify threads, each with its own DB conn&#10;a bad frame is logged / marked failed — thread survives&#10;recover(): re-enqueue status='queued' on boot" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#E14B2E;fontColor=#5c1c10;" vertex="1" parent="1">
+          <mxGeometry x="695" y="188" width="350" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="m_pipeline" value="&lt;b&gt;pipeline.py&lt;/b&gt;&#10;process_frame(): score → insert observations → recompute bay_state → commit → return deltas&#10;shared verbatim by the live classify threads AND replay.py" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#E14B2E;fontColor=#5c1c10;" vertex="1" parent="1">
+          <mxGeometry x="695" y="292" width="350" height="82" as="geometry" />
+        </mxCell>
+
+        <!-- ==== db/ ==== -->
+        <mxCell id="pkg_db" value="db/  — all SQL" style="shape=folder;tabWidth=140;tabHeight=20;tabPosition=left;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontStyle=1;fillColor=#EEF1F3;strokeColor=#6b7686;fontColor=#14181D;spacingLeft=8;spacingTop=2;" vertex="1" parent="1">
+          <mxGeometry x="270" y="420" width="380" height="230" as="geometry" />
+        </mxCell>
+        <mxCell id="m_pool" value="&lt;b&gt;pool.py&lt;/b&gt;&#10;ThreadedConnectionPool(1..10)&#10;borrow(commit=…)" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#6b7686;fontColor=#14181D;" vertex="1" parent="1">
+          <mxGeometry x="285" y="458" width="168" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="n_conn" value="pool.py serves REQUEST threads only.&#10;Classify threads call vision_db.connect()&#10;for their own long-lived connection —&#10;psycopg2 conns aren't thread-shareable." style="rounded=0;dashed=1;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=9;fillColor=none;strokeColor=#9AA6AE;fontColor=#6b747c;" vertex="1" parent="1">
+          <mxGeometry x="467" y="458" width="168" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="m_webdb" value="&lt;b&gt;web_db.py&lt;/b&gt;&#10;reads: GeoJSON · summary&#10;· detail · nearest (PostGIS)&#10;ingest + mission writes&#10;frame ⊕ frame_job in 1 tx&#10;unscored_frames() backlog&#10;drone auth lookups" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#6b7686;fontColor=#14181D;" vertex="1" parent="1">
+          <mxGeometry x="285" y="530" width="168" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="m_visdb" value="&lt;b&gt;vision_db.py&lt;/b&gt;&#10;connect() — one conn/thread&#10;load_bays_enu (WGS84→ENU)&#10;insert_observations&#10;recompute_states:&#10;strict majority vote →&#10;upsert bay_state → deltas" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#6b7686;fontColor=#14181D;" vertex="1" parent="1">
+          <mxGeometry x="467" y="530" width="168" height="105" as="geometry" />
+        </mxCell>
+
+        <!-- ==== vision/ ==== -->
+        <mxCell id="pkg_vision" value="vision/  — classifier bridge" style="shape=folder;tabWidth=170;tabHeight=20;tabPosition=left;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontStyle=1;fillColor=#FFF6E0;strokeColor=#C08A11;fontColor=#5a3f05;spacingLeft=8;spacingTop=2;" vertex="1" parent="1">
+          <mxGeometry x="680" y="420" width="380" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="m_scoring" value="&lt;b&gt;scoring.py&lt;/b&gt;&#10;score_frame(img, bays, pose) — project each bay ring to pixels, skip off-frame / half-hidden, classify&#10;re-exports project · bay_features · classify · to_enu · pose_idx, so the tuned thresholds live in ONE place" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#C08A11;fontColor=#5a3f05;" vertex="1" parent="1">
+          <mxGeometry x="695" y="458" width="350" height="76" as="geometry" />
+        </mxCell>
+
+        <!-- ==== package root ==== -->
+        <mxCell id="pkg_root" value="package root — config &amp; adapters" style="shape=folder;tabWidth=200;tabHeight=20;tabPosition=left;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontStyle=1;fillColor=#F4F1FA;strokeColor=#7A5FB0;fontColor=#2f2352;spacingLeft=8;spacingTop=2;" vertex="1" parent="1">
+          <mxGeometry x="270" y="680" width="790" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="m_config" value="&lt;b&gt;config.py&lt;/b&gt;&#10;walks up to the nearest .env&#10;(process env always wins)&#10;DB · S3 · port · threads · OSRM" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#7A5FB0;fontColor=#2f2352;" vertex="1" parent="1">
+          <mxGeometry x="285" y="718" width="245" height="76" as="geometry" />
+        </mxCell>
+        <mxCell id="m_routing" value="&lt;b&gt;routing.py&lt;/b&gt;&#10;OSRM proxy — driver coords stay on our origin&#10;quantised-key TTL cache&#10;RoutingError → 502 → straight-line fallback" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#7A5FB0;fontColor=#2f2352;" vertex="1" parent="1">
+          <mxGeometry x="542" y="718" width="245" height="76" as="geometry" />
+        </mxCell>
+        <mxCell id="m_s3" value="&lt;b&gt;s3.py&lt;/b&gt;&#10;one boto3 client for both sides&#10;put_frame (ingest) → s3:// uri&#10;get_frame_array (classify) → RGB" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#7A5FB0;fontColor=#2f2352;" vertex="1" parent="1">
+          <mxGeometry x="799" y="718" width="246" height="76" as="geometry" />
+        </mxCell>
+
+        <!-- ===== entry points ===== -->
+        <mxCell id="pkg_entry" value="entry points &amp; harnesses (not on the request path)" style="shape=folder;tabWidth=290;tabHeight=20;tabPosition=left;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontStyle=1;fillColor=#F7F8F9;strokeColor=#9AA6AE;fontColor=#33383d;spacingLeft=8;spacingTop=2;" vertex="1" parent="1">
+          <mxGeometry x="250" y="870" width="830" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="m_server" value="&lt;b&gt;server.py&lt;/b&gt;&#10;uvicorn on API_PORT&#10;serves api.app:app" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#9AA6AE;fontColor=#33383d;" vertex="1" parent="1">
+          <mxGeometry x="265" y="908" width="190" height="66" as="geometry" />
+        </mxCell>
+        <mxCell id="m_register" value="&lt;b&gt;register_drone.py&lt;/b&gt;&#10;mints an API key,&#10;stores only its SHA-256" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#9AA6AE;fontColor=#33383d;" vertex="1" parent="1">
+          <mxGeometry x="465" y="908" width="190" height="66" as="geometry" />
+        </mxCell>
+        <mxCell id="m_replay" value="&lt;b&gt;replay.py&lt;/b&gt;&#10;golden test, no server:&#10;frames → pipeline → compare" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#9AA6AE;fontColor=#33383d;" vertex="1" parent="1">
+          <mxGeometry x="665" y="908" width="190" height="66" as="geometry" />
+        </mxCell>
+        <mxCell id="m_replay_ing" value="&lt;b&gt;replay_ingest.py&lt;/b&gt;&#10;full-stack E2E over the&#10;real HTTP / WS contract" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#9AA6AE;fontColor=#33383d;" vertex="1" parent="1">
+          <mxGeometry x="865" y="908" width="190" height="66" as="geometry" />
+        </mxCell>
+
+        <!-- ===== backing services ===== -->
+        <mxCell id="so" value="&#171;module&#187;&#10;vision/score_occupancy.py&#10;the calibrated classifier —&#10;imported VERBATIM, never copied" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=11;fillColor=#FFF6E0;strokeColor=#C08A11;fontColor=#5a3f05;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="240" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="pg" value="&#171;database&#187;&#10;Postgres + PostGIS&#10;system of record" style="shape=cylinder3;html=1;whiteSpace=wrap;boundedLbl=1;backgroundOutline=1;size=14;fillColor=#EEF1F3;strokeColor=#6b7686;fontColor=#14181D;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="430" width="200" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="minio" value="&#171;datastore&#187;&#10;MinIO / S3&#10;frame pixels, 1-day TTL" style="shape=cylinder3;html=1;whiteSpace=wrap;boundedLbl=1;backgroundOutline=1;size=14;fillColor=#EEF1F3;strokeColor=#9AA6AE;fontColor=#14181D;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="610" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="osrm" value="&#171;external&#187;&#10;OSRM&#10;driving directions" style="shape=component;html=1;whiteSpace=wrap;rounded=0;align=center;verticalAlign=middle;fontSize=11;fillColor=#EEF1F3;strokeColor=#9AA6AE;fontColor=#14181D;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="740" width="200" height="66" as="geometry" />
+        </mxCell>
+
+        <!-- ===== edges: clients ===== -->
+        <mxCell id="e_drone_app" value="&#171;HTTP&#187; POST /ingest/frame&#10;+ mission start/end (x-api-key)" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" source="drone" target="m_app">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_browser_app" value="&#171;REST&#187; /bays · /summary · /route" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#2E9E57;fontColor=#0f4023;labelBackgroundColor=#ffffff;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.85;entryDx=0;entryDy=0;" edge="1" parent="1" source="browser" target="m_app">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_browser_hub" value="&#171;WebSocket&#187;&#10;/ws/occupancy?since=" style="endArrow=open;startArrow=open;startFill=0;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#2E9E57;fontColor=#0f4023;labelBackgroundColor=#ffffff;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" edge="1" parent="1" source="browser" target="m_hub">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="232" y="345" />
+              <mxPoint x="232" y="402" />
+              <mxPoint x="461" y="402" />
+              <mxPoint x="461" y="354" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_op_entry" value="python -m parkdrone_vision.…" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.6;entryDx=0;entryDy=0;" edge="1" parent="1" source="operator" target="pkg_entry">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_server_app" value="uvicorn serves&#10;api.app:app" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#9AA6AE;fontColor=#33383d;labelBackgroundColor=#ffffff;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.12;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_server" target="m_app">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="242" y="941" />
+              <mxPoint x="242" y="199" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_replay_pipe" value="reuses process_frame()&#10;— the golden test" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#9AA6AE;fontColor=#33383d;labelBackgroundColor=#ffffff;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.9;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_replay" target="m_pipeline">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="760" y="852" />
+              <mxPoint x="1072" y="852" />
+              <mxPoint x="1072" y="374" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ===== edges: inside api/ ===== -->
+        <mxCell id="e_app_auth" value="Depends(require_drone)" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#0F9E90;fontColor=#06403a;labelBackgroundColor=#E4F7F4;exitX=0.2;exitY=1;exitDx=0;exitDy=0;entryX=0.2;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_app" target="m_auth">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_app_hub" value="dev toggle → broadcast" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#0F9E90;fontColor=#06403a;labelBackgroundColor=#E4F7F4;exitX=0.85;exitY=1;exitDx=0;exitDy=0;entryX=0.85;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_app" target="m_hub">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ===== edges: the two thread crossings ===== -->
+        <mxCell id="e_app_jobs" value="&lt;b&gt;jobs.enqueue(job)&lt;/b&gt;&#10;crossing 1 — non-blocking put" style="endArrow=block;endFill=1;html=1;strokeWidth=2;fontSize=10;strokeColor=#E14B2E;fontColor=#5c1c10;labelBackgroundColor=#EAF2FB;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_app" target="m_jobs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_jobs_hub" value="&lt;b&gt;run_coroutine_threadsafe(hub.broadcast)&lt;/b&gt;&#10;crossing 2 — deltas back onto the loop" style="endArrow=block;endFill=1;html=1;strokeWidth=2;fontSize=10;strokeColor=#E14B2E;fontColor=#5c1c10;labelBackgroundColor=#EAF2FB;exitX=0;exitY=0.8;exitDx=0;exitDy=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_jobs" target="m_hub">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="668" y="260" />
+              <mxPoint x="668" y="313" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ===== edges: inside processing/ + vision/ ===== -->
+        <mxCell id="e_jobs_pipe" value="process_frame()" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#E14B2E;fontColor=#5c1c10;labelBackgroundColor=#FDE9E4;exitX=0.3;exitY=1;exitDx=0;exitDy=0;entryX=0.3;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_jobs" target="m_pipeline">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_pipe_scoring" value="score_frame()" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#C08A11;fontColor=#5a3f05;labelBackgroundColor=#ffffff;exitX=0.3;exitY=1;exitDx=0;exitDy=0;entryX=0.3;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_pipeline" target="m_scoring">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_scoring_so" value="sys.path + import&#10;(side-effect free)" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#C08A11;fontColor=#5a3f05;labelBackgroundColor=#ffffff;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_scoring" target="so">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1250" y="481" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_visdb_scoring" value="to_enu" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#C08A11;fontColor=#5a3f05;labelBackgroundColor=#ffffff;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.85;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_visdb" target="m_scoring">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="660" y="562" />
+              <mxPoint x="660" y="523" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ===== edges: db/ ===== -->
+        <mxCell id="e_app_pool" value="borrow(commit=…)" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#6b7686;fontColor=#14181D;labelBackgroundColor=#EAF2FB;exitX=0;exitY=0.8;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_app" target="m_pool">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="263" y="260" />
+              <mxPoint x="263" y="486" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_auth_pool" value="borrow()" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#6b7686;fontColor=#14181D;labelBackgroundColor=#E4F7F4;exitX=0.15;exitY=1;exitDx=0;exitDy=0;entryX=0.15;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_auth" target="m_pool">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_auth_webdb" value="lookup_drone&#10;bump_last_seen" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#6b7686;fontColor=#14181D;labelBackgroundColor=#E4F7F4;exitX=0.55;exitY=1;exitDx=0;exitDy=0;entryX=0.55;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_auth" target="m_webdb">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="377" y="440" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_app_webdb" value="insert_frame ⊕ frame_job (1 tx)&#10;mission bookkeeping · read queries" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#6b7686;fontColor=#14181D;labelBackgroundColor=#EAF2FB;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.9;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_app" target="m_webdb">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="460" y="278" />
+              <mxPoint x="460" y="512" />
+              <mxPoint x="436" y="512" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_jobs_webdb" value="mark processed / failed&#10;unscored_frames() on boot" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#6b7686;fontColor=#14181D;labelBackgroundColor=#EAF2FB;exitX=0.05;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_jobs" target="m_webdb">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="712" y="404" />
+              <mxPoint x="277" y="404" />
+              <mxPoint x="277" y="556" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_pipe_visdb" value="insert_observations&#10;recompute_states" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#6b7686;fontColor=#14181D;labelBackgroundColor=#EAF2FB;exitX=0;exitY=0.6;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_pipeline" target="m_visdb">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="551" y="341" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_webdb_pg" value="&#171;SQL&#187;" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;exitX=0;exitY=0.9;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_webdb" target="pg">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="263" y="625" />
+              <mxPoint x="263" y="664" />
+              <mxPoint x="1118" y="664" />
+              <mxPoint x="1118" y="512" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_visdb_pg" value="&#171;SQL&#187; PostGIS pushdown" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.4;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_visdb" target="pg">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1100" y="583" />
+              <mxPoint x="1100" y="474" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ===== edges: adapters & external ===== -->
+        <mxCell id="e_app_routing" value="driving_route()" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#7A5FB0;fontColor=#2f2352;labelBackgroundColor=#EAF2FB;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_app" target="m_routing">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="649" y="256" />
+              <mxPoint x="649" y="692" />
+              <mxPoint x="664" y="692" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_app_s3" value="put_frame(bytes) → s3:// uri" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#7A5FB0;fontColor=#2f2352;labelBackgroundColor=#EAF2FB;exitX=1;exitY=0.9;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_app" target="m_s3">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="641" y="269" />
+              <mxPoint x="641" y="702" />
+              <mxPoint x="922" y="702" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_jobs_s3" value="get_frame_array()&#10;missing key → job failed" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#7A5FB0;fontColor=#2f2352;labelBackgroundColor=#EAF2FB;exitX=1;exitY=0.9;exitDx=0;exitDy=0;entryX=0.9;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_jobs" target="m_s3">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1062" y="269" />
+              <mxPoint x="1062" y="702" />
+              <mxPoint x="1020" y="702" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_s3_minio" value="&#171;S3&#187; put / get" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.9;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_s3" target="minio">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1130" y="756" />
+              <mxPoint x="1130" y="700" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_routing_osrm" value="&#171;HTTP&#187; /route/v1/driving" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#5b6670;fontColor=#33383d;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_routing" target="osrm">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="664" y="822" />
+              <mxPoint x="1140" y="822" />
+              <mxPoint x="1140" y="773" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ===== notes ===== -->
+        <mxCell id="note_durab" value="Durability without a broker: frame (append-only ledger) and frame_job (work state) are written in ONE transaction, so every committed frame has a recoverable job. On boot jobs.recover() rebuilds the in-memory queue from Postgres + S3; a frame whose image has expired is marked failed so recovery never loops on it." style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#33383d;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="850" width="230" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="note_config" value="config.py is read by pool.py, s3.py, routing.py, vision_db.py and server.py — arrows omitted to keep the diagram readable." style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#6b747c;" vertex="1" parent="1">
+          <mxGeometry x="40" y="440" width="190" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="note_reuse" value="score_occupancy.py is the ONE home of the tuned thresholds; the server imports it instead of copying it, and replay.py proves the live path still agrees with the offline one." style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#6b747c;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="345" width="230" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" value="Legend — bold red solid = thread crossing · dashed = uses / calls · folder = Python subpackage · cylinder = data store. Per-module write-up: docs/server_modules.md · schema: docs/db_schema_er.md · system level: web/docs/architecture.drawio." style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontColor=#6b747c;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1010" width="1320" height="20" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

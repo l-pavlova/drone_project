@@ -57,6 +57,18 @@ def to_enu(lon, lat):
     return (lon - ORIGIN[1]) * MLON, (lat - ORIGIN[0]) * MLAT
 
 
+def pose_idx(pose):
+    """A pose record's frame index (which frame_###.png it belongs to).
+
+    Canonical key is `frame_idx`, matching frame.frame_idx and
+    observation.frame_idx. `i` is the legacy name parkdrone.py wrote before
+    2026-08-01; accepting it keeps every poses.json already on disk replayable
+    (including a long patrol interrupted mid-resume) and keeps older drone
+    builds ingestable.
+    """
+    return pose["frame_idx"] if "frame_idx" in pose else pose["i"]
+
+
 def project(px, py, pose):
     """Ground ENU point -> pixel (u, v) for a nadir camera at the pose.
     Image up = drone heading; square pixels; horizontal FOV across IMG_W."""
@@ -205,9 +217,9 @@ def main():
     for b in bays:
         votes = []                                  # (vis, off, pred, pose_i, feat)
         for off, pose, ring_px in views.get(b["id"], []):
-            feat = bay_features(frame_arr(pose["i"]), ring_px)
+            feat = bay_features(frame_arr(pose_idx(pose)), ring_px)
             if feat is not None:
-                votes.append((feat["vis"], off, classify(feat), pose["i"], feat))
+                votes.append((feat["vis"], off, classify(feat), pose_idx(pose), feat))
         if not votes:
             uncovered.append(b["id"])
             continue
@@ -255,7 +267,7 @@ def main():
         img = Image.open(os.path.join(OUT, f"frame_{fi:03d}.png")).convert("RGB")
         img = img.resize((IMG_W * 3, IMG_H * 3), Image.NEAREST)
         d = ImageDraw.Draw(img)
-        pose = next(p for p in poses if p["i"] == fi)
+        pose = next(p for p in poses if pose_idx(p) == fi)
         for b in bays:
             ring_px = [project(x, y, pose) for x, y in b["ring"]]
             if not all(-20 <= u < IMG_W + 20 and -20 <= v < IMG_H + 20

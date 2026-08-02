@@ -8,7 +8,9 @@
 --
 -- After this migration:
 --   frame      = the ingest ledger. Append-only, never UPDATEd.
---   frame_job  = the durable classify queue (our replacement for Redis).
+--   frame_job  = the durable classify queue. It is what lets the in-process
+--                job queue survive a restart: startup re-enqueues every row
+--                still 'queued', rebuilt from frame + the object store.
 --
 -- The 1:1 FK keeps the pairing exact — a job cannot exist without its frame,
 -- and ON DELETE CASCADE preserves the "clear the frame rows to reprocess a

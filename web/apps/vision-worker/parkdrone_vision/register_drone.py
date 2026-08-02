@@ -1,5 +1,4 @@
-"""Register (or re-key) a drone and print a fresh API key (Python port of
-apps/api/src/scripts/register-drone.ts).
+"""Register (or re-key) a drone and print a fresh API key.
 
     python -m parkdrone_vision.register_drone <drone_id> [name]
 

@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from psycopg2.pool import ThreadedConnectionPool
 
-from ..config import DATABASE_URL
+from ..config import required
 
 _pool: ThreadedConnectionPool | None = None
 
@@ -18,7 +18,9 @@ _pool: ThreadedConnectionPool | None = None
 def init_pool(minconn: int = 1, maxconn: int = 10) -> ThreadedConnectionPool:
     global _pool
     if _pool is None:
-        _pool = ThreadedConnectionPool(minconn, maxconn, dsn=DATABASE_URL)
+        _pool = ThreadedConnectionPool(
+            minconn, maxconn, dsn=required("DATABASE_URL")
+        )
     return _pool
 
 

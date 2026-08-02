@@ -1,7 +1,7 @@
 """End-to-end harness: replay a sim survey area's frames through the LIVE server
 (ingest -> in-process queue -> classify threads -> WebSocket push) and assert the
-pushed deltas + final /bays state match the offline result. Python port of
-apps/api/src/scripts/replay-ingest.ts; hits the same HTTP/WS contract.
+pushed deltas + final /bays state match the offline result. Exercises the same
+HTTP/WS contract the drone and the dashboard use.
 
     API_KEY=<key> python -m parkdrone_vision.replay_ingest [survey_area] [api_base]
 """
@@ -14,6 +14,7 @@ import urllib.request
 import uuid
 
 from .config import SIM_OUTPUT_ROOT
+from .vision.scoring import pose_idx
 
 
 def _post_json(url, obj, api_key=None):
@@ -97,7 +98,7 @@ async def main() -> None:
 
     # 3) stream every frame through the ingest endpoint
     for pose in poses:
-        i = pose["i"]
+        i = pose_idx(pose)
         with open(os.path.join(out_dir, f"frame_{i:03d}.png"), "rb") as f:
             png = f.read()
         meta = json.dumps(
