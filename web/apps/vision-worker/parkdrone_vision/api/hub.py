@@ -29,6 +29,9 @@ class Hub:
     def disconnect(self, ws) -> None:
         self._clients.discard(ws)
 
+    def client_count(self) -> int:
+        return len(self._clients)
+
     async def broadcast(self, deltas: list[dict]) -> None:
         """Fan out bay deltas. Each is tagged {type:"bay_delta", ...} to match
         the frontend's useOccupancySocket."""

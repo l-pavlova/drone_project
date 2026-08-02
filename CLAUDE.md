@@ -143,11 +143,23 @@ hardening) remain.** See project memory `project-web-infra.md` for the running l
   conservative — but per-frame cost stops scaling with the size of the bay dataset.
 
 ### Run it (dev)
+One command brings the whole stack up for a full-app test — infra, migrations, seed, server,
+dashboard, plus a registered dev drone whose API key lands in `web/.quickstart/drone-1.key`:
+```bash
+cd web && npm i -g pnpm    # corepack isn't on PATH here
+pnpm quickstart            # add --replay to also drive a survey through the live stack,
+                           # --no-web to skip the dashboard, --stop to tear everything down
+```
+It is idempotent and self-healing: it creates `.env` with generated credentials on first run,
+waits on real readiness probes (`pg_isready`, MinIO health, `/health`), and kills whatever stale
+process is still holding :4000 / :5173 (announcing it). Ctrl-C stops the server and dashboard and
+leaves the containers up; logs are in `web/.quickstart/`.
+
+The manual equivalent, step by step:
 ```bash
 cd web && cp -n .env.example .env   # REQUIRED: compose has no baked-in credentials,
                                     # it interpolates POSTGRES_*/S3_* from .env and
                                     # fails loud if they're unset
-npm i -g pnpm            # corepack isn't on PATH here
 pnpm install
 pnpm infra:up           # postgis + minio (needs Docker Desktop running)
 pnpm db:migrate && pnpm db:seed         # loads all 1698 bays
@@ -171,6 +183,18 @@ Verification harnesses (all Python, run from `apps/vision-worker`):
 - Frame retention: `python -m parkdrone_vision.cleanup` runs one sweep by hand (the server also
   runs it every `CLEANUP_INTERVAL_S`; set that to 0 to disable). Exits 1 if it found frames past
   retention still queued, so a scheduler surfaces a stalled pipeline.
+
+### Operational metrics (`api/metrics.py`, the P6 admin data source)
+`GET /api/v1/metrics?window_s=300` (JSON) and `GET /metrics` (Prometheus text, no client library)
+render one snapshot with two halves: **in-process** counters from `processing.jobs.stats()` — queue
+depth and in-flight, which exist only in this process's `queue.Queue`, plus lifetime
+classified/failed/recovered/deltas and mean classify time (they reset per process, by design) — and
+**durable** queries in `db/web_db.py`: `frame_job` status counts + `oldest_queued_age_s` (the stall
+signal), ingest rates, enqueue→finish latency avg/p50/p95 + failure rate, fleet/active-mission
+progress, and bay coverage. Both endpoints are unauthenticated like every other read route; they go
+behind admin auth in P7. To see a stall by hand: run the server with `CLASSIFY_THREADS=0`, ingest,
+and watch `jobs.queued` / `oldest_queued_age_s` climb; restarting normally then shows
+`recovered_on_start` and drains it.
 
 ### Dev/test occupancy toggle (drive the dashboard by hand)
 Manual override endpoints (mounted only when `ENABLE_DEV_ROUTES=true` — they have no auth, so the

@@ -152,6 +152,147 @@ def upsert_state(conn, bay_id, occupied, confidence, last_frame, source):
         return cur.fetchone()[0]
 
 
+# ---- operational metrics (GET /api/v1/metrics) -----------------------------
+#
+# The durable half of the metrics payload: what the DB knows and the process
+# does not. Job outcomes and ingest times are already recorded by the pipeline
+# (`frame_job.status`/`finished_at`, `frame.received_at`) — these queries only
+# surface them. All of them are bounded scans: `frame_job` and `frame` are swept
+# to FRAME_RETENTION_S by cleanup.py, and the time filters ride
+# frame_received_idx / frame_job_status_idx.
+
+def job_counts(conn):
+    """Rows per frame_job status, plus the age of the oldest still-queued job.
+
+    A growing `oldest_queued_age_s` is the stall signal: work is arriving that
+    the classify threads are not finishing.
+    """
+    with conn.cursor() as cur:
+        cur.execute("SELECT status, COUNT(*) FROM frame_job GROUP BY status")
+        counts = {status: int(n) for status, n in cur.fetchall()}
+        cur.execute(
+            """SELECT EXTRACT(EPOCH FROM now() - MIN(enqueued_at))
+                 FROM frame_job WHERE status = 'queued'"""
+        )
+        oldest = cur.fetchone()[0]
+    return {
+        "queued": counts.get("queued", 0),
+        "processed": counts.get("processed", 0),
+        "failed": counts.get("failed", 0),
+        "oldest_queued_age_s": round(float(oldest), 1) if oldest is not None else None,
+    }
+
+
+def ingest_rates(conn, window_s):
+    """Frames ingested in the last minute / hour / window, and the newest one."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """SELECT COUNT(*) FILTER (WHERE received_at > now() - interval '1 minute'),
+                      COUNT(*) FILTER (WHERE received_at > now() - interval '1 hour'),
+                      COUNT(*) FILTER (WHERE received_at > now() - make_interval(secs => %(w)s)),
+                      MAX(received_at)
+                 FROM frame""",
+            {"w": window_s},
+        )
+        last_min, last_hour, in_window, newest = cur.fetchone()
+    return {
+        "frames_last_1m": int(last_min),
+        "frames_last_1h": int(last_hour),
+        "frames_in_window": int(in_window),
+        "frames_per_min_window": round(int(in_window) * 60.0 / window_s, 2),
+        "last_frame_at": newest,
+    }
+
+
+def classify_latency(conn, window_s):
+    """End-to-end job latency (enqueue → finish) over the window, in seconds.
+
+    This is queue wait + classify time, i.e. what a stalled or oversubscribed
+    pipeline actually shows up in — not the per-frame CV cost, which the
+    in-process counters report separately.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """SELECT COUNT(*),
+                      AVG(EXTRACT(EPOCH FROM finished_at - enqueued_at)),
+                      PERCENTILE_CONT(0.5) WITHIN GROUP (
+                        ORDER BY EXTRACT(EPOCH FROM finished_at - enqueued_at)),
+                      PERCENTILE_CONT(0.95) WITHIN GROUP (
+                        ORDER BY EXTRACT(EPOCH FROM finished_at - enqueued_at)),
+                      COUNT(*) FILTER (WHERE status = 'failed')
+                 FROM frame_job
+                WHERE finished_at > now() - make_interval(secs => %(w)s)""",
+            {"w": window_s},
+        )
+        n, avg, p50, p95, failed = cur.fetchone()
+    n = int(n)
+    r = lambda v: round(float(v), 3) if v is not None else None  # noqa: E731
+    return {
+        "finished_in_window": n,
+        "avg_s": r(avg),
+        "p50_s": r(p50),
+        "p95_s": r(p95),
+        "failed_in_window": int(failed),
+        "failure_rate": round(int(failed) / n, 4) if n else None,
+    }
+
+
+def fleet_health(conn, window_s):
+    """Drone registry + mission progress — the "is data flowing" half."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """SELECT COUNT(*),
+                      COUNT(*) FILTER (WHERE last_seen > now() - make_interval(secs => %(w)s))
+                 FROM drone""",
+            {"w": window_s},
+        )
+        drones_total, drones_active = cur.fetchone()
+        cur.execute(
+            """SELECT m.mission_id, m.drone_id, m.survey_area, m.started_at,
+                      m.frames_done, m.frames_expected,
+                      EXTRACT(EPOCH FROM now() - MAX(f.received_at)) AS since_last_frame_s
+                 FROM mission m LEFT JOIN frame f USING (mission_id)
+                WHERE m.ended_at IS NULL
+                GROUP BY m.mission_id
+                ORDER BY m.started_at DESC
+                LIMIT 20"""
+        )
+        cols = ["mission_id", "drone_id", "survey_area", "started_at",
+                "frames_done", "frames_expected", "since_last_frame_s"]
+        missions = []
+        for row in cur.fetchall():
+            m = dict(zip(cols, row))
+            idle = m["since_last_frame_s"]
+            m["since_last_frame_s"] = round(float(idle), 1) if idle is not None else None
+            missions.append(m)
+    return {
+        "drones_total": int(drones_total),
+        "drones_active": int(drones_active),
+        "missions_active": len(missions),
+        "missions": missions,
+    }
+
+
+def coverage_counts(conn):
+    """Bay totals split by freshness — the same rule every read path applies."""
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""SELECT COUNT(*),
+                       COUNT(*) FILTER (WHERE {_FRESH} AND s.occupied IS TRUE),
+                       COUNT(*) FILTER (WHERE {_FRESH} AND s.occupied IS FALSE)
+                  FROM bay b LEFT JOIN bay_state s USING (bay_id)""",
+            {"window_s": OCCUPANCY_WINDOW_S},
+        )
+        total, occupied, free = cur.fetchone()
+    total, occupied, free = int(total), int(occupied), int(free)
+    return {
+        "bays_total": total,
+        "bays_occupied": occupied,
+        "bays_free": free,
+        "bays_unknown": total - occupied - free,
+    }
+
+
 # ---- auth ------------------------------------------------------------------
 
 def lookup_drone(conn, api_key_hash):

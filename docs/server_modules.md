@@ -20,9 +20,10 @@ flowchart TB
         direction TB
 
         subgraph api["api/ — HTTP + WebSocket edge"]
-            app["<b>app.py</b><br/>FastAPI app + lifespan<br/>ingest · reads · /route · dev toggle · WS<br/><i>sync handlers → threadpool</i>"]
+            app["<b>app.py</b><br/>FastAPI app + lifespan<br/>ingest · reads · /route · metrics · dev toggle · WS<br/><i>sync handlers → threadpool</i>"]
             auth["<b>auth.py</b><br/>require_drone dependency<br/>x-api-key → SHA-256 → drone_id"]
             hub["<b>hub.py</b><br/>WS fan-out + replay buffer<br/>?since=&lt;cursor&gt; catch-up"]
+            met["<b>metrics.py</b><br/>snapshot(): in-process counters + DB health<br/>JSON + Prometheus rendering"]
         end
 
         subgraph processing["processing/ — the classify pipeline"]
@@ -79,6 +80,10 @@ flowchart TB
     config -.-> pool
     config -.-> s3m
     config -.-> routing
+
+    app --> met
+    met -.->|"stats(): queue depth,<br/>lifetime totals"| jobs
+    met -->|"job counts · ingest rates<br/>latency · fleet · coverage"| webdb
 ```
 
 Entry points (package root, not on the request path):
@@ -96,15 +101,16 @@ Entry points (package root, not on the request path):
 
 | Module | Responsibility |
 | --- | --- |
-| `app.py` | The FastAPI app and every route. **Ingest**: `POST /api/v1/ingest/mission/start`, `…/{id}/end`, `…/frame`. **Reads**: `GET /api/v1/bays` (GeoJSON, optional `bbox`/`zona`), `/summary`, `/bays/{id}`. **Directions**: `GET /api/v1/route`. **Dev toggle**: `POST /api/v1/dev/occupy\|free` (mounted unless `ENABLE_DEV_ROUTES=false`). **Realtime**: `WS /ws/occupancy`. Its `lifespan` opens the pool, loads bays as ENU rings, runs crash recovery, then starts the classify threads. Also normalises the pose's `frame_idx` once, at the edge, so nothing downstream needs a legacy-`i` fallback. |
+| `app.py` | The FastAPI app and every route. **Ingest**: `POST /api/v1/ingest/mission/start`, `…/{id}/end`, `…/frame`. **Reads**: `GET /api/v1/bays` (GeoJSON, optional `bbox`/`zona`), `/summary`, `/bays/{id}`. **Directions**: `GET /api/v1/route`. **Metrics**: `GET /api/v1/metrics` (JSON, optional `window_s`), `GET /metrics` (Prometheus). **Dev toggle**: `POST /api/v1/dev/occupy\|free` (mounted unless `ENABLE_DEV_ROUTES=false`). **Realtime**: `WS /ws/occupancy`. Its `lifespan` opens the pool, loads bays as ENU rings, runs crash recovery, then starts the classify threads. Also normalises the pose's `frame_idx` once, at the edge, so nothing downstream needs a legacy-`i` fallback. |
 | `auth.py` | `require_drone` FastAPI dependency: reads `x-api-key`, matches its SHA-256 against `drone.api_key_hash`, bumps `last_seen`, returns `drone_id`. 401 missing / 403 unknown. |
 | `hub.py` | WebSocket fan-out. `broadcast(deltas)` tags each as `{type:"bay_delta", …}` and sends to every client, dropping dead sockets. A 500-entry replay deque plus a monotonic cursor lets a reconnecting client resume with `?since=`. |
+| `metrics.py` | Operational snapshot for the admin dashboard and any scraper. Two halves: **in-process** (`jobs.stats()` — queue depth, in-flight, process-lifetime totals, mean classify time; these exist nowhere else and reset with the process) and **durable** (`web_db` — job status counts, oldest-queued age, ingest rates, enqueue→finish latency percentiles, fleet/mission progress, bay coverage). `prometheus(snap)` renders the numeric subset as text exposition — no client library; windowed DB figures are exported as gauges, only the lifetime process totals as counters. |
 
 ### `processing/` — frame → occupancy
 
 | Module | Responsibility |
 | --- | --- |
-| `jobs.py` | The job queue: a `queue.Queue` drained by `CLASSIFY_THREADS` daemon threads, each owning its **own** long-lived psycopg2 connection (connections aren't thread-shareable). Each job: fetch the image → `process_frame` → mark the job processed → schedule `hub.broadcast` on the event loop. A missing-image `ClientError` marks the job `failed` so recovery won't loop on it; any other exception is logged and the thread survives. `recover(conn)` rebuilds the queue from `frame_job.status='queued'` on boot. |
+| `jobs.py` | The job queue: a `queue.Queue` drained by `CLASSIFY_THREADS` daemon threads, each owning its **own** long-lived psycopg2 connection (connections aren't thread-shareable). Each job: fetch the image → `process_frame` → mark the job processed → schedule `hub.broadcast` on the event loop. A missing-image `ClientError` marks the job `failed` so recovery won't loop on it; any other exception is logged and the thread survives. `recover(conn)` rebuilds the queue from `frame_job.status='queued'` on boot. `stats()` exposes the live counters (depth, in-flight, processed/failed/recovered/deltas, mean classify time) that `api/metrics.py` reports. |
 | `pipeline.py` | 6 lines that are the whole scoring transaction: `score_frame` → `insert_observations` → `recompute_states` → commit → return deltas. Shared verbatim by the live threads and the offline `replay.py`, which is what makes the golden test meaningful. |
 
 ### `vision/` — the classifier bridge
@@ -118,7 +124,7 @@ Entry points (package root, not on the request path):
 | Module | Responsibility |
 | --- | --- |
 | `pool.py` | `ThreadedConnectionPool` (1–10) + a `borrow(commit=False)` context manager. Used by the sync request handlers, which Starlette runs in its threadpool — blocking psycopg2 never touches the event loop. Classify threads deliberately bypass this pool. |
-| `web_db.py` | Web-edge SQL. Reads (`feature_collection`, `summary`, `detail`, `nearest_bay`) push geospatial predicates into PostGIS. Writes: `insert_frame` (idempotent on `(drone_id, survey_area, frame_idx)`, and creates the `frame_job` row in the *same* transaction), mission bookkeeping, `mark_frame_processed/failed`, `unscored_frames` (the recovery backlog), plus the auth lookups. |
+| `web_db.py` | Web-edge SQL. Reads (`feature_collection`, `summary`, `detail`, `nearest_bay`) push geospatial predicates into PostGIS. Writes: `insert_frame` (idempotent on `(drone_id, survey_area, frame_idx)`, and creates the `frame_job` row in the *same* transaction), mission bookkeeping, `mark_frame_processed/failed`, `unscored_frames` (the recovery backlog), plus the auth lookups. Metrics queries (`job_counts`, `ingest_rates`, `classify_latency`, `fleet_health`, `coverage_counts`) are bounded scans over the retention-swept tables, riding the existing `frame_received_idx` / `frame_job_status_idx`. |
 | `vision_db.py` | Vision-side SQL: `load_bays_enu` (WGS84 → ENU rings), `insert_observations` (one row per scored bay, numpy scalars coerced to float), and `recompute_states` — strict-majority vote over a bay's observations, upsert `bay_state`, and return a delta only for bays that flipped or became known. |
 
 ### Package root — config and adapters

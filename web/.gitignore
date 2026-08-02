@@ -5,3 +5,5 @@ dist/
 .env.local
 coverage/
 .pnpm-store/
+# quickstart.sh run state: logs, pids, and the dev drone's API key
+.quickstart/

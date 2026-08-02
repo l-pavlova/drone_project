@@ -5,6 +5,7 @@
   read  (PostGIS GeoJSON/summary) │                 threads (jobs.py) → hub push
   dev toggle ─────────────────────┘
   route proxy ── OSRM driving directions to a free bay (routing.py)
+  metrics ────── pipeline/ingest/fleet health, JSON + Prometheus (metrics.py)
   WS /ws/occupancy ── hub fan-out to browsers
 
 Read/ingest/dev handlers are sync `def`, so Starlette runs them in its
@@ -27,7 +28,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from .. import cleanup, routing, s3
 from ..config import (
@@ -40,6 +41,7 @@ from ..db import vision_db, web_db
 from ..db.pool import borrow, close_pool, init_pool
 from ..processing import jobs
 from ..vision.scoring import pose_idx
+from . import metrics
 from .auth import require_drone
 from .hub import Hub
 
@@ -242,6 +244,31 @@ def get_route(origin: str = Query(..., alias="from"), to: str = Query(...)):
     except routing.RoutingError as exc:
         # 502 is expected and handled: the map falls back to a straight line
         raise HTTPException(status_code=502, detail=str(exc))
+
+
+# ---- operational metrics ---------------------------------------------------
+#
+# The admin dashboard's data source (and P7's observability hook). See
+# metrics.py for what is measured in-process vs. read from Postgres. Sync `def`
+# for the same reason as the other read routes: psycopg2 blocks.
+
+@app.get("/api/v1/metrics")
+def get_metrics(
+    window_s: int = Query(metrics.DEFAULT_WINDOW_S, ge=1, le=86400),
+    hub: Hub = Depends(get_hub),
+):
+    with borrow() as conn:
+        return metrics.snapshot(conn, window_s, hub)
+
+
+@app.get("/metrics", response_class=PlainTextResponse)
+def get_metrics_prometheus(hub: Hub = Depends(get_hub)):
+    """Same snapshot in Prometheus exposition format, on the conventional path."""
+    with borrow() as conn:
+        snap = metrics.snapshot(conn, metrics.DEFAULT_WINDOW_S, hub)
+    return PlainTextResponse(
+        metrics.prometheus(snap), media_type="text/plain; version=0.0.4; charset=utf-8"
+    )
 
 
 # ---- dev/test manual occupancy toggle --------------------------------------

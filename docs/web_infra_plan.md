@@ -5,9 +5,13 @@
 
 ## Status
 
-Phases 1–5 built and verified end-to-end. **Next: P6** (admin analytics), starting with the
-metrics endpoint its ingestion-metrics requirement depends on — see the prerequisite note in
-Segment 3. Then P7 (prod hardening), gated on the open items under "Security follow-ups".
+Phases 1–5 built and verified end-to-end. **P6 (admin analytics) is under way:** its prerequisite
+metrics endpoint is built and verified (2026-08-02, see Segment 3); what remains is the
+`apps/web-admin` UI on top of it. Then P7 (prod hardening), gated on the open items under
+"Security follow-ups".
+
+A `pnpm quickstart` script (`web/scripts/quickstart.sh`) brings the whole stack up in one command
+— infra, migrations, seed, server, dashboard, a registered dev drone — for full-app testing.
 
 ## Context
 
@@ -149,6 +153,9 @@ rebuilt from Postgres on restart.
   (each feature = bay polygon + `occupied`, `confidence`, `updated_at`). Feeds the map on first load.
 - `GET /api/v1/bays/:id` — single bay detail + recent observation history.
 - `GET /api/v1/summary` — counts of free/occupied per zone/street for headline stats.
+- `GET /api/v1/route?from=&to=` — driving directions to a bay, proxied to OSRM.
+- `GET /api/v1/metrics?window_s=` — operational snapshot (see Segment 3); `GET /metrics` renders
+  the same numbers as Prometheus text.
 
 ### Real-time push
 - `WS /ws/occupancy` — client subscribes (optionally with a bbox / zona filter); server streams
@@ -234,12 +241,25 @@ classifier trustworthy, what's the occupancy picture over time. Auth-gated (admi
 - **Fleet/mission health:** live table of drones (`last_seen`, current mission, frames done/expected,
   ingest rate), stalled-mission alerts, per-mission coverage (bays surveyed vs. total in area).
 - **Ingestion metrics:** frames/min, queue depth, worker processing latency, failure rate.
-  > **Prerequisite (P6 blocker, noted 2026-08-02):** this originally assumed "Prometheus counters
-  > the Node API and Python worker export". Neither exists — the server exposes only `/health`.
-  > Queue depth is now trivially available in-process (`_q.qsize()`) and job outcomes are already
-  > recorded in `frame_job.status`/`finished_at`, but nothing surfaces either. **A metrics endpoint
-  > has to be built before this requirement can be met**; it is the natural first slice of P6, and
-  > it overlaps with P7's observability bullet.
+  > **✅ Built 2026-08-02 — this was the P6 blocker.** The plan had assumed "Prometheus counters the
+  > Node API and Python worker export"; neither survived the monolith rearchitecture, and the
+  > server exposed only `/health`. Now `GET /api/v1/metrics` (JSON, `?window_s=`, default 300 s)
+  > and `GET /metrics` (Prometheus text, no client library) serve one snapshot from
+  > `api/metrics.py`, split by where the truth lives:
+  > * **in-process** (`processing.jobs.stats()`): queue depth and in-flight — which exist only in
+  >   this process's `queue.Queue` — plus process-lifetime classified/failed/recovered/deltas
+  >   counts and mean per-frame classify time. These reset on restart, correctly: they describe
+  >   *this* replica.
+  > * **durable** (`db/web_db.py`): `frame_job` status counts and **oldest-queued age** (the stall
+  >   signal), ingest rates (1 m / 1 h / window), enqueue→finish latency avg/p50/p95 and failure
+  >   rate, fleet + active-mission progress with per-mission idle time, and bay coverage under the
+  >   freshness rule. All bounded scans — the frame tables are swept to `FRAME_RETENTION_S`.
+  >
+  > Verified against the live stack: replay of `fmi_block` → 34 classified / 52 deltas / p95 30 ms;
+  > staged with `CLASSIFY_THREADS=0` → depth 26, `oldest_queued_age_s` climbing; restart →
+  > `recovered_on_start=26`, queue drained, latency reflecting the stall. Both endpoints are
+  > **unauthenticated**, like every other read route — they belong behind P7's admin auth before
+  > the port is exposed.
 - **Model quality:** when ground truth is available (sim/eval runs), accuracy / precision / recall /
   confusion matrix per world, plus the `uncovered` bay list — computed from `observation` vs. `gt`.
   In production (no GT), track proxy signals: confidence distribution, votes-vs-views agreement,
@@ -271,7 +291,11 @@ classifier trustworthy, what's the occupancy picture over time. Auth-gated (admi
   thumbnails. **Scaling to >1 replica requires solving WebSocket fan-out across replicas first**
   (see the Segment 1 caveat) — the one thing the broker used to provide for free.
 - **Observability:** structured logs, Prometheus metrics from the server, Grafana dashboards,
-  alerting on queue backlog / classify failures / stalled missions. Nothing is exported today.
+  alerting on queue backlog / classify failures / stalled missions. **The exposition side exists**
+  since 2026-08-02 (`GET /metrics`, see Segment 3) — `parkdrone_queue_depth`,
+  `parkdrone_oldest_queued_age_seconds`, `parkdrone_job_failure_rate` and
+  `parkdrone_frames_per_minute` are the four worth alerting on. Still missing: a scrape config,
+  Grafana, structured logging (the server still `print()`s), and auth in front of the endpoint.
 - **Security:** TLS everywhere; drone API keys hashed at rest and rotatable; JWT for users/admins with
   role separation; ingest input validation + size limits; object-store presigned URLs for frame access.
 - **CI/CD:** lint/typecheck/test per package; build+push images; the repo currently has *no* test suite,
