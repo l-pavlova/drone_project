@@ -47,7 +47,7 @@
         <mxCell id="pkg_proc" value="processing/  — frame → occupancy" style="shape=folder;tabWidth=180;tabHeight=20;tabPosition=left;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontStyle=1;fillColor=#FDE9E4;strokeColor=#E14B2E;fontColor=#5c1c10;spacingLeft=8;spacingTop=2;" vertex="1" parent="1">
           <mxGeometry x="680" y="150" width="380" height="240" as="geometry" />
         </mxCell>
-        <mxCell id="m_jobs" value="&lt;b&gt;jobs.py&lt;/b&gt;&#10;in-process queue.Queue (replaces Redis)&#10;N classify threads, each with its own DB conn&#10;a bad frame is logged / marked failed — thread survives&#10;recover(): re-enqueue status='queued' on boot" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#E14B2E;fontColor=#5c1c10;" vertex="1" parent="1">
+        <mxCell id="m_jobs" value="&lt;b&gt;jobs.py&lt;/b&gt;&#10;in-process queue.Queue&#10;N classify threads, each with its own DB conn&#10;a bad frame is logged / marked failed — thread survives&#10;recover(): re-enqueue status='queued' on boot" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#E14B2E;fontColor=#5c1c10;" vertex="1" parent="1">
           <mxGeometry x="695" y="188" width="350" height="90" as="geometry" />
         </mxCell>
         <mxCell id="m_pipeline" value="&lt;b&gt;pipeline.py&lt;/b&gt;&#10;process_frame(): score → insert observations → recompute bay_state → commit → return deltas&#10;shared verbatim by the live classify threads AND replay.py" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#E14B2E;fontColor=#5c1c10;" vertex="1" parent="1">

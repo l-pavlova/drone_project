@@ -69,9 +69,8 @@ Hard-won controller invariants — **do not regress these** (they are why the si
 
 A separate stage 4 turns the on-disk occupancy report into a live product: an ingest API, a
 real-time occupancy push, and an end-user parking map. It lives in **`web/`** (a pnpm monorepo),
-independent of the Python sim/vision code. Full design in `docs/web_infra_plan.md` (with
-`docs/web_monolith_rearchitecture_plan.md` for why the Node+Redis tier was collapsed into one
-Python process). Diagrams: `web/docs/architecture.drawio` (system level), `docs/server_modules.md` +
+independent of the Python sim/vision code. Full design in `docs/web_infra_plan.md`.
+Diagrams: `web/docs/architecture.drawio` (system level), `docs/server_modules.md` +
 `docs/server_modules.drawio` (inside the server), `docs/db_schema_er.md` (schema).
 
 **Status: Phases 1–5 built & verified end-to-end; Phase 6 (admin dashboard) and Phase 7 (prod
@@ -99,13 +98,13 @@ hardening) remain.** See project memory `project-web-infra.md` for the running l
   per-component classes in `styles/global.css` — that file is trimmed to CSS variables/reset/base
   sizing only). Use `:global(...)` only for classes owned by a third party we don't render
   ourselves (e.g. Leaflet's injected `.leaflet-popup-content`).
-- `infra/docker-compose.yml` — postgis + minio (no Redis).
+- `infra/docker-compose.yml` — postgis + minio.
 
 ### Architecture invariants (do not regress)
 - **Postgres + PostGIS from the start** (no SQLite). Bay geometry is WGS84; bbox/nearest queries
   push down into PostGIS. The ENU projection is only for pose math.
 - **One Python process owns everything** (web edge *and* CV) because the classifier is Python and
-  reused verbatim. No cross-language boundary → **no Redis**: the job queue is an in-process
+  reused verbatim. No cross-language boundary, so **no broker**: the job queue is an in-process
   `queue.Queue` drained by dedicated classify threads (numpy releases the GIL, so real parallelism
   off the event loop), and deltas are pushed **straight** to WebSocket clients the same process
   holds. Read/ingest handlers are sync `def` (Starlette threadpool) so blocking psycopg2/boto3 never

@@ -25,8 +25,8 @@ def health():
 ```
 
 `@app.get("/health")` registers this function to handle `GET /health`. Whatever you
-`return` — a dict here — gets JSON-serialized automatically. No manual `res.json()`
-like Express; the return value *is* the response.
+`return` — a dict here — gets JSON-serialized automatically. There is no separate
+response object to write into; the return value *is* the response.
 
 ## Parameters come from type hints, based on where you declare them
 

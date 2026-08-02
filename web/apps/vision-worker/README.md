@@ -2,7 +2,7 @@
 
 A single FastAPI process: the web edge (ingest, reads, WebSocket push, dev toggle) and the CV
 classifier, in one process. Frame jobs move through an in-process `queue.Queue` drained by
-dedicated classify threads — no Redis, no separate worker.
+dedicated classify threads.
 
 It **reuses the calibrated classifier verbatim** from the project's offline vision
 stage (`vision/score_occupancy.py`): `project`, `bay_features`, `classify`, the

@@ -1,5 +1,5 @@
-# Local dev infrastructure: PostGIS + MinIO. (No Redis — the job queue is
-# in-process inside the Python server; see docs/web_monolith_rearchitecture_plan.md.)
+# Local dev infrastructure: PostGIS + MinIO. The job queue lives in-process
+# inside the Python server, so there is no broker service here.
 #
 # NO CREDENTIALS ARE BAKED INTO THIS FILE. Every secret is interpolated from
 # `web/.env` with the fail-loud `${VAR:?message}` form, so an unset variable

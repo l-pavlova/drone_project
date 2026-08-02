@@ -1,26 +1,13 @@
 # PARKDRONE Web Infrastructure — Architecture & Requirements
 
-> **Provenance.** Approved 2026-07-17; lived in `~/.claude/plans/witty-petting-ritchie.md` until
-> 2026-08-02, when it moved here so the design doc is versioned with the code it describes.
-> The July rearchitecture that collapsed the web tier into one Python process has its own
-> companion doc: `docs/web_monolith_rearchitecture_plan.md`. Sections below have been rewritten
-> to describe the **as-built** system; the superseded Node/Express + Redis design survives in the
-> companion doc and in git history.
+> **Provenance.** Approved 2026-07-17; rewritten 2026-08-02 to describe the **as-built** system.
+> Module-level view of the server: `docs/server_modules.md`. Schema: `docs/db_schema_er.md`.
 
-## Immediate next actions (agreed 2026-08-02)
+## Status
 
-Ahead of P6. Ordered — nothing should stack on an unverified schema change.
-
-1. **Land the `frame.i` → `frame.frame_idx` rename.** The change is complete across the sim,
-   `score_occupancy.py`, the server, the zod contracts and the schema docs, with migration
-   `0004_frame_i_to_frame_idx.sql` untracked and unapplied. Bring infra up, run `pnpm db:migrate`,
-   then both harnesses (`replay` = 43/43 + 100% vs GT, and the full `replay_ingest` E2E) before
-   committing. `pose_idx` keeps legacy-`i` poses.json on disk replayable.
-2. **Security sweep** — the three items under "Security follow-ups" below, plus a fourth found
-   2026-08-02: `.env.example` and `web/.env` still carry `REDIS_URL` for the deleted Redis tier,
-   the same dead-config problem as `JWT_SECRET`.
-3. **Refresh this plan** — done in this edit: stale Node/Redis architecture text rewritten to the
-   as-built shape, and a metrics prerequisite added to Segment 3 (P6).
+Phases 1–5 built and verified end-to-end. **Next: P6** (admin analytics), starting with the
+metrics endpoint its ingestion-metrics requirement depends on — see the prerequisite note in
+Segment 3. Then P7 (prod hardening), gated on the open items under "Security follow-ups".
 
 ## Context
 
@@ -39,7 +26,7 @@ across the three segments the user named:
 3. **Admin analytics** — metrics/health for the operator running the fleet.
 
 **Target:** production-scale architecture (multi-drone fleet, HA, auth). **Stack (user-chosen):**
-~~Node/Express API~~ → **Python/FastAPI API** (changed 2026-07-28, see below), React + react-leaflet
+**Python/FastAPI API**, React + react-leaflet
 dashboard, WebSocket push, **Postgres + PostGIS persistence from the start**.
 
 ### Persistence decision
@@ -51,20 +38,20 @@ projection stays available in the app layer for pose math, but geospatial *queri
 "free bays near me") push down into PostGIS `ST_*` functions. This removes the single-writer
 bottleneck entirely and lets the API scale horizontally without a later migration.
 
-### The Node/Python split — SUPERSEDED 2026-07-28
-The original shape split a Node/Express edge from a Python vision worker, connected by a Redis
-queue, because the calibrated classifier is **Python** (`vision/score_occupancy.py`: `to_enu`,
-`project`, `load_bays`, `classify`) and rewriting it in Node would have thrown away the tuned
-thresholds and the georeferencing code.
+### One process owns the edge and the CV
+The calibrated classifier is **Python** (`vision/score_occupancy.py`: `to_enu`, `project`,
+`load_bays`, `classify`), and it is reused verbatim rather than reimplemented — rewriting it would
+throw away the tuned thresholds and the georeferencing code. Making the web edge Python too means
+there is no language boundary to bridge, and therefore **no broker**:
 
-**That split has been removed.** The process boundary and the broker existed *only* because the
-edge was Node and the classifier was Python; making the edge Python too dissolves the constraint.
-The as-built system is **one FastAPI process** that imports the classifier and calls it in-process,
-drains an in-process `queue.Queue` with dedicated classify threads (numpy releases the GIL, so the
-CV genuinely parallelises off the event loop), and pushes deltas straight to the WebSocket clients
-the same process holds. **No Redis.** Durability without a broker comes from re-enqueuing
-`frame_job` rows with `status='queued'` on startup. Full reasoning:
-`docs/web_monolith_rearchitecture_plan.md`; module-level view: `docs/server_modules.md`.
+- the classifier is `import`ed and called in-process;
+- the job queue is an in-process `queue.Queue` drained by dedicated classify threads (numpy
+  releases the GIL, so the CV genuinely parallelises off the event loop);
+- deltas are pushed straight to the WebSocket clients the same process holds;
+- durability comes from re-enqueuing `frame_job` rows with `status='queued'` on startup, rebuilt
+  from Postgres + the object store.
+
+Module-level view: `docs/server_modules.md`.
 
 ---
 
@@ -264,8 +251,7 @@ classifier trustworthy, what's the occupancy picture over time. Auth-gated (admi
 - **Monorepo layout:** `packages/contracts` (shared TS types + zod schemas, the single source of truth
   for pose/bay/delta shapes), `packages/db` (migrations + seeder, dev tooling),
   `apps/vision-worker` (Python — the whole server), `apps/web-user`, `apps/web-admin` (P6),
-  `infra/` (Docker + k8s manifests). The Node `apps/api` was deleted in the July rearchitecture; an
-  empty `apps/api/` husk should be removed.
+  `infra/` (Docker + k8s manifests).
 - **Deployment:** the server containerized as one image. k8s: HPA on it (CPU/conns — note that
   queue depth is now *internal*, so it is a scale-up signal, not a scale-out one). Object store
   (MinIO in-cluster or S3). Postgres + PostGIS runs as a managed instance (e.g. cloud Postgres with
@@ -312,8 +298,8 @@ concerns above predates these concrete findings; this is the actionable list for
    The `infra:up`/`infra:down` scripts pass `--env-file .env` explicitly, because Compose otherwise
    resolves `.env` relative to the *compose file's* directory (`web/infra/`), not `web/` — without
    it the stack fails on the `:?` guard.
-2. ✅ **Done.** `JWT_SECRET` dropped from `.env.example` and `web/.env`. `REDIS_URL` dropped in the
-   same sweep — same dead-config class, left over from the deleted Redis tier.
+2. ✅ **Done.** Dead config (`JWT_SECRET`, and a stale broker URL) dropped from `.env.example` and
+   `web/.env`. Nothing in the server read either.
 3. ✅ **Done.** `ENABLE_DEV_ROUTES` now defaults to `false` (`config.py`); `.env.example` opts local
    dev in explicitly. Gating the endpoints behind the drone API key remains **open** — required
    before they're exposed beyond localhost.

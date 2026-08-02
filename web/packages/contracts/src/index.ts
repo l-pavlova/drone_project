@@ -136,7 +136,7 @@ export const observationSchema = z.object({
 export type Observation = z.infer<typeof observationSchema>;
 
 /**
- * Worker -> API delta payload published on Redis after a frame is scored.
+ * Delta payload produced after a frame is scored.
  * Carries the changed bay states plus the frame that produced them.
  */
 export const frameScoredSchema = z.object({

@@ -1,4 +1,4 @@
-"""In-process frame-job pipeline (replaces the Redis list queue + worker pod).
+"""In-process frame-job pipeline.
 
 A thread-safe queue.Queue holds classify jobs; a fixed pool of dedicated OS
 threads drains it. numpy releases the GIL during the heavy array work, so these
@@ -80,8 +80,8 @@ def _worker_loop(bays, hub, loop) -> None:
 def recover(conn) -> int:
     """Re-enqueue frames persisted as 'queued' but never scored (crash recovery).
 
-    Replaces Redis's at-least-once durability: the in-memory queue is rebuilt
-    from Postgres + S3 on startup, so a restart mid-survey resumes cleanly.
+    This is what makes an in-memory queue durable: it is rebuilt from Postgres
+    + S3 on startup, so a restart mid-survey resumes cleanly.
     """
     jobs = web_db.unscored_frames(conn)
     for j in jobs:

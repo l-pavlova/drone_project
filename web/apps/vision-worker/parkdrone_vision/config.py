@@ -1,7 +1,7 @@
 """Environment/config for the vision worker.
 
-Loads the nearest .env (walking up from CWD) so the worker shares the monorepo
-root .env with the Node services. Existing process env always wins.
+Loads the nearest .env (walking up from CWD) so the server and the dev tooling
+share the monorepo root .env. Existing process env always wins.
 """
 import os
 
@@ -49,7 +49,7 @@ SIM_OUTPUT_ROOT = os.environ.get(
     "SIM_OUTPUT_ROOT", os.path.join(REPO_ROOT, "sim", "output")
 )
 
-# ---- FastAPI server (the monolith replacing the Node API + Redis) ----------
+# ---- FastAPI server --------------------------------------------------------
 # Kept on :4000 so the web-user vite proxy target is unchanged.
 API_PORT = int(os.environ.get("API_PORT", "4000"))
 # Dev-only manual occupancy toggle. OFF unless explicitly opted into: the

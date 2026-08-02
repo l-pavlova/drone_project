@@ -1,10 +1,8 @@
 """Web-edge SQL: read queries + ingest/mission writes + drone auth lookups.
 
-Ported 1:1 from the retired Node tier (packages/db/src/repositories.ts,
-apps/api/src/routes/ingest.ts, .../dev.ts, .../auth.ts) so responses are
-byte-identical for the React app and the operator scripts. All functions take a
-psycopg2 connection (borrowed from pool.py). Geospatial predicates still push
-down into PostGIS; the app layer never materialises the full bay set.
+All functions take a psycopg2 connection (borrowed from pool.py). Geospatial
+predicates push down into PostGIS; the app layer never materialises the full
+bay set.
 
 psycopg2 usually returns json/jsonb columns as already-parsed Python objects,
 but _asjson guards the case where a build returns text (double-encoding).
@@ -17,7 +15,7 @@ def _asjson(v):
     return json.loads(v) if isinstance(v, (str, bytes, bytearray)) else v
 
 
-# ---- reads (mirror bayRepo) ------------------------------------------------
+# ---- reads -----------------------------------------------------------------
 
 def feature_collection(conn, bbox=None, zona=None):
     """Bays (+ current state) as a GeoJSON FeatureCollection. Unknown = no state row."""
@@ -141,7 +139,7 @@ def upsert_state(conn, bay_id, occupied, confidence, last_frame, source):
         return cur.fetchone()[0]
 
 
-# ---- auth (mirror auth.ts) -------------------------------------------------
+# ---- auth ------------------------------------------------------------------
 
 def lookup_drone(conn, api_key_hash):
     with conn.cursor() as cur:
@@ -155,7 +153,7 @@ def bump_last_seen(conn, drone_id):
         cur.execute("UPDATE drone SET last_seen = now() WHERE drone_id = %s", (drone_id,))
 
 
-# ---- ingest / mission (mirror ingest.ts) -----------------------------------
+# ---- ingest / mission ------------------------------------------------------
 
 def insert_mission(conn, mission_id, drone_id, survey_area, area, frames_expected):
     with conn.cursor() as cur:

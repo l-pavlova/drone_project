@@ -104,7 +104,7 @@ Entry points (package root, not on the request path):
 
 | Module | Responsibility |
 | --- | --- |
-| `jobs.py` | The queue that replaced Redis: a `queue.Queue` drained by `CLASSIFY_THREADS` daemon threads, each owning its **own** long-lived psycopg2 connection (connections aren't thread-shareable). Each job: fetch the image → `process_frame` → mark the job processed → schedule `hub.broadcast` on the event loop. A missing-image `ClientError` marks the job `failed` so recovery won't loop on it; any other exception is logged and the thread survives. `recover(conn)` rebuilds the queue from `frame_job.status='queued'` on boot. |
+| `jobs.py` | The job queue: a `queue.Queue` drained by `CLASSIFY_THREADS` daemon threads, each owning its **own** long-lived psycopg2 connection (connections aren't thread-shareable). Each job: fetch the image → `process_frame` → mark the job processed → schedule `hub.broadcast` on the event loop. A missing-image `ClientError` marks the job `failed` so recovery won't loop on it; any other exception is logged and the thread survives. `recover(conn)` rebuilds the queue from `frame_job.status='queued'` on boot. |
 | `pipeline.py` | 6 lines that are the whole scoring transaction: `score_frame` → `insert_observations` → `recompute_states` → commit → return deltas. Shared verbatim by the live threads and the offline `replay.py`, which is what makes the golden test meaningful. |
 
 ### `vision/` — the classifier bridge
@@ -118,7 +118,7 @@ Entry points (package root, not on the request path):
 | Module | Responsibility |
 | --- | --- |
 | `pool.py` | `ThreadedConnectionPool` (1–10) + a `borrow(commit=False)` context manager. Used by the sync request handlers, which Starlette runs in its threadpool — blocking psycopg2 never touches the event loop. Classify threads deliberately bypass this pool. |
-| `web_db.py` | Web-edge SQL, ported 1:1 from the retired Node tier so responses stay byte-identical. Reads (`feature_collection`, `summary`, `detail`, `nearest_bay`) push geospatial predicates into PostGIS. Writes: `insert_frame` (idempotent on `(drone_id, survey_area, frame_idx)`, and creates the `frame_job` row in the *same* transaction), mission bookkeeping, `mark_frame_processed/failed`, `unscored_frames` (the recovery backlog), plus the auth lookups. |
+| `web_db.py` | Web-edge SQL. Reads (`feature_collection`, `summary`, `detail`, `nearest_bay`) push geospatial predicates into PostGIS. Writes: `insert_frame` (idempotent on `(drone_id, survey_area, frame_idx)`, and creates the `frame_job` row in the *same* transaction), mission bookkeeping, `mark_frame_processed/failed`, `unscored_frames` (the recovery backlog), plus the auth lookups. |
 | `vision_db.py` | Vision-side SQL: `load_bays_enu` (WGS84 → ENU rings), `insert_observations` (one row per scored bay, numpy scalars coerced to float), and `recompute_states` — strict-majority vote over a bay's observations, upsert `bay_state`, and return a delta only for bays that flipped or became known. |
 
 ### Package root — config and adapters

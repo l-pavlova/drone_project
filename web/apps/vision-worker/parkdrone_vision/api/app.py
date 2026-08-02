@@ -1,5 +1,4 @@
-"""PARKDRONE server — a single FastAPI process that replaces the Node API, the
-separate vision worker, and Redis.
+"""PARKDRONE server — one FastAPI process owning the web edge and the vision CV.
 
   ingest (auth + S3 + frame row) ─┐
                                   ├─ jobs.enqueue → in-process queue → classify
@@ -10,8 +9,7 @@ separate vision worker, and Redis.
 
 Read/ingest/dev handlers are sync `def`, so Starlette runs them in its
 threadpool and blocking psycopg2/boto3 never touch the event loop. Only the
-WebSocket endpoint is async. Contract is identical to the retired Node tier, so
-the React app and operator scripts are unchanged.
+WebSocket endpoint is async.
 """
 import asyncio
 import json
@@ -40,7 +38,7 @@ from ..vision.scoring import pose_idx
 from .auth import require_drone
 from .hub import Hub
 
-# FMI block origin — matches the ENU ORIGIN used across the project (and dev.ts).
+# FMI block origin — matches the ENU ORIGIN used across the project.
 FMI = {"lon": 23.3298956, "lat": 42.6747105}
 
 # Process-wide singletons built in lifespan. They are reached through the
@@ -145,7 +143,8 @@ def ingest_frame(
     pose.pop("i", None)
     mission_id = meta_obj.get("mission_id")
 
-    # Store bytes first (matches the retired Node order), then the frame row.
+    # Store the bytes first, then the frame row, so a committed row always has
+    # an image behind it for the classify threads to fetch.
     key = f"{survey_area}/{drone_id}/frame_{pose['frame_idx']:03d}.png"
     image_uri = s3.put_frame(key, frame.file.read())
 

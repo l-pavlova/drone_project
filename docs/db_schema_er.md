@@ -121,7 +121,7 @@ erDiagram
 | `bay_state` | **The product.** One row per bay, majority vote over `observation`. What the map and the WebSocket clients reflect. |
 | `observation` | Append-only evidence, one row per bay per frame, with the raw classifier features. Input to the vote *and* the audit trail. |
 | `frame` | Ingest ledger: the immutable fact that a drone uploaded these pixels from this pose. Append-only — nothing ever UPDATEs it. |
-| `frame_job` | The **durable classify queue** — the replacement for Redis's at-least-once delivery. 1:1 with `frame`, holding only the mutable work state. |
+| `frame_job` | The **durable classify queue** — what gives an in-memory queue at-least-once delivery. 1:1 with `frame`, holding only the mutable work state. |
 | `schema_migrations` | Applied-migration ledger maintained by the runner (not in the SQL file). |
 
 ## Indexes
