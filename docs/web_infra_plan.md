@@ -107,7 +107,9 @@ must canonicalize to **string** everywhere.
   `occupancy_results.json` (`core_paint_frac`, `core_dark_frac`, `core_chroma`, `core_brightness`,
   `core_std`), `observed_at`.
 - `frame` — append-only ingest ledger, never UPDATEd: `frame_id`, `drone_id`, `survey_area`,
-  `frame_idx`, `x`, `y`, `alt`, `yaw`, `image_uri`, `received_at`.
+  `frame_idx`, `x`, `y`, `alt`, `yaw`, `image_uri`, `received_at`. **Transient**: `cleanup.py`
+  deletes rows and their stored images past `FRAME_RETENTION_S` (4 h), keeping `observation` and
+  `mission`. Frames whose job is still `queued` are never collected — that is unclassified work.
 - `frame_job` — the 1:1 classify work state, split out of `frame` in `0003`: `frame_id (PK/FK)`,
   `status ('queued'|'processed'|'failed')`, `enqueued_at`, `finished_at`. Written in the *same*
   transaction as its `frame`, so a committed ledger entry always has a recoverable job;
@@ -155,9 +157,18 @@ rebuilt from Postgres on restart.
   classifier runs in this same process, deltas reach the hub directly — no cross-process channel.
 - Heartbeat/ping (uvicorn's default) + last-event replay on reconnect (client sends `since` cursor,
   served from the hub's bounded replay deque).
-- **Scale-out caveat:** a single process fans out to its own clients only. Running multiple replicas
-  would reintroduce the need for a shared channel between them — deferred to P7, and a reason to
-  scale this process up before scaling it out.
+- **Scale-out caveat — single replica is currently a correctness requirement.** Three things are
+  per-process or unowned, and all three must change before a second replica is safe:
+  1. `jobs.recover()` re-enqueues *every* `frame_job` with `status='queued'` and no ownership
+     filter, so two replicas would both classify the same backlog and double-count the vote. Needs
+     `FOR UPDATE SKIP LOCKED` claiming with `owner`/`claimed_at` and a reaper for orphaned leases.
+  2. The hub is per-process, so a browser on replica B never sees a delta produced by replica A.
+     Postgres `LISTEN`/`NOTIFY` covers this with no new infrastructure.
+  3. `Hub._cursor` is a per-process counter, so `?since=` means different things per replica.
+     Needs a shared sequence or a timestamp cursor.
+
+  Throughput is not the reason to scale out: measured ~103 frames/s per classify thread against
+  ~0.5 frames/s per drone. Availability during deploys would be — a different problem.
 
 ### Queue + in-process vision
 - **Queue:** a thread-safe `queue.Queue` drained by `CLASSIFY_THREADS` dedicated OS threads. Jobs

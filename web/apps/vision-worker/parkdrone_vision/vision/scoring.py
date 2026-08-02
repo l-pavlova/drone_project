@@ -19,6 +19,7 @@ import score_occupancy as so  # noqa: E402
 
 # Re-export the calibrated pieces so the rest of the worker never re-implements them.
 IMG_W, IMG_H = so.IMG_W, so.IMG_H
+FOV = so.FOV
 project = so.project
 bay_features = so.bay_features
 classify = so.classify
@@ -29,18 +30,42 @@ to_enu = so.to_enu
 pose_idx = so.pose_idx
 
 
-def score_frame(img_arr, bays, pose):
+def footprint_reach(alt):
+    """Half-diagonal, in metres, of the ground rectangle a nadir frame covers.
+
+    Inverts `project`'s scale: it maps ground metres to pixels with
+    k = IMG_W / (2*alt*tan(FOV/2)), so the visible half-width is alt*tan(FOV/2)
+    and the half-height is that times the aspect ratio. At 30 m: 12.4 x 7.5 m,
+    i.e. the ~25x15 m footprint the patrol spacing is designed around.
+
+    A point farther than this from the drone cannot be inside the frame, which is
+    what makes it a safe rejection radius.
+    """
+    half_w = alt * math.tan(FOV / 2.0)
+    half_h = half_w * (IMG_H / IMG_W)
+    return math.hypot(half_w, half_h)
+
+
+def score_frame(img_arr, bays, pose, index=None):
     """Classify every bay sufficiently visible in one nadir frame.
 
     Args:
         img_arr: HxWx3 RGB numpy array of the frame.
         bays: iterable of {"id": str, "ring": [(x, y), ...]} in ENU metres.
         pose: dict with x, y, alt, yaw (a poses.json record).
+        index: optional BayIndex over `bays`. Given one, bays outside the camera
+            footprint are rejected by a vectorised distance test instead of being
+            projected vertex-by-vertex. Results are identical either way — the
+            test is conservative — but the per-frame cost stops scaling with the
+            size of the bay dataset, which is what keeps this affordable beyond
+            one city block.
 
     Returns a list of per-bay single-view results:
         {"bay_id", "occupied", "off", "feat"}
     mirroring exactly the candidate-view + usability logic of the batch script.
     """
+    if index is not None:
+        bays = index.visible(bays, pose["x"], pose["y"], footprint_reach(pose["alt"]))
     out = []
     for b in bays:
         ring_px = [project(x, y, pose) for x, y in b["ring"]]

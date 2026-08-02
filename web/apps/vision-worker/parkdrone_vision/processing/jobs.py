@@ -30,14 +30,14 @@ def enqueue(job: dict) -> None:
     _q.put(job)
 
 
-def start_workers(n: int, bays, hub, loop) -> None:
+def start_workers(n: int, bays, index, hub, loop) -> None:
     for _ in range(n):
         threading.Thread(
-            target=_worker_loop, args=(bays, hub, loop), daemon=True
+            target=_worker_loop, args=(bays, index, hub, loop), daemon=True
         ).start()
 
 
-def _worker_loop(bays, hub, loop) -> None:
+def _worker_loop(bays, index, hub, loop) -> None:
     conn = vision_db.connect()
     while True:
         job = _q.get()
@@ -51,6 +51,7 @@ def _worker_loop(bays, hub, loop) -> None:
                 job["pose"],
                 bays,
                 frame_id=job.get("frame_id"),
+                index=index,
             )
             if job.get("frame_id"):
                 web_db.mark_frame_processed(conn, job["frame_id"])

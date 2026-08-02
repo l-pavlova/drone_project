@@ -74,6 +74,25 @@ ENABLE_DEV_ROUTES = os.environ.get("ENABLE_DEV_ROUTES", "false").lower() == "tru
 # the GIL during array ops, so these parallelise real CV work off the event loop).
 CLASSIFY_THREADS = int(os.environ.get("CLASSIFY_THREADS", "4"))
 
+# ---- occupancy freshness ---------------------------------------------------
+# How far back an observation counts toward a bay's occupancy vote, and how old
+# a bay_state row may be before reads report it as unknown.
+#
+# MUST exceed the survey period. The vote is per (bay, survey_area) over this
+# window, so if a patrol takes longer than the window it expires its own early
+# bays before it lands — the 1 km route is 1976 waypoints, >60 min at cruise.
+OCCUPANCY_WINDOW_S = int(os.environ.get("OCCUPANCY_WINDOW_S", "7200"))  # 2 h
+
+# ---- retention (cleanup.py) ------------------------------------------------
+# Frames are transient classifier input: once scored, the pose lives on in
+# `observation` and the pixels are dead weight. After this age a frame's row and
+# its object-store image are deleted. `observation` and `mission` are KEPT —
+# they are the analytics history.
+FRAME_RETENTION_S = int(os.environ.get("FRAME_RETENTION_S", "14400"))  # 4 h
+# How often the background cleanup pass runs. 0 disables it (same escape hatch
+# as CLASSIFY_THREADS=0), which is how the tests drive cleanup by hand.
+CLEANUP_INTERVAL_S = int(os.environ.get("CLEANUP_INTERVAL_S", "900"))  # 15 min
+
 # ---- driving directions (GET /api/v1/route -> routing.py) -------------------
 # The browser never calls the router itself; we proxy, so user coordinates stay
 # on our origin and the provider is swappable. Defaults to the public OSRM demo

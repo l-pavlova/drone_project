@@ -29,8 +29,13 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse
 
-from .. import routing, s3
-from ..config import API_PORT, CLASSIFY_THREADS, ENABLE_DEV_ROUTES
+from .. import cleanup, routing, s3
+from ..config import (
+    API_PORT,
+    CLASSIFY_THREADS,
+    CLEANUP_INTERVAL_S,
+    ENABLE_DEV_ROUTES,
+)
 from ..db import vision_db, web_db
 from ..db.pool import borrow, close_pool, init_pool
 from ..processing import jobs
@@ -69,7 +74,7 @@ async def lifespan(app: FastAPI):
 
     init_pool()
     conn = vision_db.connect()
-    bays = vision_db.load_bays_enu(conn)
+    bays, bay_index = vision_db.load_bays_enu(conn)
     conn.close()
 
     loop = _loop = asyncio.get_running_loop()
@@ -80,10 +85,12 @@ async def lifespan(app: FastAPI):
     recovered = jobs.recover(rconn)
     rconn.close()
 
-    jobs.start_workers(CLASSIFY_THREADS, bays, hub, loop)
+    jobs.start_workers(CLASSIFY_THREADS, bays, bay_index, hub, loop)
+    sweeping = cleanup.start_thread()
     print(
         f"parkdrone server on :{API_PORT} — {len(bays)} bays, "
-        f"{CLASSIFY_THREADS} classify threads, recovered {recovered} queued frames"
+        f"{CLASSIFY_THREADS} classify threads, recovered {recovered} queued frames, "
+        f"frame cleanup {'every %ds' % CLEANUP_INTERVAL_S if sweeping else 'disabled'}"
     )
     yield
     close_pool()

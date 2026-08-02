@@ -9,6 +9,15 @@ but _asjson guards the case where a build returns text (double-encoding).
 """
 import json
 
+from ..config import OCCUPANCY_WINDOW_S
+
+# A bay_state row older than the freshness window is reported as unknown rather
+# than as its last known value: "this spot was free two hours ago" is not an
+# answer a driver can act on, and the schema already spells unknown as a NULL
+# `occupied`. Derived at read time on purpose — a sweeper that NULLed rows would
+# rewrite the whole table on every tick and lose the last reading for good.
+_FRESH = "s.updated_at > now() - make_interval(secs => %(window_s)s)"
+
 
 def _asjson(v):
     """Coerce a PostGIS json column to a Python object (parse if it came as text)."""
@@ -35,7 +44,8 @@ def feature_collection(conn, bbox=None, zona=None):
                     'properties', json_build_object(
                       'bay_id', b.bay_id, 'zona', b.zona, 'street', b.street,
                       'park_txt', b.park_txt, 'bearing_deg', b.bearing_deg, 'public', b.public,
-                      'occupied', s.occupied, 'confidence', s.confidence,
+                      'occupied', CASE WHEN {_FRESH} THEN s.occupied END,
+                      'confidence', CASE WHEN {_FRESH} THEN s.confidence END,
                       'last_frame', s.last_frame, 'updated_at', s.updated_at, 'source', s.source
                     )
                   ) AS feat
@@ -44,7 +54,7 @@ def feature_collection(conn, bbox=None, zona=None):
             WHERE ({env} IS NULL OR b.geom && {env})
               AND (%(zona)s::text IS NULL OR b.zona = %(zona)s)
          ) t"""
-    params = {"zona": zona}
+    params = {"zona": zona, "window_s": OCCUPANCY_WINDOW_S}
     if bbox:
         params.update(bbox)
     with conn.cursor() as cur:
@@ -54,16 +64,17 @@ def feature_collection(conn, bbox=None, zona=None):
 
 
 def summary(conn):
-    """Free/occupied/unknown counts grouped by zone."""
+    """Free/occupied/unknown counts grouped by zone (stale rows count as unknown)."""
     with conn.cursor() as cur:
         cur.execute(
-            """SELECT b.zona,
-                      COUNT(*) FILTER (WHERE s.occupied IS FALSE) AS free,
-                      COUNT(*) FILTER (WHERE s.occupied IS TRUE)  AS occupied,
-                      COUNT(*) FILTER (WHERE s.occupied IS NULL)  AS unknown
+            f"""SELECT b.zona,
+                      COUNT(*) FILTER (WHERE {_FRESH} AND s.occupied IS FALSE) AS free,
+                      COUNT(*) FILTER (WHERE {_FRESH} AND s.occupied IS TRUE)  AS occupied,
+                      COUNT(*) FILTER (WHERE NOT ({_FRESH}) OR s.occupied IS NULL) AS unknown
                  FROM bay b LEFT JOIN bay_state s USING (bay_id)
                 GROUP BY b.zona
-                ORDER BY b.zona"""
+                ORDER BY b.zona""",
+            {"window_s": OCCUPANCY_WINDOW_S},
         )
         rows = cur.fetchall()
     return [
@@ -76,12 +87,14 @@ def detail(conn, bay_id, history_limit=20):
     """One bay + current state + recent observations (default 20), or None."""
     with conn.cursor() as cur:
         cur.execute(
-            """SELECT b.bay_id, b.zona, b.street, b.park_txt, b.bearing_deg, b.public,
+            f"""SELECT b.bay_id, b.zona, b.street, b.park_txt, b.bearing_deg, b.public,
                       ST_AsGeoJSON(b.geom)::json AS geometry,
-                      s.occupied, s.confidence, s.last_frame, s.updated_at, s.source
+                      CASE WHEN {_FRESH} THEN s.occupied END,
+                      CASE WHEN {_FRESH} THEN s.confidence END,
+                      s.last_frame, s.updated_at, s.source
                  FROM bay b LEFT JOIN bay_state s USING (bay_id)
-                WHERE b.bay_id = %s""",
-            (bay_id,),
+                WHERE b.bay_id = %(bay_id)s""",
+            {"bay_id": bay_id, "window_s": OCCUPANCY_WINDOW_S},
         )
         bay = cur.fetchone()
         if bay is None:

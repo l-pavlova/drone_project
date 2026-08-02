@@ -119,9 +119,28 @@ hardening) remain.** See project memory `project-web-infra.md` for the running l
   enqueued; a duplicate ingest creates no job row. `ON DELETE CASCADE` means clearing a survey
   area's `frame` rows still clears its jobs.
 - **Bay ids: int in `block_bays.geojson`, string everywhere in the web tier**.
-- Frame ingest is idempotent on `UNIQUE(drone_id, survey_area, frame_idx)` — a re-send does NOT re-enqueue; to
-  reprocess a survey area, clear the `frame` table first.
+- Frame ingest is idempotent on `UNIQUE(drone_id, survey_area, frame_idx)` — a re-send does NOT
+  re-enqueue; to reprocess a survey area *within the retention window*, clear the `frame` table
+  first. Past `FRAME_RETENTION_S` the rows are gone anyway, so a re-send is ingested as new.
+- **Occupancy is a vote over a freshness window, not over all history** (`OCCUPANCY_WINDOW_S`,
+  default 2 h). Only observations inside the window count, and a `bay_state` row older than it is
+  reported as `occupied: null` (unknown) by every read path — derived at read time, not swept. The
+  window **must exceed the survey period**, or a long patrol expires its own early bays before it
+  lands (the 1 km route is >60 min).
+- **Frames are transient.** `cleanup.py` deletes `frame` rows and their stored images past
+  `FRAME_RETENTION_S` (4 h); `observation` and `mission` are kept as the analytics history. It
+  refuses to collect a frame whose job is still `queued` — that is unclassified work, and dropping
+  it silently would hide a stalled pipeline.
+- **Single replica is a correctness requirement, not a preference.** `jobs.recover()` re-enqueues
+  every `status='queued'` row with no ownership filter, so two replicas would both classify the
+  same backlog and double-count the vote; the WebSocket hub and its replay cursor are also
+  per-process. Scaling out needs job claiming, a shared delta channel and a global cursor first —
+  see `docs/web_infra_plan.md`. Throughput is not the reason to: ~103 frames/s per classify thread
+  against ~0.5 frames/s per drone.
 - The server classifies **all** visible bays (production has no ground truth); `gt` is eval-only.
+- `score_frame` takes an optional `BayIndex` and rejects bays outside the camera footprint before
+  projecting them (footprint half-width is `alt*tan(FOV/2)`). Results are identical — the test is
+  conservative — but per-frame cost stops scaling with the size of the bay dataset.
 
 ### Run it (dev)
 ```bash
@@ -144,9 +163,14 @@ Verification harnesses (all Python, run from `apps/vision-worker`):
   (expect 43/43 match vs `occupancy_results.json`, 100% vs GT). Imports the classifier only — no
   server needed.
 - Full stack E2E: register a drone `python -m parkdrone_vision.register_drone drone-1`, then
-  `API_KEY=<key> python -m parkdrone_vision.replay_ingest fmi_block` (expect WS deltas received +
-  final `/bays` matching the offline result). To re-run, first clear the survey area's `frame` rows
-  (idempotency skips duplicates).
+  `API_KEY=<key> python -m parkdrone_vision.replay_ingest fmi_block` (expect 52 WS deltas + final
+  `/bays` matching the offline result, 43/43). To re-run, clear the survey area's `frame`,
+  `observation` **and `bay_state`** rows first: `frame` because idempotency skips duplicates, and
+  the other two because deltas only fire on a *change* — replay straight after the golden test
+  leaves the state already correct and reports a green "0 deltas".
+- Frame retention: `python -m parkdrone_vision.cleanup` runs one sweep by hand (the server also
+  runs it every `CLEANUP_INTERVAL_S`; set that to 0 to disable). Exits 1 if it found frames past
+  retention still queued, so a scheduler surfaces a stalled pipeline.
 
 ### Dev/test occupancy toggle (drive the dashboard by hand)
 Manual override endpoints (mounted only when `ENABLE_DEV_ROUTES=true` — they have no auth, so the
