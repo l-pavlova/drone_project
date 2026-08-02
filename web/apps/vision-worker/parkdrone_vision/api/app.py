@@ -43,18 +43,39 @@ from .hub import Hub
 # FMI block origin — matches the ENU ORIGIN used across the project (and dev.ts).
 FMI = {"lon": 23.3298956, "lat": 42.6747105}
 
+# Process-wide singletons built in lifespan. They are reached through the
+# dependency providers below rather than `app.state`, which FastAPI discourages
+# ("for most of the cases you would instead use FastAPI dependencies") — that
+# way a handler declares what it needs and a test can swap it via
+# app.dependency_overrides. The classify threads don't go through either: they
+# receive hub/loop as plain arguments from start_workers.
+_hub: Hub | None = None
+_loop: asyncio.AbstractEventLoop | None = None
+
+
+def get_hub() -> Hub:
+    if _hub is None:  # only reachable if lifespan never ran
+        raise RuntimeError("hub not initialised")
+    return _hub
+
+
+def get_loop() -> asyncio.AbstractEventLoop:
+    if _loop is None:
+        raise RuntimeError("event loop not captured")
+    return _loop
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _hub, _loop
+
     init_pool()
     conn = vision_db.connect()
     bays = vision_db.load_bays_enu(conn)
     conn.close()
 
-    loop = asyncio.get_running_loop()
-    hub = Hub()
-    app.state.hub = hub
-    app.state.loop = loop
+    loop = _loop = asyncio.get_running_loop()
+    hub = _hub = Hub()
 
     # crash recovery: rebuild the in-memory queue from unscored frame rows
     rconn = vision_db.connect()
@@ -219,7 +240,7 @@ def get_route(origin: str = Query(..., alias="from"), to: str = Query(...)):
 
 # ---- dev/test manual occupancy toggle --------------------------------------
 
-def _set_occupancy(bay_id: str | None, occupied: bool):
+def _set_occupancy(bay_id: str | None, occupied: bool, hub: Hub, loop):
     with borrow(commit=True) as conn:
         if bay_id and bay_id.strip():
             target = bay_id.strip() if web_db.bay_exists(conn, bay_id.strip()) else None
@@ -230,18 +251,27 @@ def _set_occupancy(bay_id: str | None, occupied: bool):
         updated_at = web_db.upsert_state(conn, target, occupied, 1, None, "manual")
     ua = updated_at.isoformat()
     delta = {"bay_id": target, "occupied": occupied, "confidence": 1, "updated_at": ua}
-    asyncio.run_coroutine_threadsafe(app.state.hub.broadcast([delta]), app.state.loop).result()
+    # sync handler on a threadpool thread -> the loop's only thread-safe door
+    asyncio.run_coroutine_threadsafe(hub.broadcast([delta]), loop).result()
     return {"bay_id": target, "occupied": occupied, "updated_at": ua}
 
 
 if ENABLE_DEV_ROUTES:
     @app.post("/api/v1/dev/occupy")
-    def dev_occupy(bay_id: str | None = None):
-        return _set_occupancy(bay_id, True)
+    def dev_occupy(
+        bay_id: str | None = None,
+        hub: Hub = Depends(get_hub),
+        loop: asyncio.AbstractEventLoop = Depends(get_loop),
+    ):
+        return _set_occupancy(bay_id, True, hub, loop)
 
     @app.post("/api/v1/dev/free")
-    def dev_free(bay_id: str | None = None):
-        return _set_occupancy(bay_id, False)
+    def dev_free(
+        bay_id: str | None = None,
+        hub: Hub = Depends(get_hub),
+        loop: asyncio.AbstractEventLoop = Depends(get_loop),
+    ):
+        return _set_occupancy(bay_id, False, hub, loop)
 
     print("dev routes enabled: POST /api/v1/dev/occupy | /free")
 
@@ -249,11 +279,10 @@ if ENABLE_DEV_ROUTES:
 # ---- realtime occupancy push ----------------------------------------------
 
 @app.websocket("/ws/occupancy")
-async def ws_occupancy(ws: WebSocket):
+async def ws_occupancy(ws: WebSocket, hub: Hub = Depends(get_hub)):
     await ws.accept()
     raw = ws.query_params.get("since")
     since = int(raw) if raw and raw.isdigit() else None
-    hub: Hub = app.state.hub
     await hub.connect(ws, since)
     try:
         while True:
