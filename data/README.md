@@ -13,6 +13,22 @@ Download note (Windows): `curl --ssl-no-revoke`.
 
 Other ids on the API (not downloaded): zones 470 (2016), 291 (2019); spaces 181 (2019), 274 (2016).
 
+Derived files, written by the scripts in `tools/` (the sim reads these, not the raw datasets):
+
+| File | Written by | What | Geometry |
+|------|-----------|------|----------|
+| `block_spaces.geojson` | `cut_block.py` | spaces inside the demo block; carries `_center`/`_half_m` | Point |
+| `block_bays.geojson` | `make_bays.py` | space points widened into oriented bay rectangles | Polygon |
+| `block_roads.geojson` | `get_roads.py` | OSM street centerlines (`name`, `highway`, `lanes`, `oneway`) | LineString |
+| `block_areas.geojson` | `get_areas.py` | OSM building footprints + green areas (sim scenery) | Polygon |
+
+`block_areas.geojson` properties: `osm_id`, `kind` (`"building"` or `"green"`), `name`, the raw
+tags `building` / `landuse` / `leisure` / `natural`, and the raw height tags `height`, `levels`
+(`building:levels`), `min_levels` (`building:min_level`). Heights are transcribed **unparsed** —
+`generate_world.py`'s `parse_height()` interprets them, the same split as `lanes` → `road_width()`.
+Only closed ways become polygons; multipolygon **relations are skipped** (nothing downstream can
+express a hole), and both skipped counts are printed by the fetcher rather than hidden.
+
 ## `zones_34.geojson` — zone polygons (for route planning / which streets are payable)
 
 Props: `razshireni` = zone type (`"Зелена зона"` green ×34, `"Синя зона"` blue ×5, null ×9),

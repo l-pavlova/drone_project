@@ -1,5 +1,5 @@
 # PARKDRONE — Simulation Documentation (thesis draft)
-
+#add skill https://github.com/anthropics/skills/blob/main/skills/doc-coauthoring/SKILL.md
 *Draft for thesis use. Covers the problem statement, the data and world-building
 pipeline, the simulation scales, the flight controller, waypoint navigation, and
 the evolution of the route-planning algorithm (DFS → rural postman). Numbers are
@@ -128,6 +128,30 @@ World contents:
   instead of clipping segments would drop streets that merely cross the
   window). Road heights are staggered by millimetres to avoid z-fighting at
   intersections.
+- **Green areas**: OSM `landuse=grass|meadow|forest`, `leisure=park|garden` and
+  `natural=scrub|wood` polygons, triangulated (ear clipping — Webots renders
+  non-convex faces unreliably) and painted at z = 0.005: above the ground and
+  *below* the road ribbons, so a park that crosses a street renders under the
+  asphalt and can never cover a bay. Unlike buildings they are **clipped** to
+  the window (Sutherland–Hodgman), because an unclipped 1 km park would carpet
+  the whole visible ground of the 150 m world.
+- **Buildings**: OSM footprints as Webots `SimpleBuilding` protos, at their real
+  heights — `building:levels` where mapped, else the `height` tag (split into
+  whole floors of an adjusted height so the total stays exact), else four
+  floors, the Lozenets panel-block norm. A building is kept or dropped *whole*
+  by its centroid rather than clipped: it is a 3D object, not ground paint, and
+  a clipped footprint can come back self-touching and break the proto's roof
+  triangulation. Footprints past 24 corners collapse to their PCA-oriented
+  bounding box.
+- **Light poles**: `StreetLight` protos walked along the street centerlines at
+  an adaptive spacing (25 m on the small worlds, opening up on the 1 km world so
+  the count stays bounded), one kerb-width plus 1 m off the centerline,
+  alternating sides. A candidate that would stand on a painted bay tries the
+  other kerb and is otherwise skipped — a pole on the paint would be a
+  ground-truth bug, not scene realism. Their built-in spot light is switched
+  **off**: the proto ships a 1000 m-radius `SpotLight`, and hundreds of those
+  would both wreck performance and shift the daylight exposure that the
+  classifier's brightness thresholds are calibrated against.
 - **Painted bays**: thin white boxes at each bay rectangle.
 - **Parked cars**: each *public* bay is occupied with probability
   `occupied_fraction` (default 0.5). Occupied bays hold one of seven real
@@ -155,8 +179,23 @@ Two placement details matter for realism:
   bodies across all generated worlds.
 
 **Determinism.** Occupancy uses a seeded RNG (`random.seed(42)`); car model and
-colour choices come from a *separate* stream (`random.Random(7)`), so cosmetic
-changes to car placement never change the ground truth.
+colour choices come from a *separate* stream (`random.Random(7)`), and the
+scenery's cosmetic choices from a third (`random.Random(11)`), so neither
+parked cars nor scenery can shift the ground truth. Adding the scenery was
+verified this way: all three worlds' `ground_truth.json` and `route.json` are
+byte-identical before and after.
+
+**Obstacles and the flight path.** The buildings carry no bounding object by
+default (`--collide` turns them on). The controller holds a fixed 30 m and has
+no obstacle logic whatsoever, so collision geometry would simply crash it into
+the first tall block under the route; Webots range sensors, on the other hand,
+only detect nodes that *have* a bounding object, so the switch is what the
+obstacle-avoidance stage will flip. Either way the generator reports the
+conflict: buildings that reach the flight level within 10 m of the route are
+printed as a warning and written to `<name>.hazards.json` (id, height, distance
+to the route, centroid in the shared local metres). On the 1 km world 7
+structures reach 30 m and 3 of them sit beside the route — the tallest, 42 m,
+is 8.6 m from the centerline.
 
 ## 5. Simulation scales
 
@@ -164,11 +203,11 @@ The same generator covers all scales; each world is an independent file set
 with its own route and ground truth, and the controller writes its captures to
 a per-survey-area output folder (`sim/output/<survey_area>/frame_###.png`, `poses.json`):
 
-| world | half-size | bays | cars | routed streets | route | waypoints |
-|---|---|---|---|---|---|---|
-| `fmi_block` (default) | 75 m | 45 | 17 | 2 | 286 m | 34 |
-| `fmi_block_4st` (test) | 130 m | 111 | 49 | 4 | 871 m | 97 |
-| `fmi_block_1km` | 500 m | 1,593 | 727 | 45 (+4 PCA-fallback) | 19.0 km | 1,976 |
+| world | half-size | bays | cars | buildings | greens | poles | routed streets | route | waypoints |
+|---|---|---|---|---|---|---|---|---|---|
+| `fmi_block` (default) | 75 m | 45 | 17 | 28 | 8 | 8 | 2 | 286 m | 34 |
+| `fmi_block_4st` (test) | 130 m | 111 | 49 | 67 | 13 | 23 | 4 | 871 m | 97 |
+| `fmi_block_1km` | 500 m | 1,593 | 727 | 775 | 38 | 375 | 45 (+4 PCA-fallback) | 19.0 km | 1,976 |
 
 The default world is the regression baseline (its route has been flown and
 verified repeatedly); the 4-street world exercises junctions, dead-end
@@ -483,6 +522,28 @@ with harder rendering (textures, shadows, lighting variation) or real
 imagery — the projection, view-selection and scoring stages are
 classifier-agnostic either way.
 
+### 8.2 First measured effect of the scenery
+
+Adding buildings, greenery and light poles (section 4) and re-flying the
+held-out world moved it off saturation for the first time:
+
+| `fmi_block_4st` | classified | TP | TN | FP | FN | accuracy |
+|---|---|---|---|---|---|---|
+| before scenery | 111/111 | 49 | 62 | 0 | 0 | 100% |
+| with scenery | 111/111 | 49 | 61 | 1 | 0 | **99.1%** |
+
+The single false positive is diagnostic rather than noise. Bay 17579 was
+photographed from 110 px off-nadir, and a 7 m light pole standing *beside* it
+leans across it under that parallax; the dark pole pixels put the core's dark
+fraction at 0.03 against a 0.02 threshold, with brightness at 82 — exactly on
+the envelope's lower bound. The pole does not stand on the paint (the generator
+rejects that placement); it overhangs from above, which a real street lamp does
+too. So this is the intended kind of hard case: a physically real occlusion, not
+a rendering artifact — and it is a failure mode a core-crop colour heuristic
+cannot fix, since the occluding object is genuinely inside the crop. It is the
+first concrete argument in this project for the learned classifier, and it comes
+with a labelled example.
+
 ## 9. Verification methodology
 
 There is no unit-test suite; verification is empirical and scripted:
@@ -595,7 +656,23 @@ the unchanged layers above it.
   uniform lighting and untextured surfaces. It will not survive shadows,
   surface texture, weathered markings or real imagery — the step to a learned
   classifier over the identical bay crops belongs together with making the
-  scene harder, so that the comparison is meaningful.
+  scene harder, so that the comparison is meaningful. The scenery (section 4)
+  is the first instalment of that hardening, and a bounded one: the classifier
+  samples only the lengthwise *core* of each bay, so scenery that merely sits
+  beside a bay never enters the sampled pixels. It still cost the first point
+  of accuracy the project has lost — 100% → 99.1% on the held-out world, one
+  false positive from a light pole leaning across a bay under parallax
+  (section 8.2). The other exposed surface is bays that sit **on** a green
+  polygon: none in the two small worlds, 31 in the 1 km one, so that world is
+  where the next measurement should be taken.
+- **Shadows are the real hardening lever, and are deliberately still off.**
+  `castShadows FALSE` on the sun is not an aesthetic choice: shadow mapping over
+  a 1.2 km ground plane painted streak artifacts across the nadir frames. Turning
+  it on would therefore harden the classifier against a *rendering defect* rather
+  than against real shading, and doing it in the same step as the scenery would
+  make any accuracy change unattributable. The right sequence is its own
+  experiment — a window-sized ground plane or a tighter shadow frustum first,
+  measured on its own — alongside the learned classifier that has to survive it.
 - **Cruise speed**: capped at 2.5 m/s — a 5 m/s trial crashed the
   neighbourhood patrol at a fast junction turn (section 7.4), and with
   waypoints every 10 m the approach ramp keeps the median speed near 2.5 m/s

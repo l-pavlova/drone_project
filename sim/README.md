@@ -1,17 +1,20 @@
 # PARKDRONE — Webots simulation
 
-A simulated FMI-block neighbourhood: ground, painted parking bays (from the real
-Sofia dataset), parked cars on a known-occupancy subset, and a Mavic 2 PRO drone
-with a downward camera that flies a lawnmower patrol and saves frames.
+A simulated FMI-block neighbourhood: ground, streets, painted parking bays (from
+the real Sofia dataset), parked cars on a known-occupancy subset, OSM buildings /
+green areas / light poles as scenery, and a Mavic 2 PRO drone with a downward
+camera that flies a patrol and saves frames.
 
 ## Layout
 
 ```
 sim/
   generate_world.py            # builds worlds/fmi_block.wbt from ../data/block_bays.geojson
+                               # (+ block_roads.geojson streets, block_areas.geojson scenery)
   worlds/
     fmi_block.wbt              # the generated world  (regenerate any time)
     ground_truth.json         # bay_id -> occupied (true labels for scoring detection)
+    <name>.hazards.json       # buildings that reach the 30 m flight level near the route
   controllers/parkdrone/
     parkdrone.py              # flight + lawnmower patrol + frame capture
   output/                     # frame_###.png + poses.json (created on run)

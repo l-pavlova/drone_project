@@ -8,7 +8,7 @@ keeps a square window around the centre, and writes:
   worlds/ground_truth.json    - bay_id -> occupied (for detection evaluation)
 
 Usage:
-    python generate_world.py [window_half_m] [occupied_fraction] [survey_area]
+    python generate_world.py [window_half_m] [occupied_fraction] [survey_area] [--collide]
     python generate_world.py 75 0.5                    # default fmi_block.wbt
     python generate_world.py 500 0.5 fmi_block_1km     # separate big world:
         writes fmi_block_1km.wbt + fmi_block_1km.route.json +
@@ -16,6 +16,14 @@ Usage:
         hands its route file to the controller via controllerArgs, so both
         worlds coexist and stay runnable (default keeps legacy route.json /
         ground_truth.json names).
+
+--collide gives the buildings a bounding object. OFF by default: the controller
+flies a fixed 30 m with no obstacle logic at all, so collision geometry would
+crash the drone on any tall block under the route (and burn the >1 h 1 km
+patrol). Webots range sensors only see nodes that HAVE a bounding object, so
+the obstacle-avoidance work turns this on and regenerates. Note StreetLight has
+no bounding object to enable - sensing poles will need a sibling Solid with a
+Cylinder bounding object, which belongs to that task.
 
 NOTE: not run/verified here — needs Webots installed to open. The Mavic2Pro proto
 is pulled via EXTERNPROTO pinned to R2023b; if your Webots differs, change WEBOTS_VER.
@@ -25,12 +33,15 @@ import json, os, math, sys, random, heapq
 HERE = os.path.dirname(__file__)
 BAYS = os.path.join(HERE, "..", "data", "block_bays.geojson")
 ROADS = os.path.join(HERE, "..", "data", "block_roads.geojson")
+AREAS = os.path.join(HERE, "..", "data", "block_areas.geojson")
 WORLDS = os.path.join(HERE, "worlds")
 os.makedirs(WORLDS, exist_ok=True)
 
-WINDOW = float(sys.argv[1]) if len(sys.argv) > 1 else 75.0       # half-size, metres
-OCC = float(sys.argv[2]) if len(sys.argv) > 2 else 0.5
-NAME = sys.argv[3] if len(sys.argv) > 3 else "fmi_block"
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+COLLIDE = "--collide" in sys.argv          # see the docstring: off by default
+WINDOW = float(args[0]) if len(args) > 0 else 75.0               # half-size, metres
+OCC = float(args[1]) if len(args) > 1 else 0.5
+NAME = args[2] if len(args) > 2 else "fmi_block"
 # the default world keeps the legacy file names (controller falls back to them)
 ROUTE_FILE = "route.json" if NAME == "fmi_block" else f"{NAME}.route.json"
 GT_FILE = "ground_truth.json" if NAME == "fmi_block" else f"{NAME}.ground_truth.json"
@@ -444,6 +455,8 @@ parts.append(f"#VRML_SIM {WEBOTS_VER} utf8")
 parts.append(f'EXTERNPROTO "{GH}/robots/dji/mavic/protos/Mavic2Pro.proto"')
 parts.append(f'EXTERNPROTO "{GH}/objects/road/protos/Road.proto"')
 parts.append(f'EXTERNPROTO "{GH}/objects/road/protos/RoadLine.proto"')
+parts.append(f'EXTERNPROTO "{GH}/objects/buildings/protos/SimpleBuilding.proto"')
+parts.append(f'EXTERNPROTO "{GH}/objects/traffic/protos/StreetLight.proto"')
 for path in CAR_PROTOS.values():
     parts.append(f'EXTERNPROTO "{GH}/vehicles/protos/{path}.proto"')
 parts.append("""WorldInfo { basicTimeStep 8 }
@@ -516,6 +529,162 @@ def clip_polyline(pts, lim):
     if run:
         runs.append(run)
     return [r for r in runs if len(r) >= 2]
+
+# --- polygons (scenery: OSM building footprints and green areas). The road
+# helpers above are Liang-Barsky on LINES and cannot clip an area, so rings get
+# Sutherland-Hodgman; and a concave ring needs explicit triangulation because
+# Webots renders non-convex IndexedFaceSet faces unreliably.
+# Convention here: a ring is OPEN (no repeated closing point), like the bay
+# rings after ring_center()'s [:-1].
+
+def poly_area(ring):
+    """Signed shoelace area (positive = counter-clockwise)."""
+    n = len(ring)
+    return 0.5 * sum(ring[i][0] * ring[(i+1) % n][1] - ring[(i+1) % n][0] * ring[i][1]
+                     for i in range(n))
+
+def poly_centroid(ring):
+    """Area centroid; falls back to the vertex mean for a degenerate ring."""
+    n = len(ring)
+    a = poly_area(ring)
+    if abs(a) < 1e-9:
+        return sum(p[0] for p in ring) / n, sum(p[1] for p in ring) / n
+    cx = cy = 0.0
+    for i in range(n):
+        x0, y0 = ring[i]
+        x1, y1 = ring[(i+1) % n]
+        cr = x0 * y1 - x1 * y0
+        cx += (x0 + x1) * cr
+        cy += (y0 + y1) * cr
+    return cx / (6 * a), cy / (6 * a)
+
+def point_in_poly(p, ring):
+    """Ray cast; True if p is inside the ring."""
+    x, y = p
+    inside = False
+    n = len(ring)
+    for i in range(n):
+        x0, y0 = ring[i]
+        x1, y1 = ring[(i+1) % n]
+        if (y0 > y) != (y1 > y) and x < x0 + (y - y0) * (x1 - x0) / (y1 - y0):
+            inside = not inside
+    return inside
+
+def simplify_ring(ring, tol=0.5):
+    """Drop sub-tol steps, then Douglas-Peucker the ring at tol metres."""
+    pts = [ring[0]]
+    for p in ring[1:]:
+        if math.hypot(p[0] - pts[-1][0], p[1] - pts[-1][1]) > tol:
+            pts.append(p)
+    if len(pts) > 2 and math.hypot(pts[0][0] - pts[-1][0], pts[0][1] - pts[-1][1]) <= tol:
+        pts.pop()
+    if len(pts) < 4:
+        return pts
+
+    def dp(seq):
+        if len(seq) < 3:
+            return seq
+        a, b = seq[0], seq[-1]
+        k, dmax = 0, -1.0
+        for i in range(1, len(seq) - 1):
+            d = _pt_seg_d2(seq[i][0], seq[i][1], a[0], a[1], b[0], b[1])
+            if d > dmax:
+                k, dmax = i, d
+        if dmax <= tol * tol:
+            return [a, b]
+        return dp(seq[:k+1])[:-1] + dp(seq[k:])
+
+    # DP the closed ring as a path that starts and ends on the first vertex
+    out = dp(pts + [pts[0]])[:-1]
+    return out if len(out) >= 3 else pts
+
+def clip_polygon(ring, lim):
+    """Sutherland-Hodgman: the part of the ring inside |x|,|y| <= lim ([] if none)."""
+    def half(poly, keep, cut):
+        out = []
+        for i in range(len(poly)):
+            cur, prv = poly[i], poly[i-1]
+            if keep(cur):
+                if not keep(prv):
+                    out.append(cut(prv, cur))
+                out.append(cur)
+            elif keep(prv):
+                out.append(cut(prv, cur))
+        return out
+
+    edges = (
+        (lambda p: p[0] <= lim,  lambda a, b: (lim,  a[1] + (b[1]-a[1]) * (lim - a[0]) / (b[0]-a[0]))),
+        (lambda p: p[0] >= -lim, lambda a, b: (-lim, a[1] + (b[1]-a[1]) * (-lim - a[0]) / (b[0]-a[0]))),
+        (lambda p: p[1] <= lim,  lambda a, b: (a[0] + (b[0]-a[0]) * (lim - a[1]) / (b[1]-a[1]),  lim)),
+        (lambda p: p[1] >= -lim, lambda a, b: (a[0] + (b[0]-a[0]) * (-lim - a[1]) / (b[1]-a[1]), -lim)),
+    )
+    poly = list(ring)
+    for keep, cut in edges:
+        if not poly:
+            return []
+        poly = half(poly, keep, cut)
+    return poly if len(poly) >= 3 else []
+
+def _in_tri(p, a, b, c):
+    d1 = (p[0]-b[0]) * (a[1]-b[1]) - (a[0]-b[0]) * (p[1]-b[1])
+    d2 = (p[0]-c[0]) * (b[1]-c[1]) - (b[0]-c[0]) * (p[1]-c[1])
+    d3 = (p[0]-a[0]) * (c[1]-a[1]) - (c[0]-a[0]) * (p[1]-a[1])
+    return not ((d1 < 0 or d2 < 0 or d3 < 0) and (d1 > 0 or d2 > 0 or d3 > 0))
+
+def triangulate(ring):
+    """Ear clipping -> list of (i, j, k) index triples, counter-clockwise.
+    Returns [] on a self-intersecting ring (no ear found) rather than garbage."""
+    if len(ring) < 3:
+        return []
+    idx = list(range(len(ring)))
+    if poly_area(ring) < 0:
+        idx.reverse()          # work counter-clockwise
+    tris = []
+    while len(idx) > 3:
+        for k in range(len(idx)):
+            i0, i1, i2 = idx[k-1], idx[k], idx[(k+1) % len(idx)]
+            a, b, c = ring[i0], ring[i1], ring[i2]
+            if (b[0]-a[0]) * (c[1]-a[1]) - (b[1]-a[1]) * (c[0]-a[0]) <= 0:
+                continue       # reflex vertex, not an ear
+            if any(_in_tri(ring[j], a, b, c) for j in idx if j not in (i0, i1, i2)):
+                continue       # another vertex sits in the ear
+            tris.append((i0, i1, i2))
+            idx.pop(k)
+            break
+        else:
+            return []          # degenerate ring
+    tris.append(tuple(idx))
+    return tris
+
+# Building heights. OSM gives either building:levels or a metric height; where
+# there is neither, Lozenets is panel blocks, so assume DEFAULT_LEVELS.
+FLOOR_H = 3.0
+DEFAULT_LEVELS = 4
+MAX_LEVELS = 40
+
+def _num(s):
+    """A number out of a raw OSM tag ('12', '12,5', '12 m', "40'", '5;6')."""
+    if not s:
+        return None
+    s = str(s).split(";")[0].strip().lower().replace(",", ".")
+    feet = s.endswith("'") or s.endswith("ft")
+    s = s.rstrip("'").removesuffix("ft").removesuffix("m").strip()
+    try:
+        v = float(s)
+    except ValueError:
+        return None
+    return v * 0.3048 if feet else v
+
+def parse_height(pr):
+    """(floor_count, floor_height) for SimpleBuilding, from the raw OSM tags."""
+    lv = _num(pr.get("levels"))
+    if lv and lv >= 1:
+        return min(MAX_LEVELS, int(round(lv))), FLOOR_H
+    h = _num(pr.get("height"))
+    if h and h > 0:
+        n = max(1, min(MAX_LEVELS, int(round(h / FLOOR_H))))
+        return n, h / n            # keep the TOTAL height exact
+    return DEFAULT_LEVELS, FLOOR_H
 
 def _pt_seg_d2(px, py, ax, ay, bx, by):
     """Squared distance from point to segment."""
@@ -598,6 +767,98 @@ if os.path.exists(ROADS):
 else:
     print("WARNING: no block_roads.geojson (run tools/get_roads.py) - world has no streets")
 
+# --- scenery: OSM building footprints and green areas (block_areas.geojson,
+# written by tools/get_areas.py), projected with the same lon0/lat0.
+#
+# Buildings and greens are windowed DIFFERENTLY, on purpose:
+#   * a green area is ground paint, so it is CLIPPED - an unclipped 1 km park
+#     would carpet the whole visible ground of the 75 m world;
+#   * a building is a 3D object, so it is kept or dropped WHOLE by its centroid.
+#     The ground plane runs to 2*WINDOW+200 anyway, and a clipped footprint can
+#     come back self-touching, which breaks SimpleBuilding's roof triangulation.
+# The count caps are inert at WINDOW 75/130 and only bite at 500; largest-area
+# first, so what the 1 km world loses is the least visually significant.
+BUILDING_MARGIN = 40.0
+GREEN_MARGIN = 10.0
+MIN_BUILDING_AREA = 25.0      # m2 - drops shed/garage noise
+MIN_GREEN_AREA = 40.0
+MAX_CORNERS = 24              # past this a building becomes its bounding box
+MAX_GREEN_CORNERS = 64        # ear clipping is O(n^3); simplify harder instead
+MAX_BUILDINGS = 1400
+MAX_GREENS = 300
+
+def obb_ring(ring):
+    """The footprint's oriented bounding box (PCA axis), as a 4-corner ring."""
+    (cx, cy), (dx, dy) = fit_axis(ring)
+    us = [(p[0] - cx) * dx + (p[1] - cy) * dy for p in ring]
+    vs = [-(p[0] - cx) * dy + (p[1] - cy) * dx for p in ring]
+    mu, mv = (min(us) + max(us)) / 2, (min(vs) + max(vs)) / 2
+    return rect_corners(cx + mu * dx - mv * dy, cy + mu * dy + mv * dx,
+                        math.atan2(dy, dx), max(us) - min(us), max(vs) - min(vs))
+
+buildings, greens = [], []
+if os.path.exists(AREAS):
+    drop = {}
+    def _drop(why):
+        drop[why] = drop.get(why, 0) + 1
+    n_boxed = 0
+    for f in json.load(open(AREAS, encoding="utf-8"))["features"]:
+        pr = f["properties"]
+        ring = [((lon - lon0) * mlon, (lat - lat0) * mlat)
+                for lon, lat in f["geometry"]["coordinates"][0][:-1]]
+        ring = simplify_ring(ring, 0.5)
+        if len(ring) < 3:
+            _drop("degenerate")
+            continue
+        if pr.get("kind") == "building":
+            cx, cy = poly_centroid(ring)
+            if abs(cx) > WINDOW + BUILDING_MARGIN or abs(cy) > WINDOW + BUILDING_MARGIN:
+                _drop("outside")
+                continue
+            area = abs(poly_area(ring))
+            if area < MIN_BUILDING_AREA:
+                _drop("small")
+                continue
+            if len(ring) > MAX_CORNERS:
+                ring = obb_ring(ring)
+                cx, cy = poly_centroid(ring)
+                n_boxed += 1
+            levels, floor_h = parse_height(pr)
+            buildings.append({"id": pr.get("osm_id"), "ring": ring, "cx": cx, "cy": cy,
+                              "levels": levels, "floor_h": floor_h, "area": area,
+                              "top": levels * floor_h})
+        else:
+            ring = clip_polygon(ring, WINDOW + GREEN_MARGIN)
+            if len(ring) < 3:
+                _drop("outside")
+                continue
+            for tol in (0.5, 1.0, 2.0, 4.0, 8.0):
+                if len(ring) <= MAX_GREEN_CORNERS:
+                    break
+                ring = simplify_ring(ring, tol)
+            if len(ring) > MAX_GREEN_CORNERS:
+                ring = obb_ring(ring)
+                n_boxed += 1
+            area = abs(poly_area(ring))
+            if area < MIN_GREEN_AREA:
+                _drop("small")
+                continue
+            kind = pr.get("landuse") or pr.get("leisure") or pr.get("natural") or "grass"
+            greens.append({"id": pr.get("osm_id"), "ring": ring, "kind": kind, "area": area})
+
+    buildings.sort(key=lambda b: -b["area"])
+    greens.sort(key=lambda g: -g["area"])
+    if len(buildings) > MAX_BUILDINGS:
+        drop["over cap"] = drop.get("over cap", 0) + len(buildings) - MAX_BUILDINGS
+        del buildings[MAX_BUILDINGS:]
+    if len(greens) > MAX_GREENS:
+        drop["over cap"] = drop.get("over cap", 0) + len(greens) - MAX_GREENS
+        del greens[MAX_GREENS:]
+    print(f"scenery: {len(buildings)} buildings, {len(greens)} green areas"
+          f"   (dropped {dict(sorted(drop.items()))}, {n_boxed} reduced to a bounding box)")
+else:
+    print("WARNING: no block_areas.geojson (run tools/get_areas.py) - world has no scenery")
+
 rng_cars = random.Random(7)   # separate stream so ground_truth.json stays stable
 
 # Bays look like real Sofia street parking: an asphalt pad with a thin white
@@ -670,7 +931,198 @@ parts.append(f"""Mavic2Pro {{
   controllerArgs [ "{ROUTE_FILE}" ]
 }}""")
 
+# ---------------------------------------------------------------------------
+# Scenery emission. Appended AFTER the drone so the road/bay/car region of the
+# generated .wbt stays byte-identical - a 2 MB generated file is only
+# reviewable if new content lands at the end.
+rng_scene = random.Random(11)   # third stream: cosmetics only, so that neither
+                                # ground_truth.json (module random, seed 42) nor
+                                # the parked cars (rng_cars, seed 7) can shift
+
+# Green areas are painted at z = 0.005: above the ground plane (0.0) and BELOW
+# the roads (0.01+), so a park polygon that crosses a street renders under the
+# asphalt and can never cover a bay pad (0.04-0.06) or its paint (0.059-0.071).
+# Per the "harden the scene" decision, greenery is NOT subtracted around bays -
+# it runs to the kerb and under bay rows wherever OSM says so.
+GREEN_Z = 0.005
+GREEN_COLORS = {"grass": (0.35, 0.52, 0.24), "meadow": (0.35, 0.52, 0.24),
+                "park": (0.32, 0.48, 0.22), "garden": (0.32, 0.48, 0.22),
+                "forest": (0.20, 0.35, 0.16), "wood": (0.20, 0.35, 0.16),
+                "scrub": (0.24, 0.38, 0.18)}
+
+n_green = 0
+for g in greens:
+    tris = triangulate(g["ring"])
+    if not tris:
+        continue                # self-intersecting ring; skip rather than emit garbage
+    r, gr, b = GREEN_COLORS.get(g["kind"], GREEN_COLORS["grass"])
+    jit = lambda c: max(0.0, min(1.0, c + rng_scene.uniform(-0.02, 0.02)))
+    pts = ", ".join(f"{x:.2f} {y:.2f} {GREEN_Z}" for x, y in g["ring"])
+    idx = " ".join(f"{i} {j} {k} -1" for i, j, k in tris)
+    parts.append(f"""Solid {{
+  name "green_{g['id']}"
+  children [ Shape {{
+    appearance PBRAppearance {{ baseColor {jit(r):.3f} {jit(gr):.3f} {jit(b):.3f} roughness 1 metalness 0 }}
+    geometry IndexedFaceSet {{
+      coord Coordinate {{ point [ {pts} ] }}
+      coordIndex [ {idx} ]
+    }}
+  }} ]
+}}""")
+    n_green += 1
+
+# Diagnostic, not a filter: how many bays now sit on grass. If the classifier's
+# accuracy moves after this change, this number is the first thing to look at.
+on_grass = sum(1 for b in bays
+               if any(point_in_poly((b["x"], b["y"]), g["ring"]) for g in greens))
+if greens:
+    print(f"scenery: {n_green} green areas painted   ({on_grass} bays sit on one)")
+
+# Buildings: SimpleBuilding takes the footprint ring directly (`corners`, node-
+# local), fixes the winding itself and handles non-convex rings, so no hand-
+# written IndexedFaceSet. Flat roofs - Sofia panel blocks, and it also avoids
+# the proto degrading a "pyramidal roof" on every real L-shaped footprint.
+WALL_TYPES = ["residential building", "old building", "windowed building",
+              "concrete building", "brick building"]   # no glass towers: Lozenets
+ROOF_TYPES = ["bitumen", "gravel", "sheet metal"]   # what a nadir camera sees
+
+for bl in buildings:
+    corners = ", ".join(f"{x - bl['cx']:.2f} {y - bl['cy']:.2f}" for x, y in bl["ring"])
+    parts.append(f"""SimpleBuilding {{
+  translation {bl['cx']:.3f} {bl['cy']:.3f} 0
+  name "bld_{bl['id']}"
+  corners [ {corners} ]
+  floorHeight {bl['floor_h']:.2f}
+  floorNumber {bl['levels']}
+  wallType "{rng_scene.choice(WALL_TYPES)}"
+  roofType "{rng_scene.choice(ROOF_TYPES)}"
+  roofShape "flat roof"
+  enableBoundingObject {"TRUE" if COLLIDE else "FALSE"}
+}}""")
+
+if buildings:
+    tall = max(bl["top"] for bl in buildings)
+    print(f"scenery: {len(buildings)} buildings   (tallest {tall:.0f} m, "
+          f"bounding objects {'ON' if COLLIDE else 'off'})")
+
+# Light poles, placed PROCEDURALLY along the street centerlines rather than from
+# OSM highway=street_lamp: those nodes are barely mapped in Sofia, so most of the
+# block would get none, and the density would vary with the window for no reason
+# we control. Walking the centerlines puts a pole exactly where it matters - at
+# the kerb, beside a bay row. The spacing opens up on bigger worlds so the count
+# stays bounded (25 m at half-size 75/130, ~50 m at 500).
+MAX_POLES = 400
+POLE_SPACING_MIN = 25.0
+POLE_KERB = 1.0        # metres out from the road edge
+POLE_MIN_SEP = 3.0     # dedup at junctions, where runs meet
+
+poles = []
+if os.path.exists(ROADS) and emit:
+    lamp_runs = [(road_width(pr), list(run)) for pr, run in emit]   # copy: build_route
+    total_len = sum(math.hypot(b[0]-a[0], b[1]-a[1])                # reads road_runs
+                    for _, run in lamp_runs for a, b in zip(run, run[1:]))
+    spacing = max(POLE_SPACING_MIN, total_len / MAX_POLES)
+    side = 1
+    for width, run in lamp_runs:
+        s = spacing / 2      # don't start every street with a pole on its corner
+        for a, b in zip(run, run[1:]):
+            seg = math.hypot(b[0]-a[0], b[1]-a[1])
+            if seg < 1e-6:
+                continue
+            ux, uy = (b[0]-a[0]) / seg, (b[1]-a[1]) / seg
+            while s < seg:
+                at = s
+                s += spacing
+                off = width / 2 + POLE_KERB
+                # try the alternating side first, then the other one: a bay row
+                # occupies one kerb, and rejecting outright would leave whole
+                # streets unlit
+                for sd in (side, -side):
+                    px = a[0] + ux * at - uy * off * sd
+                    py = a[1] + uy * at + ux * off * sd
+                    if abs(px) > WINDOW or abs(py) > WINDOW:
+                        continue
+                    # a pole standing on painted tarmac is a ground-truth bug,
+                    # not scene hardening: that bay could never be occupied.
+                    # The test is the bay RECTANGLE plus a margin, not its
+                    # circumscribed circle - a lamp between two bays is exactly
+                    # where a real one stands.
+                    if any(abs((px-bb["x"])*math.cos(bb["ang"]) + (py-bb["y"])*math.sin(bb["ang"])) < bb["L"]/2 + 0.4
+                           and abs(-(px-bb["x"])*math.sin(bb["ang"]) + (py-bb["y"])*math.cos(bb["ang"])) < bb["W"]/2 + 0.4
+                           for bb in bays):
+                        continue
+                    if any((px-qx)**2 + (py-qy)**2 < POLE_MIN_SEP**2 for qx, qy, _ in poles):
+                        continue
+                    poles.append((px, py, math.atan2(uy, ux)))
+                    break
+                side = -side
+            s -= seg
+
+for i, (px, py, ang) in enumerate(poles):
+    # `on FALSE`: the proto ships a live SpotLight (intensity 30, radius 1000).
+    # Hundreds of those would wreck performance AND shift the daylight exposure
+    # that the classifier's brightness thresholds are calibrated against. This
+    # is a daytime scene - the lamps are geometry, not light sources.
+    parts.append(f"""StreetLight {{
+  translation {px:.2f} {py:.2f} 0
+  rotation 0 0 1 {ang:.4f}
+  name "lamp_{i}"
+  on FALSE
+}}""")
+if poles:
+    print(f"scenery: {len(poles)} light poles   (every {spacing:.0f} m of street)")
+
 route = build_route(bays, road_runs)
+
+# --- route hazards. The controller holds a fixed altitude and has no obstacle
+# logic at all, so a building that reaches the flight level under the route is
+# a real conflict - reported whether or not --collide is on, because without
+# bounding objects the drone flies THROUGH it and the frames beneath it are
+# garbage either way. <NAME>.hazards.json is the handoff to the
+# obstacle-avoidance work: it needs exactly this list, in these metres.
+FLIGHT_ALT = 30.0      # keep in step with TARGET_ALT in controllers/parkdrone
+VERT_CLEAR = 5.0       # how close to the flight level still counts
+LATERAL_MARGIN = 10.0  # how far from the route centerline still counts
+
+hazards = []
+for bl in buildings:
+    if bl["top"] + VERT_CLEAR <= FLIGHT_ALT:
+        continue
+    ring = bl["ring"]
+    rx = [p[0] for p in ring]; ry = [p[1] for p in ring]
+    lo_x, hi_x = min(rx) - LATERAL_MARGIN, max(rx) + LATERAL_MARGIN
+    lo_y, hi_y = min(ry) - LATERAL_MARGIN, max(ry) + LATERAL_MARGIN
+    best = None
+    for a, b in zip(route, route[1:]):
+        if max(a[0], b[0]) < lo_x or min(a[0], b[0]) > hi_x:
+            continue
+        if max(a[1], b[1]) < lo_y or min(a[1], b[1]) > hi_y:
+            continue
+        if point_in_poly(a, ring) or point_in_poly(b, ring):
+            best = 0.0
+            break
+        d2 = min(_seg_seg_d2(a, b, ring[i], ring[(i+1) % len(ring)]) for i in range(len(ring)))
+        best = d2 if best is None else min(best, d2)
+    if best is None:
+        continue
+    d = math.sqrt(best)
+    if d <= LATERAL_MARGIN:
+        hazards.append({"osm_id": bl["id"], "height_m": round(bl["top"], 1),
+                        "min_route_dist_m": round(d, 1),
+                        "centroid": [round(bl["cx"], 2), round(bl["cy"], 2)]})
+
+hazards.sort(key=lambda h: -h["height_m"])
+haz_file = os.path.join(WORLDS, f"{NAME}.hazards.json")
+json.dump(hazards, open(haz_file, "w"), indent=0)
+n_tall = sum(1 for bl in buildings if bl["top"] + VERT_CLEAR > FLIGHT_ALT)
+if hazards:
+    h0 = hazards[0]
+    print(f"WARNING: {n_tall} structures reach the {FLIGHT_ALT:.0f} m flight level; "
+          f"{len(hazards)} lie within {LATERAL_MARGIN:.0f} m of the route "
+          f"(tallest: bld_{h0['osm_id']} at {h0['height_m']:.0f} m, "
+          f"{h0['min_route_dist_m']:.0f} m away)")
+elif n_tall:
+    print(f"{n_tall} structures reach the {FLIGHT_ALT:.0f} m flight level, none near the route")
 
 wbt = os.path.join(WORLDS, f"{NAME}.wbt")
 open(wbt, "w", encoding="utf-8").write("\n".join(parts) + "\n")
