@@ -8,7 +8,7 @@ keeps a square window around the centre, and writes:
   worlds/ground_truth.json    - bay_id -> occupied (for detection evaluation)
 
 Usage:
-    python generate_world.py [window_half_m] [occupied_fraction] [survey_area] [--collide]
+    python generate_world.py [window_half_m] [occupied_fraction] [survey_area] [--collide] [--chase]
     python generate_world.py 75 0.5                    # default fmi_block.wbt
     python generate_world.py 500 0.5 fmi_block_1km     # separate big world:
         writes fmi_block_1km.wbt + fmi_block_1km.route.json +
@@ -39,6 +39,8 @@ os.makedirs(WORLDS, exist_ok=True)
 
 args = [a for a in sys.argv[1:] if not a.startswith("--")]
 COLLIDE = "--collide" in sys.argv          # see the docstring: off by default
+CHASE = "--chase" in sys.argv              # ride-along camera instead of the
+                                           # tracking shot (viewing, not data)
 WINDOW = float(args[0]) if len(args) > 0 else 75.0               # half-size, metres
 OCC = float(args[1]) if len(args) > 1 else 0.5
 NAME = args[2] if len(args) > 2 else "fmi_block"
@@ -459,15 +461,23 @@ parts.append(f'EXTERNPROTO "{GH}/objects/buildings/protos/SimpleBuilding.proto"'
 parts.append(f'EXTERNPROTO "{GH}/objects/traffic/protos/StreetLight.proto"')
 for path in CAR_PROTOS.values():
     parts.append(f'EXTERNPROTO "{GH}/vehicles/protos/{path}.proto"')
-parts.append("""WorldInfo { basicTimeStep 8 }
-Viewpoint {
-  orientation -0.35 0.35 0.87 1.75
+# --chase rides ON the drone (Mounted Shot) instead of trailing it; it only
+# changes what the GUI window shows, never the drone's own camera or any
+# captured frame. It is a flag rather than a hand edit to the .wbt because a
+# hand edit is silently lost the next time the world is regenerated.
+VIEWPOINT = ("""  orientation 0 1 0 0.4
+  position -0.5 0 0.8
+  follow "Mavic 2 PRO"
+  followType "Mounted Shot\"""" if CHASE else """  orientation -0.35 0.35 0.87 1.75
   position -8 -14 10
   follow "Mavic 2 PRO"
-  followType "Tracking Shot"
-}
-Background { skyColor [ 0.5 0.7 1 ] }
-DirectionalLight { direction 0.4 0.5 -1 intensity 2.5 castShadows FALSE }""")
+  followType "Tracking Shot\"""")
+parts.append(f"""WorldInfo {{ basicTimeStep 8 }}
+Viewpoint {{
+{VIEWPOINT}
+}}
+Background {{ skyColor [ 0.5 0.7 1 ] }}
+DirectionalLight {{ direction 0.4 0.5 -1 intensity 2.5 castShadows FALSE }}""")
 GROUND = 2 * WINDOW + 200      # ground plane comfortably past the window
 parts.append(f"""Solid {{
   name "ground"

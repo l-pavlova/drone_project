@@ -13,10 +13,10 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/project
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/vehicles/protos/mercedes_benz/MercedesBenzSprinterSimple.proto"
 WorldInfo { basicTimeStep 8 }
 Viewpoint {
-  orientation -0.35 0.35 0.87 1.75
-  position -8 -14 10
+  orientation 0 1 0 0.4
+  position -0.5 0 0.8
   follow "Mavic 2 PRO"
-  followType "Tracking Shot"
+  followType "Mounted Shot"
 }
 Background { skyColor [ 0.5 0.7 1 ] }
 DirectionalLight { direction 0.4 0.5 -1 intensity 2.5 castShadows FALSE }
