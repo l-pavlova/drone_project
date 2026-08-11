@@ -30,7 +30,52 @@ This reads `../data/block_bays.geojson` (plus `block_roads.geojson` and `block_a
 
 **Scenery** (from `block_areas.geojson`): OSM green areas triangulated by ear clipping and painted at **z = 0.005** — above the ground, *below* the roads (0.01+), so they can never cover a bay pad (0.04–0.06); OSM building footprints as `SimpleBuilding` protos at real heights (`building:levels`, else `height`, else 4 floors), kept/dropped **whole** by centroid (clipping a footprint can break the proto's roof triangulation) while greens are Sutherland-Hodgman **clipped**; `StreetLight` poles walked along the centerlines at adaptive spacing, `on FALSE` (the proto ships a 1000 m-radius SpotLight that would shift the daylight the classifier is calibrated against) and never placed on a bay. Buildings and light poles get **no bounding object** unless you pass `--collide` — the controller flies a fixed 30 m with zero obstacle logic, so collision geometry would crash it; Webots range sensors only see nodes that have one, so that flag is the obstacle-avoidance stage's entry point. Either way the generator warns about structures reaching 30 m within 10 m of the route and writes them to `worlds/<name>.hazards.json`. `--chase` swaps the GUI viewpoint from the trailing "Tracking Shot" to a ride-along "Mounted Shot" (viewing only — it never touches the drone's own camera or any captured frame); it is a flag rather than a hand edit because hand edits to a `.wbt` are silently lost on the next regeneration. `DirectionalLight` has `castShadows FALSE` — shadow mapping paints streak artifacts on the road/ground in the nadir frames. Then run the world (see "Running Webots" below). The route (`worlds/route.json`) is an open-path rural-postman walk of the OSM street centerlines of every street that has bays: disconnected coverage components are joined by shortest road transits (MST), odd-degree nodes are evened out with a minimum-weight matching (exact blossom if `networkx` is installed, stdlib fallback otherwise; two virtual endpoints make it an open path whose start is the endpoint nearest the origin), then a Hierholzer Euler walk flies every coverage edge once with deadheads only along the matched repeats — waypoints every 10 m because the camera footprint at 30 m is only ~25×15 m. The controller `controllers/parkdrone/parkdrone.py` takes off to 30 m, flies that route (square-lawnmower fallback if route.json is missing), and writes `output/<survey_area>/frame_###.png` + `output/<survey_area>/poses.json` at each waypoint (plus timed diagnostic `snap_###.png`). Worlds are per-scale file sets: `generate_world.py [half_m] [occ_frac] [name]` writes `<name>.wbt` + `<name>.route.json` + `<name>.ground_truth.json` (default name `fmi_block` keeps legacy `route.json`/`ground_truth.json`); the `.wbt` passes its route file to the controller via `controllerArgs`, which also keys the output subfolder. E.g. the 1 km world: `python generate_world.py 500 0.5 fmi_block_1km`. The local-metre frame is pinned by `ORIGIN` in `generate_world.py` — do NOT let it drift when re-cutting data at other sizes.
 
-**`fmi_block_obst` — the obstacle-avoidance test world** (`python generate_world.py 130 0.5 fmi_block_obst --collide --obstacles --chase`). It exists because the only real world with anything to hit at 30 m is `fmi_block_1km`, which takes >10 min to load, so the avoidance edit/run/observe loop needed a fast world with a deliberate conflict. Same window/route/bays as `fmi_block_4st`, plus `--obstacles`: four synthetic structures anchored to fractions along the finished route, each tall enough to reach cruise altitude, each a *different* failure mode — `tower` (45 m, head-on, wide), `slab` (38 m, offset 7 m so it clips the corridor without blocking it), `mast` (40 m but 0.9 m across — the sparse-DistanceSensor-fan blind spot, the case that argues for a Lidar) and `trap` (34 m U opening toward the drone — the concave deadlock that pure reactive avoidance circles inside forever; expect it to fail first). Placement is deterministic and nudged forward past any bay it would cover (a box on painted tarmac is a ground-truth bug) and enforces 30 m between structures, because a postman route doubles back and two anchors 12 waypoints apart can land 15 m apart. They land in `<name>.hazards.json` next to the real buildings, flagged `"synthetic": true`, so a controller arming sensors off that list needs no special case. `--obstacles` changes nothing unless passed — the three survey worlds regenerate byte-identical. **Baseline (verified 2026-08-09):** the obstacle-blind controller flies into `tower` at wp12 and stops there, 13 frames in; archived at `sim/output/fmi_block_obst_baseline/`.
+**Bay paint is MERGED geometry, not per-bay nodes** (2026-08-11). Each bay used to emit 5 `Solid`s
+(an asphalt pad + 4 outline boxes); they are now accumulated into exactly **two `IndexedFaceSet`s**
+(`bay_pads`, `bay_lines`). A Webots `Solid` costs ~0.145 MB of RSS however trivial its geometry, so
+at 1593 bays the 1 km world was spending ~1.1 GB on flat rectangles — and, contrary to
+`docs/webots_1km_performance.md`'s prediction of "~0 s", **~115 s of load time** (~14 ms per Solid;
+the doc's probe measured Solids in an otherwise-empty world where that vanished into the noise
+floor). Measured on `fmi_block_1km`: load **282.6 s → 167.6 s**, peak RSS **6359 → 5268 MiB**,
+top-level Solids **8379 → 416**. `DEF`/`USE` is NOT the alternative — it was measured at only 9%,
+because Webots already shares primitive meshes via `WbTriangleMeshCache` and the residual cost is
+the *node*. Two invariants make this safe and must hold if it is ever touched: the merged quads sit
+at the **top face** of the boxes they replace (pads z=0.090, lines z=0.101 — *not* the box centres,
+or the paint shifts 10 mm and reopens the coplanar-flicker fight in `Z_LAYERS`), and each quad is
+wound **counter-clockwise** so its normal faces +Z and the nadir camera (`rect_corners` walks
+clockwise, so `quad_mesh` reverses it). Nothing addresses a bay by scene-node name — the classifier
+works from `block_bays.geojson` + `poses.json` — but if that ever changes, `--bay-solids` restores
+the old per-bay emission and reproduces the pre-2026-08-11 generator **byte-for-byte**. Verified
+accuracy-neutral by an A/B of 4 flights per variant on `fmi_block` (95.2%, identical confusion
+matrix, 8/8 runs) and 1 each on `fmi_block_4st` (100% both).
+
+**`--lowpoly` — proxy box cars, big worlds ONLY.** A "Simple" vehicle proto is not low-poly
+("Simple" = no physics/joints/interior; the exterior mesh is still full detail, ~20–30k triangles),
+and costs a measured **5.1 MB of RSS and 0.136 s of load each** — at 727 cars, ~3.7 GB and ~99 s,
+the biggest single line item in the 1 km world. `--lowpoly` swaps the proto for a hand-built
+`Solid` (body + cabin + windscreen + 4 wheel boxes) and drops the vehicle `EXTERNPROTO`s.
+Everything upstream — every `rng_cars` draw, the model choice, `CAR_DIMS`, the fit-and-fallback
+loop that can free a bay and rewrite `gt` — is deliberately untouched, so `ground_truth.json` and
+`route.json` come out **byte-identical to the proto-car world of the same size** (verified). It is
+opt-in and changes nothing unless passed.
+**It changes what a car LOOKS like, so it changes what the accuracy number MEANS.** Measured on
+`fmi_block_4st_lp`: **98.2%** (TP=47 TN=62 FP=0 **FN=2**) vs 100% for the proto-car `fmi_block_4st`.
+Both misses are *dark* cars (`brightness` 68–70, `core_std` 10–11, `core_dark_frac` 0.00) — a
+uniform dark box on dark asphalt looks like empty tarmac, because it has none of the panel gaps,
+glass or under-car shadow `classify()` leans on. So a box world is **harder** for dark vehicles, not
+easier as `docs/webots_1km_performance.md` originally guessed. **Never pass `--lowpoly` for
+`fmi_block` or `fmi_block_4st`** (the calibration world and the golden fixtures), and report
+`fmi_block_1km_lp` as a coverage/logistics result, never an accuracy one.
+Worlds: `fmi_block_1km_lp` (`generate_world.py 500 0.5 fmi_block_1km_lp --chase --lowpoly`) loads in
+**57 s / 1663 MiB** vs 282.6 s / 6359 MiB for the original `fmi_block_1km` — 4.9× faster, 3.8×
+smaller. `fmi_block_4st_lp` exists only as the evidence for the accuracy claim above.
+
+**Webots runs are deterministic.** Re-flying the same world with the same controller reproduces
+frames, poses and scores exactly (8/8 identical runs). So a changed accuracy number always means a
+changed *world or controller*, never noise — and conversely, a stale archived flight cannot be
+compared against a fresh one. This is why both golden fixtures were re-flown on 2026-08-11.
+
+**`fmi_block_obst` — the obstacle-avoidance test world** (`python generate_world.py 130 0.5 fmi_block_obst --collide --obstacles --chase`). It exists because the only real world with anything to hit at 30 m is `fmi_block_1km`, which took >10 min to load when this world was built (2.8 min headless since the bay-paint merge), so the avoidance edit/run/observe loop needed a fast world with a deliberate conflict. Same window/route/bays as `fmi_block_4st`, plus `--obstacles`: four synthetic structures anchored to fractions along the finished route, each tall enough to reach cruise altitude, each a *different* failure mode — `tower` (45 m, head-on, wide), `slab` (38 m, offset 7 m so it clips the corridor without blocking it), `mast` (40 m but 0.9 m across — the sparse-DistanceSensor-fan blind spot, the case that argues for a Lidar) and `trap` (34 m U opening toward the drone — the concave deadlock that pure reactive avoidance circles inside forever; expect it to fail first). Placement is deterministic and nudged forward past any bay it would cover (a box on painted tarmac is a ground-truth bug) and enforces 30 m between structures, because a postman route doubles back and two anchors 12 waypoints apart can land 15 m apart. They land in `<name>.hazards.json` next to the real buildings, flagged `"synthetic": true`, so a controller arming sensors off that list needs no special case. `--obstacles` changes nothing unless passed — the three survey worlds regenerate byte-identical. **Baseline (verified 2026-08-09):** the obstacle-blind controller flies into `tower` at wp12 and stops there, 13 frames in; archived at `sim/output/fmi_block_obst_baseline/`.
 
 **Obstacle layer, stage D (detect & stop) — done, verified.** `--collide` also mounts a **9-ray `DistanceSensor` fan** (±40°, 80 m, `type "laser"` so Webots draws the beams) in the Mavic2Pro's `bodySlot`; survey worlds get none, `getDevice` returns `None`, and the whole layer switches itself off. `DS_N`/`DS_SPREAD_DEG`/`DS_RANGE` are duplicated in `generate_world.py` and `parkdrone.py` — keep in step, same convention as `ORIGIN`. **The layer emits only a speed limit into the existing `v_des` channel** — never a position target — so the stabilizer sees nothing new and every controller invariant survives by construction; stage B's yaw bias will use the same principle (the threat *bearing* is already read and logged for it). Frames captured while it is in control get `"avoiding": true` + `"obstacle_m"` in `poses.json`, so the scorer can exclude them rather than silently mis-score. Telemetry goes to `output/<area>/flight_log.csv` (line-buffered, one row/s) because Webots' stdout is routinely lost and the interesting seconds fall *between* waypoint captures.
 
@@ -205,11 +250,14 @@ pnpm db:migrate && pnpm db:seed         # loads all 1698 bays
 ```
 Verification harnesses (all Python, run from `apps/vision-worker`):
 - Vision golden test: `python -m parkdrone_vision.replay fmi_block`
-  (expect 43/43 match vs `occupancy_results.json`, 100% vs GT). Imports the classifier only — no
-  server needed.
+  (expect 42/42 match vs `occupancy_results.json`, **95.2%** vs GT). Imports the classifier only —
+  no server needed. The fixture was re-flown 2026-08-11; the older "43/43, 100%" figure came from
+  frames captured 2026-07-06 that were re-scored, never re-flown, after the scenery landed, so it
+  no longer reproduced. The 2 remaining FPs (bays 17685/17686) are a known open bug — see
+  **Known open issues** at the end of this file.
 - Full stack E2E: register a drone `python -m parkdrone_vision.register_drone drone-1`, then
   `API_KEY=<key> python -m parkdrone_vision.replay_ingest fmi_block` (expect 52 WS deltas + final
-  `/bays` matching the offline result, 43/43). To re-run, clear the survey area's `frame`,
+  `/bays` matching the offline result, 42/42). To re-run, clear the survey area's `frame`,
   `observation` **and `bay_state`** rows first: `frame` because idempotency skips duplicates, and
   the other two because deltas only fire on a *change* — replay straight after the golden test
   leaves the state already correct and reports a green "0 deltas".
@@ -282,3 +330,24 @@ Gotchas: native Windows Python needs `D:/...` paths, not Git Bash `/d/...`. The 
 free it by PID (`netstat -ano | grep :4000` → `taskkill //F //PID <pid>`) rather than blanket-killing
 `python.exe` (also kills sim Python). `CLASSIFY_THREADS=0` starts the server without draining the
 queue (used to stage frames for the restart-recovery test).
+
+## Known open issues
+
+**Off-nadir projection FPs on `fmi_block` (found 2026-08-11, not fixed).** The world scores 95.2%,
+not 100%: bays **17685 and 17686** are free but classified occupied, both from frame 26 at
+**136–146 px off image centre**. It is a *projection* bug, not a classification one — the same
+family as the fixed gimbal-pitch offset. At that eccentricity the projected bay polygon no longer
+lines up with the painted outline in the image, so white line pixels fall inside the "core" crop:
+`core_paint_frac` 0.07, `core_brightness` 105 (the free envelope is 82–102) and `core_std` 40, which
+trips the occupied cues on empty asphalt. The debug overlay (`sim/output/fmi_block/debug/
+debug_026.png`) shows the misalignment directly.
+- **Not caused by the bay-paint merge** — an A/B of 4 flights per variant reproduces 95.2% with the
+  original per-bay `Solid`s too.
+- It went unnoticed because the old fixture was never re-flown after the scenery landed (July frames,
+  re-scored in August). `fmi_block_4st` is unaffected: 111/111 covered, 100%.
+- Likely directions: correct the projection for camera eccentricity/lens centre, shrink the core
+  crop as `center_off_px` grows, or down-weight/reject views past an eccentricity threshold (the
+  scorer already records `center_off_px` per bay, so the data to calibrate it is on disk).
+
+**Longer-standing, unchanged:** capture scatter leaves ~3 bays uncovered on `fmi_block`; the 1 km
+flight is unfinished (318/1976 frames) and unscored; the learned classifier v2 is not started.

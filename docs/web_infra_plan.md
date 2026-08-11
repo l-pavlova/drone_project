@@ -461,6 +461,9 @@ Because this is a from-scratch system, verification is per-phase, driven end-to-
   (34 captures fed one every 1.2 s) reached 34 queued / 0 failed and matched the offline result
   43/43, and a real headless `fmi_block_4st` flight streamed live captures while airborne with
   mission progress tracking against the route's 97 waypoints.
+  *(The 43/43 figure is the `fmi_block` fixture as it stood then; the fixture was re-flown on
+  2026-08-11 and is now 42/42 — see CLAUDE.md. The check is a match against whatever the current
+  `occupancy_results.json` says, so it does not need updating, only re-running.)*
 - **Dashboard smoke:** load the React app against the replay, confirm bays render green/red/grey and
   flip live as deltas arrive; verify stale-bay handling by withholding some frames.
 - **Admin smoke:** confirm fleet/mission counters, ingestion metrics, and (eval-mode) accuracy/confusion

@@ -1,0 +1,29 @@
+[
+{
+"osm_id": 166213376,
+"height_m": 42.0,
+"min_route_dist_m": 8.6,
+"centroid": [
+-2.62,
+379.96
+]
+},
+{
+"osm_id": 166215395,
+"height_m": 27.0,
+"min_route_dist_m": 9.5,
+"centroid": [
+27.77,
+-350.94
+]
+},
+{
+"osm_id": 288712091,
+"height_m": 27.0,
+"min_route_dist_m": 9.5,
+"centroid": [
+-299.48,
+-218.91
+]
+}
+]

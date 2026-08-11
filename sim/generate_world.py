@@ -54,6 +54,16 @@ COLLIDE = "--collide" in sys.argv          # see the docstring: off by default
 CHASE = "--chase" in sys.argv              # ride-along camera instead of the
                                            # tracking shot (viewing, not data)
 OBSTACLES = "--obstacles" in sys.argv      # synthetic obstacle course on the route
+LOWPOLY = "--lowpoly" in sys.argv          # proxy box cars instead of vehicle
+                                           # protos. NEVER pass this for the
+                                           # calibrated worlds - see the comment
+                                           # above lowpoly_car().
+BAY_SOLIDS = "--bay-solids" in sys.argv    # one Solid per bay pad/line (the old
+                                           # path). Off by default: bay paint is
+                                           # merged into 2 IndexedFaceSets, which
+                                           # is ~0.145 MB x 5 x n_bays cheaper.
+                                           # Only needed if something ever wants a
+                                           # per-bay node (e.g. a bounding object).
 WINDOW = float(args[0]) if len(args) > 0 else 75.0               # half-size, metres
 OCC = float(args[1]) if len(args) > 1 else 0.5
 NAME = args[2] if len(args) > 2 else "fmi_block"
@@ -471,8 +481,9 @@ parts.append(f'EXTERNPROTO "{GH}/robots/dji/mavic/protos/Mavic2Pro.proto"')
 parts.append(f'EXTERNPROTO "{GH}/objects/road/protos/Road.proto"')
 parts.append(f'EXTERNPROTO "{GH}/objects/road/protos/RoadLine.proto"')
 parts.append(f'EXTERNPROTO "{GH}/objects/buildings/protos/SimpleBuilding.proto"')
-for path in CAR_PROTOS.values():
-    parts.append(f'EXTERNPROTO "{GH}/vehicles/protos/{path}.proto"')
+if not LOWPOLY:   # each vehicle EXTERNPROTO pulls 6-13 sub-protos transitively
+    for path in CAR_PROTOS.values():
+        parts.append(f'EXTERNPROTO "{GH}/vehicles/protos/{path}.proto"')
 # --chase rides ON the drone (Mounted Shot) instead of trailing it; it only
 # changes what the GUI window shows, never the drone's own camera or any
 # captured frame. It is a flag rather than a hand edit to the .wbt because a
@@ -917,26 +928,144 @@ rng_cars = random.Random(7)   # separate stream so ground_truth.json stays stabl
 LINE_W = 0.12                 # painted line width (m)
 BAY_ASPHALT = "0.20 0.20 0.21"
 
+# The pad/line boxes are 3D only incidentally: they are flat paint at a fixed z,
+# they never move, never collide and nothing addresses them individually (the
+# classifier works from block_bays.geojson + poses.json, not the scene tree). A
+# Webots Solid costs ~0.145 MB of RSS regardless of how trivial its geometry is,
+# and at 5 per bay the 1 km world spent ~1.15 GB on flat rectangles - enough to
+# push a 6 GB scene past a 4 GB card. So by default every pad quad goes into ONE
+# IndexedFaceSet and every line quad into a second one: 2 nodes instead of 5*n.
+# DEF/USE is NOT the alternative - it was measured at only 9% (Webots already
+# shares primitive meshes via WbTriangleMeshCache); the node COUNT is the cost.
+#
+# The merged quads sit at the TOP FACE of the boxes they replace, not at the box
+# centres, so the surface a nadir camera sees is at exactly the same height and
+# the render is unchanged. Getting this wrong shifts the paint 10 mm and
+# reopens the coplanar-flicker fight documented in Z_LAYERS.
+BAY_PAD_H, BAY_LINE_H = 0.02, 0.012            # the old box thicknesses
+BAY_PAD_TOP = BAY_PAD_Z + BAY_PAD_H / 2        # 0.090
+BAY_LINE_TOP = BAY_LINE_Z + BAY_LINE_H / 2     # 0.101
+
+def bay_lines(b):
+    """The 4 outline lines of one bay as (centre_x, centre_y, size_x, size_y).
+
+    (u, v) is the line centre in the bay frame - u along the length, v across -
+    rotated out to world metres here so both emission paths share one source.
+    """
+    ca, sa = math.cos(b["ang"]), math.sin(b["ang"])
+    spec = [(0, +(b["W"] - LINE_W) / 2, b["L"], LINE_W),
+            (0, -(b["W"] - LINE_W) / 2, b["L"], LINE_W),
+            (+(b["L"] - LINE_W) / 2, 0, LINE_W, b["W"]),
+            (-(b["L"] - LINE_W) / 2, 0, LINE_W, b["W"])]
+    return [(b["x"] + u * ca - v * sa, b["y"] + u * sa + v * ca, sx, sy)
+            for u, v, sx, sy in spec]
+
+def bay_rings(b):
+    """(pad quad, [4 line quads]) for one bay, as world-metre corner lists."""
+    return (rect_corners(b["x"], b["y"], b["ang"], b["L"], b["W"]),
+            [rect_corners(x, y, b["ang"], sx, sy)
+             for x, y, sx, sy in bay_lines(b)])
+
 def bay_marking(b):
     """Asphalt pad + 4 white outline lines for one bay, as Solid strings."""
-    ca, sa = math.cos(b["ang"]), math.sin(b["ang"])
-    out = [solid(b["x"], b["y"], BAY_PAD_Z, b["ang"], b["L"], b["W"], 0.02,
+    out = [solid(b["x"], b["y"], BAY_PAD_Z, b["ang"], b["L"], b["W"], BAY_PAD_H,
                  BAY_ASPHALT, name=f"bay_{b['id']}")]
-    # (u, v) = centre of each line in the bay frame (u along length, v across),
-    # with the line's box size; lines sit just above the pad
-    lines = [(0, +(b["W"] - LINE_W) / 2, b["L"], LINE_W),
-             (0, -(b["W"] - LINE_W) / 2, b["L"], LINE_W),
-             (+(b["L"] - LINE_W) / 2, 0, LINE_W, b["W"]),
-             (-(b["L"] - LINE_W) / 2, 0, LINE_W, b["W"])]
-    for i, (u, v, sx, sy) in enumerate(lines):
-        out.append(solid(b["x"] + u * ca - v * sa, b["y"] + u * sa + v * ca,
-                         BAY_LINE_Z, b["ang"], sx, sy, 0.012,
+    for i, (x, y, sx, sy) in enumerate(bay_lines(b)):
+        out.append(solid(x, y, BAY_LINE_Z, b["ang"], sx, sy, BAY_LINE_H,
                          "0.95 0.95 0.95", name=f"bay_{b['id']}_l{i}"))
     return out
 
+def quad_mesh(quads, z, color, name):
+    """One Solid holding all `quads` as a flat IndexedFaceSet at height `z`.
+
+    rect_corners walks a rectangle CLOCKWISE seen from +Z, which would face the
+    normals DOWN and hide the paint from the nadir camera under backface
+    culling - so each quad is reversed here to wind counter-clockwise.
+    """
+    pts = ", ".join(f"{x:.3f} {y:.3f} {z:.3f}"
+                    for q in quads for x, y in reversed(q))
+    idx = " ".join(f"{4*i} {4*i+1} {4*i+2} -1 {4*i} {4*i+2} {4*i+3} -1"
+                   for i in range(len(quads)))
+    return f"""Solid {{
+  name "{name}"
+  children [ Shape {{
+    appearance PBRAppearance {{ baseColor {color} roughness 1 metalness 0 }}
+    geometry IndexedFaceSet {{
+      coord Coordinate {{ point [ {pts} ] }}
+      coordIndex [ {idx} ]
+    }}
+  }} ]
+}}"""
+
+# --lowpoly: replace the vehicle proto with a hand-built box car.
+#
+# A "Simple" vehicle proto is not low-poly - "Simple" means no physics/joints/
+# interior, and the exterior mesh is still the full-detail one (~20-30k triangles
+# in ~1 MB of inline IndexedFaceSet text across 6-13 sub-protos). Measured cost:
+# 5.1 MB of RSS and 0.136 s of load EACH, dead linear to at least 800 instances.
+# At 727 cars that is ~3.7 GB and ~99 s - the single biggest line item in the
+# 1 km world.
+#
+# THIS CHANGES WHAT A CAR LOOKS LIKE FROM 30 M, so it changes what the accuracy
+# number MEANS. vision/score_occupancy.py's classify() is a five-term heuristic
+# calibrated against the real protos; a flat box would still trip core_chroma
+# easily, but core_std (panel gaps, windscreen edges) and core_dark_frac (glass,
+# tyres, under-car shadow) are weaker on a box. A 100% on a box world is NOT the
+# same claim as a 100% on a proto world. So: big worlds only, never
+# fmi_block / fmi_block_4st (the calibration world and the golden fixtures).
+#
+# Everything ABOVE this - the rng_cars draws, the model choice, CAR_DIMS, the
+# fit-and-fallback loop that can free a bay and rewrite gt - is untouched, which
+# is what keeps ground_truth.json byte-identical. Only the emitted geometry
+# differs. Kept as ONE Solid with several Pose children rather than several
+# Solids, because the node count is the memory cost (see the bay-paint merge).
+CAR_BODY_H = 0.60       # body box height; sits 0.25 -> 0.85
+CAR_CABIN_H = 0.45      # cabin box on top; 0.85 -> 1.30
+CAR_WHEEL_R = 0.30
+TYRE = "0.05 0.05 0.05"
+GLASS = "0.08 0.10 0.13"
+
+def lowpoly_car(cx, cy, ang, L, W, col, name):
+    """Box-and-cabin proxy for one parked car, centred on (cx, cy)."""
+    cabin_l, cabin_w = 0.55 * L, 0.90 * W
+    wx, wy = 0.32 * L, (W - 0.24) / 2
+    # Appearances are inlined rather than DEF/USE-shared: sharing was measured at
+    # only 9% (Webots already caches the meshes), and a USE needs its DEF earlier
+    # in the file, which would mean emitting a dummy node before the first car.
+    wheels = "".join(f"""
+    Pose {{ translation {sx*wx:.3f} {sy*wy:.3f} {CAR_WHEEL_R:.3f}
+      children [ Shape {{ appearance PBRAppearance {{ baseColor {TYRE} roughness 1 metalness 0 }}
+        geometry Box {{ size 0.66 0.22 {2*CAR_WHEEL_R:.2f} }} }} ] }}"""
+                     for sx in (1, -1) for sy in (1, -1))
+    return f"""Solid {{
+  translation {cx:.3f} {cy:.3f} 0
+  rotation 0 0 1 {ang:.4f}
+  name "{name}"
+  children [
+    Pose {{ translation 0 0 {0.25 + CAR_BODY_H/2:.3f}
+      children [ Shape {{
+        appearance PBRAppearance {{ baseColor {col} roughness 0.4 metalness 0.2 }}
+        geometry Box {{ size {L:.3f} {W:.3f} {CAR_BODY_H:.2f} }} }} ] }}
+    Pose {{ translation {-0.05*L:.3f} 0 {0.25 + CAR_BODY_H + CAR_CABIN_H/2:.3f}
+      children [ Shape {{
+        appearance PBRAppearance {{ baseColor {col} roughness 0.4 metalness 0.2 }}
+        geometry Box {{ size {cabin_l:.3f} {cabin_w:.3f} {CAR_CABIN_H:.2f} }} }} ] }}
+    Pose {{ translation {0.5*cabin_l - 0.05*L:.3f} 0 {0.25 + CAR_BODY_H + CAR_CABIN_H/2:.3f}
+      children [ Shape {{ appearance PBRAppearance {{ baseColor {GLASS} roughness 0.2 metalness 0.1 }}
+        geometry Box {{ size 0.06 {0.86*cabin_w:.3f} {0.75*CAR_CABIN_H:.2f} }} }} ] }}{wheels}
+  ]
+}}"""
+
+pad_quads, line_quads = [], []   # accumulated when bays are merged (the default)
+
 placed = []   # body rectangles (with clearance) of cars already placed
 for b in bays:
-    parts.extend(bay_marking(b))
+    if BAY_SOLIDS:
+        parts.extend(bay_marking(b))
+    else:
+        pad, lines = bay_rings(b)
+        pad_quads.append(pad)
+        line_quads.extend(lines)
     if b["occupied"]:
         longitudinal = b["L"] > 5.0
         if longitudinal and rng_cars.random() < 0.12:
@@ -962,15 +1091,33 @@ for b in bays:
             continue
         L, W, off = CAR_DIMS[model]
         placed.append(rect_corners(b["x"], b["y"], ang, L + CAR_GAP, W))
-        # proto origin is the rear axle: pull it back so the BODY is bay-centred
-        tx = b["x"] - math.cos(ang) * off
-        ty = b["y"] - math.sin(ang) * off
-        parts.append(f"""{model} {{
+        if LOWPOLY:
+            # The proxy is built about its own body centre, which is exactly what
+            # the rear-axle offset below achieves for the proto - same footprint.
+            parts.append(lowpoly_car(b["x"], b["y"], ang, L, W, col,
+                                     f"car_{b['id']}"))
+        else:
+            # proto origin is the rear axle: pull it back so the BODY is bay-centred
+            tx = b["x"] - math.cos(ang) * off
+            ty = b["y"] - math.sin(ang) * off
+            parts.append(f"""{model} {{
   translation {tx:.3f} {ty:.3f} 0.4
   rotation 0 0 1 {ang:.4f}
   color {col}
   name "car_{b['id']}"
 }}""")
+
+if BAY_SOLIDS:
+    print(f"bays: {len(bays)} drawn as {5 * len(bays)} Solids (--bay-solids)")
+else:
+    parts.append(quad_mesh(pad_quads, BAY_PAD_TOP, BAY_ASPHALT, "bay_pads"))
+    parts.append(quad_mesh(line_quads, BAY_LINE_TOP, "0.95 0.95 0.95", "bay_lines"))
+    print(f"bays: {len(bays)} merged into 2 IndexedFaceSets "
+          f"({len(pad_quads)} pad + {len(line_quads)} line quads, "
+          f"replacing {5 * len(bays)} Solids)")
+if LOWPOLY:
+    print("cars: LOW-POLY PROXY BOXES (--lowpoly) - accuracy from this world is "
+          "NOT comparable with the proto-car worlds")
 
 # --- forward obstacle sensors, mounted in the Mavic2Pro's bodySlot.
 #

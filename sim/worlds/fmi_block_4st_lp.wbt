@@ -3,13 +3,6 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/project
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/objects/road/protos/Road.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/objects/road/protos/RoadLine.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/objects/buildings/protos/SimpleBuilding.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/vehicles/protos/tesla/TeslaModel3Simple.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/vehicles/protos/bmw/BmwX5Simple.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/vehicles/protos/citroen/CitroenCZeroSimple.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/vehicles/protos/toyota/ToyotaPriusSimple.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/vehicles/protos/lincoln/LincolnMKZSimple.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/vehicles/protos/range_rover/RangeRoverSportSVRSimple.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/vehicles/protos/mercedes_benz/MercedesBenzSprinterSimple.proto"
 WorldInfo { basicTimeStep 8 }
 Viewpoint {
   orientation 0 1 0 0.4
@@ -183,299 +176,1475 @@ Road {
   leftBorder FALSE
   wayPoints [ -131.23 -49.59 0, -130.52 -51.52 0, -115.82 -92.34 0, -112.19 -102.41 0, -109.34 -110.22 0, -96.76 -144.59 0, -96.63 -145.00 0 ]
 }
-BmwX5Simple {
-  translation -120.560 86.394 0.4
+Solid {
+  translation -119.221 86.949 0
   rotation 0 0 1 0.3927
-  color 0.1 0.1 0.1
   name "car_17549"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.890 1.940 0.60 } } ] }
+    Pose { translation -0.244 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.690 1.746 0.45 } } ] }
+    Pose { translation 1.100 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.502 0.34 } } ] }
+    Pose { translation 1.565 0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.565 -0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.565 0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.565 -0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-MercedesBenzSprinterSimple {
-  translation -104.086 92.606 0.4
+Solid {
+  translation -105.667 91.954 0
   rotation 0 0 1 -2.7506
-  color 0.6 0.6 0.6
   name "car_17550"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 5.930 1.990 0.60 } } ] }
+    Pose { translation -0.296 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 3.262 1.791 0.45 } } ] }
+    Pose { translation 1.334 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.540 0.34 } } ] }
+    Pose { translation 1.898 0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.898 -0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.898 0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.898 -0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-LincolnMKZSimple {
-  translation -98.831 94.532 0.4
+Solid {
+  translation -100.070 94.021 0
   rotation 0 0 1 -2.7506
-  color 0.1 0.1 0.8
   name "car_17551"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.8 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.930 1.860 0.60 } } ] }
+    Pose { translation -0.246 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.8 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.712 1.674 0.45 } } ] }
+    Pose { translation 1.109 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.440 0.34 } } ] }
+    Pose { translation 1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-TeslaModel3Simple {
-  translation -68.207 105.844 0.4
+Solid {
+  translation -69.482 105.318 0
   rotation 0 0 1 -2.7506
-  color 0.1 0.1 0.8
   name "car_17555"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.8 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.690 1.850 0.60 } } ] }
+    Pose { translation -0.235 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.8 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.580 1.665 0.45 } } ] }
+    Pose { translation 1.055 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.432 0.34 } } ] }
+    Pose { translation 1.501 0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.501 -0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.501 0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.501 -0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-LincolnMKZSimple {
-  translation -65.470 106.747 0.4
+Solid {
+  translation -64.231 107.258 0
   rotation 0 0 1 0.3910
-  color 0.8 0.1 0.1
   name "car_17556"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.8 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.930 1.860 0.60 } } ] }
+    Pose { translation -0.246 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.8 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.712 1.674 0.45 } } ] }
+    Pose { translation 1.109 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.440 0.34 } } ] }
+    Pose { translation 1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-LincolnMKZSimple {
-  translation -60.409 108.616 0.4
+Solid {
+  translation -59.170 109.127 0
   rotation 0 0 1 0.3910
-  color 0.8 0.1 0.1
   name "car_17557"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.8 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.930 1.860 0.60 } } ] }
+    Pose { translation -0.246 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.8 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.712 1.674 0.45 } } ] }
+    Pose { translation 1.109 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.440 0.34 } } ] }
+    Pose { translation 1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-BmwX5Simple {
-  translation -55.402 110.461 0.4
+Solid {
+  translation -54.062 111.013 0
   rotation 0 0 1 0.3910
-  color 0.8 0.1 0.1
   name "car_17558"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.8 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.890 1.940 0.60 } } ] }
+    Pose { translation -0.244 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.8 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.690 1.746 0.45 } } ] }
+    Pose { translation 1.100 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.502 0.34 } } ] }
+    Pose { translation 1.565 0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.565 -0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.565 0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.565 -0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-ToyotaPriusSimple {
-  translation -45.293 114.197 0.4
+Solid {
+  translation -44.017 114.723 0
   rotation 0 0 1 0.3910
-  color 0.1 0.1 0.8
   name "car_17560"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.8 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.540 1.760 0.60 } } ] }
+    Pose { translation -0.227 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.8 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.497 1.584 0.45 } } ] }
+    Pose { translation 1.022 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.362 0.34 } } ] }
+    Pose { translation 1.453 0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.453 -0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.453 0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.453 -0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-LincolnMKZSimple {
-  translation -37.396 117.222 0.4
+Solid {
+  translation -38.635 116.711 0
   rotation 0 0 1 -2.7506
-  color 0.2 0.5 0.2
   name "car_17561"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.2 0.5 0.2 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.930 1.860 0.60 } } ] }
+    Pose { translation -0.246 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.2 0.5 0.2 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.712 1.674 0.45 } } ] }
+    Pose { translation 1.109 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.440 0.34 } } ] }
+    Pose { translation 1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-RangeRoverSportSVRSimple {
-  translation -20.245 106.956 0.4
+Solid {
+  translation -19.826 105.620 0
   rotation 0 0 1 -1.2671
-  color 0.1 0.1 0.8
   name "car_17564"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.8 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.850 1.980 0.60 } } ] }
+    Pose { translation -0.242 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.8 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.667 1.782 0.45 } } ] }
+    Pose { translation 1.091 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.533 0.34 } } ] }
+    Pose { translation 1.552 0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.552 -0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.552 0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.552 -0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-TeslaModel3Simple {
-  translation -15.010 89.392 0.4
+Solid {
+  translation -14.597 88.075 0
   rotation 0 0 1 -1.2671
-  color 0.6 0.6 0.6
   name "car_17567"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.690 1.850 0.60 } } ] }
+    Pose { translation -0.235 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.580 1.665 0.45 } } ] }
+    Pose { translation 1.055 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.432 0.34 } } ] }
+    Pose { translation 1.501 0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.501 -0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.501 0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.501 -0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-RangeRoverSportSVRSimple {
-  translation -8.379 71.877 0.4
+Solid {
+  translation -7.805 70.600 0
   rotation 0 0 1 -1.1484
-  color 0.6 0.6 0.6
   name "car_17570"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.850 1.980 0.60 } } ] }
+    Pose { translation -0.242 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.667 1.782 0.45 } } ] }
+    Pose { translation 1.091 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.533 0.34 } } ] }
+    Pose { translation 1.552 0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.552 -0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.552 0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.552 -0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-LincolnMKZSimple {
-  translation 3.607 46.365 0.4
+Solid {
+  translation 4.156 45.143 0
   rotation 0 0 1 -1.1484
-  color 0.1 0.1 0.1
   name "car_17571"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.930 1.860 0.60 } } ] }
+    Pose { translation -0.246 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.712 1.674 0.45 } } ] }
+    Pose { translation 1.109 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.440 0.34 } } ] }
+    Pose { translation 1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-BmwX5Simple {
-  translation -1.844 56.361 0.4
+Solid {
+  translation -2.439 57.683 0
   rotation 0 0 1 1.9932
-  color 0.2 0.5 0.2
   name "car_17573"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.2 0.5 0.2 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.890 1.940 0.60 } } ] }
+    Pose { translation -0.244 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.2 0.5 0.2 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.690 1.746 0.45 } } ] }
+    Pose { translation 1.100 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.502 0.34 } } ] }
+    Pose { translation 1.565 0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.565 -0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.565 0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.565 -0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-MercedesBenzSprinterSimple {
-  translation -118.677 -27.653 0.4
+Solid {
+  translation -120.236 -28.354 0
   rotation 0 0 1 3.5640
-  color 0.9 0.9 0.9
   name "car_17574"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.9 0.9 0.9 roughness 0.4 metalness 0.2 }
+        geometry Box { size 5.930 1.990 0.60 } } ] }
+    Pose { translation -0.296 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.9 0.9 0.9 roughness 0.4 metalness 0.2 }
+        geometry Box { size 3.262 1.791 0.45 } } ] }
+    Pose { translation 1.334 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.540 0.34 } } ] }
+    Pose { translation 1.898 0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.898 -0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.898 0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.898 -0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-CitroenCZeroSimple {
-  translation -116.444 -26.582 0.4
+Solid {
+  translation -115.261 -25.998 0
   rotation 0 0 1 0.4590
-  color 0.1 0.1 0.1
   name "car_17575"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 3.480 1.480 0.60 } } ] }
+    Pose { translation -0.174 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 1.914 1.332 0.45 } } ] }
+    Pose { translation 0.783 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.146 0.34 } } ] }
+    Pose { translation 1.114 0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.114 -0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.114 0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.114 -0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-TeslaModel3Simple {
-  translation -37.905 11.584 0.4
+Solid {
+  translation -36.667 12.195 0
   rotation 0 0 1 0.4590
-  color 0.6 0.6 0.6
   name "car_17582"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.690 1.850 0.60 } } ] }
+    Pose { translation -0.235 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.580 1.665 0.45 } } ] }
+    Pose { translation 1.055 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.432 0.34 } } ] }
+    Pose { translation 1.501 0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.501 -0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.501 0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.501 -0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-BmwX5Simple {
-  translation -1.880 29.037 0.4
+Solid {
+  translation -0.580 29.680 0
   rotation 0 0 1 0.4590
-  color 0.1 0.1 0.1
   name "car_17589"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.890 1.940 0.60 } } ] }
+    Pose { translation -0.244 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.690 1.746 0.45 } } ] }
+    Pose { translation 1.100 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.502 0.34 } } ] }
+    Pose { translation 1.565 0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.565 -0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.565 0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.565 -0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-TeslaModel3Simple {
-  translation -117.910 -40.877 0.4
+Solid {
+  translation -119.169 -41.442 0
   rotation 0 0 1 3.5640
-  color 0.6 0.6 0.6
   name "car_17590"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.690 1.850 0.60 } } ] }
+    Pose { translation -0.235 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.580 1.665 0.45 } } ] }
+    Pose { translation 1.055 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.432 0.34 } } ] }
+    Pose { translation 1.501 0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.501 -0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.501 0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.501 -0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-CitroenCZeroSimple {
-  translation -112.990 -38.544 0.4
+Solid {
+  translation -114.194 -39.085 0
   rotation 0 0 1 3.5640
-  color 0.9 0.9 0.9
   name "car_17591"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.9 0.9 0.9 roughness 0.4 metalness 0.2 }
+        geometry Box { size 3.480 1.480 0.60 } } ] }
+    Pose { translation -0.174 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.9 0.9 0.9 roughness 0.4 metalness 0.2 }
+        geometry Box { size 1.914 1.332 0.45 } } ] }
+    Pose { translation 0.783 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.146 0.34 } } ] }
+    Pose { translation 1.114 0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.114 -0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.114 0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.114 -0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-LincolnMKZSimple {
-  translation -110.007 -37.033 0.4
+Solid {
+  translation -108.805 -36.439 0
   rotation 0 0 1 0.4590
-  color 0.1 0.1 0.1
   name "car_17592"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.930 1.860 0.60 } } ] }
+    Pose { translation -0.246 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.712 1.674 0.45 } } ] }
+    Pose { translation 1.109 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.440 0.34 } } ] }
+    Pose { translation 1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-CitroenCZeroSimple {
-  translation -104.885 -34.547 0.4
+Solid {
+  translation -103.702 -33.962 0
   rotation 0 0 1 0.4590
-  color 0.9 0.9 0.9
   name "car_17593"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.9 0.9 0.9 roughness 0.4 metalness 0.2 }
+        geometry Box { size 3.480 1.480 0.60 } } ] }
+    Pose { translation -0.174 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.9 0.9 0.9 roughness 0.4 metalness 0.2 }
+        geometry Box { size 1.914 1.332 0.45 } } ] }
+    Pose { translation 0.783 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.146 0.34 } } ] }
+    Pose { translation 1.114 0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.114 -0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.114 0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.114 -0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-TeslaModel3Simple {
-  translation 4.989 19.372 0.4
+Solid {
+  translation 3.752 18.761 0
   rotation 0 0 1 3.6006
-  color 0.2 0.5 0.2
   name "car_17594"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.2 0.5 0.2 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.690 1.850 0.60 } } ] }
+    Pose { translation -0.235 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.2 0.5 0.2 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.580 1.665 0.45 } } ] }
+    Pose { translation 1.055 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.432 0.34 } } ] }
+    Pose { translation 1.501 0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.501 -0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.501 0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.501 -0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-RangeRoverSportSVRSimple {
-  translation -2.371 15.741 0.4
+Solid {
+  translation -1.116 16.361 0
   rotation 0 0 1 0.4590
-  color 0.1 0.1 0.1
   name "car_17595"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.850 1.980 0.60 } } ] }
+    Pose { translation -0.242 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.667 1.782 0.45 } } ] }
+    Pose { translation 1.091 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.533 0.34 } } ] }
+    Pose { translation 1.552 0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.552 -0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.552 0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.552 -0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-RangeRoverSportSVRSimple {
-  translation -12.129 10.930 0.4
+Solid {
+  translation -10.874 11.551 0
   rotation 0 0 1 0.4590
-  color 0.9 0.9 0.9
   name "car_17597"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.9 0.9 0.9 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.850 1.980 0.60 } } ] }
+    Pose { translation -0.242 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.9 0.9 0.9 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.667 1.782 0.45 } } ] }
+    Pose { translation 1.091 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.533 0.34 } } ] }
+    Pose { translation 1.552 0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.552 -0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.552 0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.552 -0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-BmwX5Simple {
-  translation -17.351 8.356 0.4
+Solid {
+  translation -16.052 8.999 0
   rotation 0 0 1 0.4590
-  color 0.6 0.6 0.6
   name "car_17598"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.890 1.940 0.60 } } ] }
+    Pose { translation -0.244 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.690 1.746 0.45 } } ] }
+    Pose { translation 1.100 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.502 0.34 } } ] }
+    Pose { translation 1.565 0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.565 -0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.565 0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.565 -0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-MercedesBenzSprinterSimple {
-  translation -22.767 5.686 0.4
+Solid {
+  translation -21.234 6.444 0
   rotation 0 0 1 0.4590
-  color 0.9 0.9 0.9
   name "car_17599"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.9 0.9 0.9 roughness 0.4 metalness 0.2 }
+        geometry Box { size 5.930 1.990 0.60 } } ] }
+    Pose { translation -0.296 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.9 0.9 0.9 roughness 0.4 metalness 0.2 }
+        geometry Box { size 3.262 1.791 0.45 } } ] }
+    Pose { translation 1.334 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.540 0.34 } } ] }
+    Pose { translation 1.898 0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.898 -0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.898 0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.898 -0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-CitroenCZeroSimple {
-  translation -27.177 3.513 0.4
+Solid {
+  translation -25.994 4.097 0
   rotation 0 0 1 0.4590
-  color 0.1 0.1 0.1
   name "car_17600"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 3.480 1.480 0.60 } } ] }
+    Pose { translation -0.174 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 1.914 1.332 0.45 } } ] }
+    Pose { translation 0.783 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.146 0.34 } } ] }
+    Pose { translation 1.114 0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.114 -0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.114 0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.114 -0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-LincolnMKZSimple {
-  translation -43.225 -4.255 0.4
+Solid {
+  translation -44.426 -4.849 0
   rotation 0 0 1 3.6006
-  color 0.9 0.9 0.9
   name "car_17604"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.9 0.9 0.9 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.930 1.860 0.60 } } ] }
+    Pose { translation -0.246 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.9 0.9 0.9 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.712 1.674 0.45 } } ] }
+    Pose { translation 1.109 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.440 0.34 } } ] }
+    Pose { translation 1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-LincolnMKZSimple {
-  translation -53.375 -9.250 0.4
+Solid {
+  translation -54.576 -9.844 0
   rotation 0 0 1 3.6006
-  color 0.9 0.9 0.9
   name "car_17606"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.9 0.9 0.9 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.930 1.860 0.60 } } ] }
+    Pose { translation -0.246 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.9 0.9 0.9 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.712 1.674 0.45 } } ] }
+    Pose { translation 1.109 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.440 0.34 } } ] }
+    Pose { translation 1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-RangeRoverSportSVRSimple {
-  translation -59.006 -12.021 0.4
+Solid {
+  translation -60.261 -12.642 0
   rotation 0 0 1 3.6006
-  color 0.1 0.1 0.1
   name "car_17607"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.850 1.980 0.60 } } ] }
+    Pose { translation -0.242 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.667 1.782 0.45 } } ] }
+    Pose { translation 1.091 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.533 0.34 } } ] }
+    Pose { translation 1.552 0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.552 -0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.552 0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.552 -0.870 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-BmwX5Simple {
-  translation 72.645 52.777 0.4
+Solid {
+  translation 73.945 53.420 0
   rotation 0 0 1 0.4590
-  color 0.1 0.1 0.8
   name "car_17676"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.8 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.890 1.940 0.60 } } ] }
+    Pose { translation -0.244 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.8 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.690 1.746 0.45 } } ] }
+    Pose { translation 1.100 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.502 0.34 } } ] }
+    Pose { translation 1.565 0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.565 -0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.565 0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.565 -0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-ToyotaPriusSimple {
-  translation 67.581 50.291 0.4
+Solid {
+  translation 68.818 50.902 0
   rotation 0 0 1 0.4590
-  color 0.6 0.6 0.6
   name "car_17677"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.540 1.760 0.60 } } ] }
+    Pose { translation -0.227 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.497 1.584 0.45 } } ] }
+    Pose { translation 1.022 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.362 0.34 } } ] }
+    Pose { translation 1.453 0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.453 -0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.453 0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.453 -0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-BmwX5Simple {
-  translation 64.839 48.952 0.4
+Solid {
+  translation 63.540 48.310 0
   rotation 0 0 1 3.6006
-  color 0.1 0.1 0.1
   name "car_17678"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.890 1.940 0.60 } } ] }
+    Pose { translation -0.244 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.690 1.746 0.45 } } ] }
+    Pose { translation 1.100 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.502 0.34 } } ] }
+    Pose { translation 1.565 0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.565 -0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.565 0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.565 -0.850 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-CitroenCZeroSimple {
-  translation 60.036 46.593 0.4
+Solid {
+  translation 58.852 46.008 0
   rotation 0 0 1 3.6006
-  color 0.1 0.1 0.8
   name "car_17679"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.8 roughness 0.4 metalness 0.2 }
+        geometry Box { size 3.480 1.480 0.60 } } ] }
+    Pose { translation -0.174 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.8 roughness 0.4 metalness 0.2 }
+        geometry Box { size 1.914 1.332 0.45 } } ] }
+    Pose { translation 0.783 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.146 0.34 } } ] }
+    Pose { translation 1.114 0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.114 -0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.114 0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.114 -0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-LincolnMKZSimple {
-  translation 55.568 44.399 0.4
+Solid {
+  translation 54.367 43.805 0
   rotation 0 0 1 3.6006
-  color 0.2 0.5 0.2
   name "car_17680"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.2 0.5 0.2 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.930 1.860 0.60 } } ] }
+    Pose { translation -0.246 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.2 0.5 0.2 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.712 1.674 0.45 } } ] }
+    Pose { translation 1.109 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.440 0.34 } } ] }
+    Pose { translation 1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-MercedesBenzSprinterSimple {
-  translation 41.943 37.708 0.4
+Solid {
+  translation 40.410 36.951 0
   rotation 0 0 1 3.6006
-  color 0.2 0.5 0.2
   name "car_17683"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.2 0.5 0.2 roughness 0.4 metalness 0.2 }
+        geometry Box { size 5.930 1.990 0.60 } } ] }
+    Pose { translation -0.296 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.2 0.5 0.2 roughness 0.4 metalness 0.2 }
+        geometry Box { size 3.262 1.791 0.45 } } ] }
+    Pose { translation 1.334 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.540 0.34 } } ] }
+    Pose { translation 1.898 0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.898 -0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.898 0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.898 -0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-ToyotaPriusSimple {
-  translation 29.046 31.366 0.4
+Solid {
+  translation 30.283 31.977 0
   rotation 0 0 1 0.4590
-  color 0.1 0.1 0.1
   name "car_17685"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.540 1.760 0.60 } } ] }
+    Pose { translation -0.227 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.497 1.584 0.45 } } ] }
+    Pose { translation 1.022 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.362 0.34 } } ] }
+    Pose { translation 1.453 0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.453 -0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.453 0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.453 -0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-TeslaModel3Simple {
-  translation 109.921 71.067 0.4
+Solid {
+  translation 111.158 71.678 0
   rotation 0 0 1 0.4590
-  color 0.1 0.1 0.8
   name "car_17687"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.8 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.690 1.850 0.60 } } ] }
+    Pose { translation -0.235 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.8 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.580 1.665 0.45 } } ] }
+    Pose { translation 1.055 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.432 0.34 } } ] }
+    Pose { translation 1.501 0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.501 -0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.501 0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.501 -0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-CitroenCZeroSimple {
-  translation 105.755 69.035 0.4
+Solid {
+  translation 106.939 69.620 0
   rotation 0 0 1 0.4590
-  color 0.8 0.1 0.1
   name "car_17688"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.8 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 3.480 1.480 0.60 } } ] }
+    Pose { translation -0.174 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.8 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 1.914 1.332 0.45 } } ] }
+    Pose { translation 0.783 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.146 0.34 } } ] }
+    Pose { translation 1.114 0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.114 -0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.114 0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.114 -0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-MercedesBenzSprinterSimple {
-  translation 103.603 67.978 0.4
+Solid {
+  translation 102.070 67.220 0
   rotation 0 0 1 3.6006
-  color 0.8 0.1 0.1
   name "car_17689"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.8 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 5.930 1.990 0.60 } } ] }
+    Pose { translation -0.296 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.8 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 3.262 1.791 0.45 } } ] }
+    Pose { translation 1.334 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.540 0.34 } } ] }
+    Pose { translation 1.898 0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.898 -0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.898 0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.898 -0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-CitroenCZeroSimple {
-  translation 124.376 78.144 0.4
+Solid {
+  translation 125.559 78.729 0
   rotation 0 0 1 0.4590
-  color 0.6 0.6 0.6
   name "car_17696"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 3.480 1.480 0.60 } } ] }
+    Pose { translation -0.174 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 1.914 1.332 0.45 } } ] }
+    Pose { translation 0.783 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.146 0.34 } } ] }
+    Pose { translation 1.114 0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.114 -0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.114 0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.114 -0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-LincolnMKZSimple {
-  translation 119.067 88.919 0.4
+Solid {
+  translation 120.268 89.513 0
   rotation 0 0 1 0.4590
-  color 0.1 0.1 0.1
   name "car_17726"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.930 1.860 0.60 } } ] }
+    Pose { translation -0.246 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.712 1.674 0.45 } } ] }
+    Pose { translation 1.109 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.440 0.34 } } ] }
+    Pose { translation 1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.578 -0.810 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-CitroenCZeroSimple {
-  translation 114.158 86.512 0.4
+Solid {
+  translation 115.341 87.097 0
   rotation 0 0 1 0.4590
-  color 0.6 0.6 0.6
   name "car_17727"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 3.480 1.480 0.60 } } ] }
+    Pose { translation -0.174 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 1.914 1.332 0.45 } } ] }
+    Pose { translation 0.783 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.146 0.34 } } ] }
+    Pose { translation 1.114 0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.114 -0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.114 0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.114 -0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-ToyotaPriusSimple {
-  translation 98.703 78.875 0.4
+Solid {
+  translation 99.940 79.487 0
   rotation 0 0 1 0.4590
-  color 0.1 0.1 0.1
   name "car_17730"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.540 1.760 0.60 } } ] }
+    Pose { translation -0.227 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.497 1.584 0.45 } } ] }
+    Pose { translation 1.022 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.362 0.34 } } ] }
+    Pose { translation 1.453 0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.453 -0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.453 0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.453 -0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-ToyotaPriusSimple {
-  translation 86.692 72.973 0.4
+Solid {
+  translation 87.929 73.584 0
   rotation 0 0 1 0.4590
-  color 0.2 0.5 0.2
   name "car_17732"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.2 0.5 0.2 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.540 1.760 0.60 } } ] }
+    Pose { translation -0.227 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.2 0.5 0.2 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.497 1.584 0.45 } } ] }
+    Pose { translation 1.022 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.362 0.34 } } ] }
+    Pose { translation 1.453 0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.453 -0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.453 0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.453 -0.760 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-MercedesBenzSprinterSimple {
-  translation -129.000 -65.011 0.4
+Solid {
+  translation -128.421 -66.620 0
   rotation 0 0 1 -1.2252
-  color 0.6 0.6 0.6
   name "car_22456"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 5.930 1.990 0.60 } } ] }
+    Pose { translation -0.296 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 3.262 1.791 0.45 } } ] }
+    Pose { translation 1.334 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.540 0.34 } } ] }
+    Pose { translation 1.898 0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.898 -0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.898 0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.898 -0.875 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-CitroenCZeroSimple {
-  translation -127.055 -70.652 0.4
+Solid {
+  translation -126.608 -71.894 0
   rotation 0 0 1 -1.2252
-  color 0.6 0.6 0.6
   name "car_22457"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 3.480 1.480 0.60 } } ] }
+    Pose { translation -0.174 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 0.4 metalness 0.2 }
+        geometry Box { size 1.914 1.332 0.45 } } ] }
+    Pose { translation 0.783 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.146 0.34 } } ] }
+    Pose { translation 1.114 0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.114 -0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.114 0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.114 -0.620 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
-TeslaModel3Simple {
-  translation -122.376 -84.143 0.4
+Solid {
+  translation -122.844 -82.845 0
   rotation 0 0 1 1.9164
-  color 0.2 0.5 0.2
   name "car_22458"
+  children [
+    Pose { translation 0 0 0.550
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.2 0.5 0.2 roughness 0.4 metalness 0.2 }
+        geometry Box { size 4.690 1.850 0.60 } } ] }
+    Pose { translation -0.235 0 1.075
+      children [ Shape {
+        appearance PBRAppearance { baseColor 0.2 0.5 0.2 roughness 0.4 metalness 0.2 }
+        geometry Box { size 2.580 1.665 0.45 } } ] }
+    Pose { translation 1.055 0 1.075
+      children [ Shape { appearance PBRAppearance { baseColor 0.08 0.10 0.13 roughness 0.2 metalness 0.1 }
+        geometry Box { size 0.06 1.432 0.34 } } ] }
+    Pose { translation 1.501 0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation 1.501 -0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.501 0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+    Pose { translation -1.501 -0.805 0.300
+      children [ Shape { appearance PBRAppearance { baseColor 0.05 0.05 0.05 roughness 1 metalness 0 }
+        geometry Box { size 0.66 0.22 0.60 } } ] }
+  ]
 }
 Solid {
   name "bay_pads"
@@ -500,7 +1669,7 @@ Solid {
 Mavic2Pro {
   translation 0 0 0.15
   controller "parkdrone"
-  controllerArgs [ "fmi_block_4st.route.json" ]
+  controllerArgs [ "fmi_block_4st_lp.route.json" ]
 }
 Solid {
   name "green_1493505379"

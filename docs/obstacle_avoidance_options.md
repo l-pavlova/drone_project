@@ -76,6 +76,12 @@ one that takes >10 minutes and ~6 GB to load.* Both fast dev worlds are hazard-f
 option below needs a purpose-built small test world with a deliberate conflict, or the
 edit–run–observe loop is 10+ minutes per iteration.
 
+> **Update 2026-08-11:** the load cost was subsequently fixed — `fmi_block_1km` now loads in 167 s
+> (57 s with `--lowpoly`); see `webots_1km_performance.md`. The conclusion above still stands and
+> `fmi_block_obst` remains the right place to develop avoidance, since a 130 m world with a
+> deliberate, *reproducible* conflict beats a 1 km world where the hazards are incidental — but the
+> 1 km world is now usable for a final check.
+
 **What is sensable.** Webots range devices only see nodes that have a `boundingObject`. Right now:
 
 - Buildings — `enableBoundingObject` is wired to the `--collide` flag, **off by default**.

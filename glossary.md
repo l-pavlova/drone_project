@@ -80,6 +80,24 @@ the documentation; the thesis chapters will be held to this glossary.*
 | collision-aware placement | разполагане със следене за застъпване | |
 | separating-axis test | тест с разделяща ос | |
 | rear axle | задна ос | |
+| scene graph | графа на сцената | дървото от възли, което Webots зарежда |
+| node (scene graph) | възел | ⚠ не „нод“ |
+| mesh | мрежа (mesh) | „меш“ само разговорно |
+| polygon / triangle | полигон / триъгълник | |
+| triangulation (ear clipping) | триангулация (чрез отрязване на уши) | |
+| vertex / vertices | връх / върхове | |
+| winding (of a face) | обхождане на стената | по или обратно на часовниковата стрелка; определя накъде сочи нормалата |
+| normal (surface) | нормала | |
+| backface culling | отхвърляне на обърнатите стени | |
+| z-fighting | трептене от съвпадащи повърхности | описателно; „z-fighting“ в скоби при първа употреба |
+| level of detail | ниво на детайлност | |
+| low-poly proxy | нискополигонален заместител | нашите кутиести коли (`--lowpoly`) |
+| load time | време за зареждане | на света в симулатора |
+| memory footprint | заемана памет | |
+| deduplication (of meshes) | премахване на дублиращи се мрежи | Webots споделя еднакви мрежи между копията |
+| determinism / reproducibility | детерминираност / възпроизводимост | еднакъв свят + контролер → еднакъв резултат |
+| regression test | регресионен тест | тук: побайтово сравнение на `ground_truth.json` |
+| fixture (golden result) | еталонен резултат | „златен“ само разговорно |
 
 ## Контролер и полет / Controller & flight
 
@@ -119,6 +137,23 @@ the documentation; the thesis chapters will be held to this glossary.*
 | flight log | полетен дневник / лог на полета | |
 | mission (MAVLink) | мисия | |
 | EKF, RTK, GPS, IMU | — | остават абревиатури |
+| obstacle avoidance | заобикаляне на препятствия | общото име на етапа |
+| obstacle detection | откриване на препятствия | етапът „засичане и спиране“ |
+| range finder / distance sensor | далекомер / сензор за разстояние | |
+| sensor fan (of rays) | ветрило от лъчи | нашите 9 лъча ±40° |
+| ray | лъч | |
+| field of view (sensor) | зрително поле на сензора | |
+| blind spot | сляпа зона | тънкото препятствие между два лъча |
+| lidar | лидар | |
+| bounding object | тяло за сблъсък | Webots: без него сензорите не виждат обекта |
+| standoff distance | дистанция на безопасност | разстоянието, на което дронът спира |
+| braking distance | спирачен път | `v²/2a`; определя нужния обхват на сензора |
+| deceleration | забавяне | |
+| reaction allowance | резерв за реакция | пътят, изминат преди спирачката да подейства |
+| speed limit (command) | ограничение на скоростта | единственото, което слоят за препятствия подава |
+| ratchet (monotonic limit) | еднопосочно ограничение | ограничението само намалява |
+| concave obstacle / trap | вдлъбнато препятствие / капан | където чисто реактивното заобикаляне зацикля |
+| reactive (control) | реактивно управление | без памет за маршрута |
 
 ## Графи и маршрутизация / Graphs & routing
 
@@ -159,7 +194,7 @@ the documentation; the thesis chapters will be held to this glossary.*
 | greedy (algorithm) | алчен алгоритъм | утвърден термин |
 | NP-hard | NP-трудна (задача) | |
 
-## Компютърно зрение (предстоящо) / Vision (upcoming)
+## Компютърно зрение / Vision
 
 | English | Български | Бележки |
 |---|---|---|
@@ -181,6 +216,17 @@ the documentation; the thesis chapters will be held to this glossary.*
 | crop (image region) | изрязан участък (crop) | |
 | threshold | праг | |
 | calibration (of thresholds) | калибриране | |
+| held-out (world / set) | отделен за проверка (held-out) | не се използва при калибрирането |
+| occlusion | закриване (на обект от друг) | напр. стълб, който закрива паркомясто |
+| parallax | паралакс | привидното отместване при поглед под ъгъл |
+| off-nadir | извън надира | когато обектът не е точно под камерата |
+| image centre / eccentricity | център на кадъра / отдалеченост от центъра | в кода `center_off_px` |
+| projection error | грешка в проекцията | геометрична, не класификационна |
+| coverage (of bays) | покритие на паркоместата | дял, попаднал поне в един кадър |
+| capture scatter | разсейване на заснемането | отклонение от планираната пътна точка |
+| chroma | наситеност на цвета (chroma) | |
+| brightness | яркост | |
+| texture / standard deviation | текстура / стандартно отклонение | |
 | held-out set | независимо тестово множество | ⚠ не „задържано множество“ |
 
 ---

@@ -8,6 +8,57 @@ GTX 1650 (4 GB VRAM) + Intel UHD.
 
 ---
 
+## OUTCOME (2026-08-11) — options B and A implemented and measured
+
+Everything below this section is the original research note of 2026-08-10, kept as
+written. Two of its predictions were **wrong**, both for the same reason, and the
+corrections matter more than the numbers:
+
+| `fmi_block_1km`, headless | load | peak RSS | peak VRAM | Solids |
+|---|---:|---:|---:|---:|
+| as committed (`e7f9ad7`) | 282.6 s | 6359 MiB | 1315 MiB | 8379 |
+| **+ B** (merged bay paint) | 167.6 s | 5268 MiB | 1211 MiB | 416 |
+| **+ B + A** (`--lowpoly`) | **57.4 s** | **1663 MiB** | 610 MiB | 1143 |
+
+**4.9× faster and 3.8× smaller.** The original "10 minutes" was headless-4.7-min
+plus GUI overhead; it is now under a minute.
+
+**Correction 1 — the VRAM hypothesis is refuted.** "What I could not determine"
+proposed that a ~6 GB scene against a 4 GB card forced the driver to spill during
+`createWrenObjects()`. Measured: VRAM peaked at **1315 MiB of 4096** and sat at
+52 MiB for the first ~170 s of a 282 s load. The card was never close to full.
+(The `--no-rendering` result should have been the tell: if WREN buffers were the
+cost, disabling rendering would not have been free.)
+
+**Correction 2 — option B saves 115 s, not "~0 s".** The table below predicts
+"~1.1 GB / ~0 s" for B. Memory was almost exact (1091 MiB), but the 7963 removed
+`Solid`s were worth **115 s** — ~14 ms each.
+
+Both errors share one cause: **per-node costs were measured in worlds containing
+only that node type, then summed linearly.** A `Solid`'s 14 ms disappeared into
+the noise floor of an 8 s empty-world baseline, so it was recorded as "~0 s" and
+the missing time was then attributed to a GPU effect that does not exist. When
+re-measuring anything here, measure the *change to the real world*, not an
+isolated probe. (The 5.1 MB/car figure is trustworthy — it came from a 400→800
+marginal rate, not a noise-floor reading.)
+
+**Answered: does a box-car world keep 100 %?** No — and not in the direction
+predicted. The note reasoned that `core_chroma` alone would carry it and the box
+world would be an *easier* target. Built `fmi_block_4st_lp` (the note's own
+suggested experiment) and scored it: **98.2 %, TP=47 TN=62 FP=0 FN=2** against
+100 % for the proto-car world. Both misses are **dark** cars (`brightness` 68–70,
+`std` 10–11, `dark_frac` 0.00): a uniform dark box on dark asphalt is
+indistinguishable from empty tarmac, because the box has none of the panel gaps,
+glass or under-car shadow the heuristic leans on. So the box world is *harder*
+for dark vehicles, and the warning stands in strengthened form — **never use
+`--lowpoly` for an accuracy claim**, only for coverage/logistics on big worlds.
+
+Also confirmed as written: `SimpleBuilding` is cheap (refuted candidate G),
+DEF/USE is not the lever (node count is), and the "kill stray Webots first"
+warning is real.
+
+---
+
 ## Bottom line
 
 **~6 GB is normal for this scene; 10 minutes is at the bad end but not an outlier.**

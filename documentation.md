@@ -1,9 +1,11 @@
 # PARKDRONE — Simulation Documentation (thesis draft)
-#add skill https://github.com/anthropics/skills/blob/main/skills/doc-coauthoring/SKILL.md
+
 *Draft for thesis use. Covers the problem statement, the data and world-building
-pipeline, the simulation scales, the flight controller, waypoint navigation, and
-the evolution of the route-planning algorithm (DFS → rural postman). Numbers are
-from verified simulation runs (July 2026).*
+pipeline, the simulation scales and their cost, the flight controller, waypoint
+navigation, the evolution of the route-planning algorithm (DFS → rural postman),
+obstacle detection, and the occupancy-scoring vision stage with its measured
+failure modes. Numbers are from verified simulation runs; last revised
+2026-08-11.*
 
 ---
 
@@ -126,8 +128,13 @@ World contents:
   dashed centre line), width from OSM lane count. Segments are clipped to the
   window with Liang–Barsky clipping (OSM nodes are sparse — filtering points
   instead of clipping segments would drop streets that merely cross the
-  window). Road heights are staggered by millimetres to avoid z-fighting at
-  intersections.
+  window). Road heights are separated by a greedy slot colouring: each road run
+  takes the lowest height not used by a run it overlaps, so crossing streets stay
+  apart while the maximum height is bounded by the junction degree rather than by
+  the number of roads. A flat stagger — height proportional to road index — was
+  tried first and failed on the 1 km world, where it lifted late roads *above*
+  the bay layer and painted asphalt over whole bay rows (330 vision false
+  positives).
 - **Green areas**: OSM `landuse=grass|meadow|forest`, `leisure=park|garden` and
   `natural=scrub|wood` polygons, triangulated (ear clipping — Webots renders
   non-convex faces unreliably) and painted at z = 0.005: above the ground and
@@ -143,16 +150,24 @@ World contents:
   a clipped footprint can come back self-touching and break the proto's roof
   triangulation. Footprints past 24 corners collapse to their PCA-oriented
   bounding box.
-- **Light poles**: `StreetLight` protos walked along the street centerlines at
-  an adaptive spacing (25 m on the small worlds, opening up on the 1 km world so
-  the count stays bounded), one kerb-width plus 1 m off the centerline,
-  alternating sides. A candidate that would stand on a painted bay tries the
-  other kerb and is otherwise skipped — a pole on the paint would be a
-  ground-truth bug, not scene realism. Their built-in spot light is switched
-  **off**: the proto ships a 1000 m-radius `SpotLight`, and hundreds of those
-  would both wreck performance and shift the daylight exposure that the
-  classifier's brightness thresholds are calibrated against.
-- **Painted bays**: thin white boxes at each bay rectangle.
+- **Light poles**: a mast, an arm and a head, built from primitives and walked
+  along the street centerlines at an adaptive spacing (25 m on the small worlds,
+  opening up on the 1 km world so the count stays bounded), one kerb-width plus
+  1 m off the centerline, alternating sides. A candidate that would stand on a
+  painted bay tries the other kerb and is otherwise skipped — a pole on the paint
+  would be a ground-truth bug, not scene realism. They are hand-built rather than
+  taken from Webots' `StreetLight` proto because that proto is a 66 KB detailed
+  mesh *and* carries a live 1000 m-radius `SpotLight`; hundreds of those would
+  both wreck performance and shift the daylight exposure the classifier's
+  brightness thresholds are calibrated against. This is a daytime scene — lamps
+  are geometry, not light sources.
+- **Painted bays**: a dark asphalt pad with a thin white painted **outline**
+  (~12 cm lines), like real Sofia street parking. An earlier version filled the
+  whole rectangle white, which made free/occupied trivially separable by colour
+  and simultaneously made white cars invisible — unrealistic in both directions.
+  All the pads are emitted as one merged `IndexedFaceSet` and all the lines as a
+  second one, rather than five `Solid` nodes per bay; see "The cost of a node"
+  below.
 - **Parked cars**: each *public* bay is occupied with probability
   `occupied_fraction` (default 0.5). Occupied bays hold one of seven real
   Webots vehicle models (Tesla Model 3, BMW X5, Citroën C-Zero, Toyota Prius,
@@ -197,6 +212,73 @@ to the route, centroid in the shared local metres). On the 1 km world 7
 structures reach 30 m and 3 of them sit beside the route — the tallest, 42 m,
 is 8.6 m from the centerline.
 
+### 4.1 The cost of a node
+
+The 1 km world initially took **over ten minutes and ~6 GB of RAM to load**,
+which made every generator change a ten-minute experiment. Measurement — rather
+than the usual guesses about rendering settings — located the cost precisely, and
+two of the answers were counter-intuitive enough to be worth recording.
+
+The scene is far outside the envelope Webots is tuned for. The most vehicle-dense
+world Cyberbotics ships has 28 cars; the 1 km world had 727, in 10 065 top-level
+nodes. Reading the R2023b sources explains why that is expensive: triangle meshes
+and textures *are* deduplicated across instances, but **GPU buffers are not** —
+`createWrenObjects()` uploads private vertex and index buffers per geometry node,
+and there is no instancing path. A "Simple" vehicle proto is also not low-poly:
+"Simple" means no physics, joints or interior, while the exterior mesh stays at
+full detail (~20–30 k triangles). Measured cost: **5.1 MB and 0.136 s per
+vehicle**, linear to at least 800 instances.
+
+Two changes followed, each verified to leave `ground_truth.json` and
+`route.json` byte-identical:
+
+1. **Merge the bay paint.** Each bay emitted five `Solid` nodes (a pad and four
+   outline boxes). A Webots `Solid` costs ~0.145 MB *however trivial its
+   geometry*, so 1593 bays spent ~1.1 GB on flat rectangles. Accumulating every
+   pad into one `IndexedFaceSet` and every line into a second cut the world from
+   8379 `Solid`s to 416. Two details make it exact rather than approximate: the
+   merged quads sit at the **top face** of the boxes they replace, not at the box
+   centres, so the surface the camera sees does not move; and each quad is wound
+   counter-clockwise so its normal faces the camera rather than the ground.
+2. **Optional proxy cars** (`--lowpoly`): a body, cabin, windscreen and four
+   wheel boxes instead of the proto. Every random draw, model choice and
+   collision test upstream is left untouched, so the ground truth cannot move —
+   only the emitted geometry differs.
+
+| `fmi_block_1km`, headless | load | peak RAM | `Solid` nodes |
+|---|---:|---:|---:|
+| original | 282.6 s | 6359 MiB | 8379 |
+| merged bay paint | 167.6 s | 5268 MiB | 416 |
+| + proxy cars | **57.4 s** | **1663 MiB** | 1143 |
+
+**4.9× faster and 3.8× smaller.** Two negative results are as useful as the
+positive one. `--no-rendering` changes load cost by *exactly zero* (56.2 s vs
+56.4 s on a 400-car probe): the scene graph and GPU buffers are built whether or
+not the main view draws, so rendering flags are a *step*-cost lever and not a
+load-cost one. And `DEF`/`USE` sharing saved only 9%, because Webots already
+shares primitive meshes — the residual cost is the node itself. **Reducing node
+count is the lever; reducing geometry is not.**
+
+The methodological lesson is the one worth carrying into the thesis. An earlier
+analysis measured each node type in a world containing *only* that type and
+summed the costs linearly. That attributed a `Solid` ~0 s (its true ~14 ms
+vanished into an 8 s baseline) and left a 5× discrepancy in load time, which was
+then blamed on GPU memory exhaustion. Direct measurement refuted that outright:
+video memory peaked at 1315 MiB of an available 4096 MiB and was never close to
+full. **Component costs measured in isolation do not compose**; the change to the
+real system has to be measured directly.
+
+Finally, the proxy cars answer a question the analysis had guessed at. It
+predicted that a box world would be an *easier* target for the classifier. It is
+not: scored on a low-poly copy of the calibration world, accuracy fell from 100%
+to **98.2%**, and both misses are *dark* cars (brightness 68–70, texture
+std 10–11). A uniform dark box on dark asphalt is indistinguishable from empty
+tarmac, because it has none of the panel gaps, glass or under-car shadow the
+heuristic relies on. So proxy cars are legitimate for coverage and logistics work
+on large worlds, but **an accuracy figure measured on them is not comparable**
+with one measured on the real vehicle models — and the calibrated worlds are
+therefore never built with them.
+
 ## 5. Simulation scales
 
 The same generator covers all scales; each world is an independent file set
@@ -209,10 +291,14 @@ a per-survey-area output folder (`sim/output/<survey_area>/frame_###.png`, `pose
 | `fmi_block_4st` (test) | 130 m | 111 | 49 | 67 | 13 | 23 | 4 | 871 m | 97 |
 | `fmi_block_1km` | 500 m | 1,593 | 727 | 775 | 38 | 375 | 45 (+4 PCA-fallback) | 19.0 km | 1,976 |
 
+Two further worlds exist for specific experiments rather than for survey work:
+`fmi_block_obst` (the obstacle-avoidance test course, section 7.5) and
+`fmi_block_1km_lp` (the 1 km world with proxy cars, section 4.1).
+
 The default world is the regression baseline (its route has been flown and
-verified repeatedly); the 4-street world exercises junctions, dead-end
-backtracks and transits at manageable runtime; the 1 km world is the
-neighbourhood-scale target. At the 2.5 m/s cruise speed the 1 km patrol is
+verified repeatedly); the 4-street world is where the classifier is calibrated
+and exercises junctions, dead-end backtracks and transits at manageable runtime;
+the 1 km world is the neighbourhood-scale target. At the 2.5 m/s cruise speed the 1 km patrol is
 ≈2 h of simulated flight; the dominant *wall-clock* cost — continuous camera
 rendering — was removed (section 7.4), after which the remaining limit is
 physics: with ~700 car models the simulation runs near real time on one CPU
@@ -416,6 +502,74 @@ controller now reads the incrementally-written `poses.json` on startup and
 continues from the first uncaptured waypoint, so a multi-hour patrol survives
 crashes and host interruptions without re-flying.
 
+### 7.5 Obstacle avoidance: detect and stop
+
+The survey controller holds a fixed 30 m and, by design, knows nothing about
+obstacles: the three survey worlds contain no collision geometry at all, so a
+range sensor there would read maximum range forever. Obstacle work is therefore
+gated behind a generator flag (`--collide`) which arms buildings, poles *and* the
+drone's sensing together, and it is developed against a dedicated world.
+
+**A purpose-built test world.** The only real world with anything to hit at
+cruise altitude is the 1 km world, whose load time made the edit–run–observe loop
+impractical. `fmi_block_obst` reuses the 4-street window and route and adds four
+synthetic structures anchored to fractions along the finished route — each tall
+enough to reach cruise altitude, and each a *different* failure mode rather than
+four copies of one: a wide head-on `tower`; a `slab` offset 7 m so it clips the
+flight corridor without blocking it; a 0.9 m-wide `mast`, thin enough to fall
+between the rays of a sparse sensor fan at range; and a concave `trap` opening
+toward the drone, the case where purely reactive avoidance circles forever.
+Placement is deterministic, is nudged past any bay it would otherwise cover (a
+box on painted tarmac would be a ground-truth bug), and enforces a 30 m
+separation — because a postman route doubles back, and two anchors twelve
+waypoints apart can land 15 m from each other. The obstacle-blind baseline is
+recorded: the controller flies into the tower at waypoint 12 and stops, 13 frames
+into the patrol.
+
+**Sensing.** Nine `DistanceSensor` rays in a ±40° fan, 80 m range, mounted in the
+drone's body slot. A fan of single-ray sensors rather than a Lidar, because that
+is what the hardware plan specifies — and because its weakness is the thing worth
+measuring: rays diverge, so a thin obstacle can hide between two of them at
+range, which is exactly what the 0.9 m mast is there to demonstrate. If the mast
+proves undetectable in time, *that* is the evidence for specifying a Lidar,
+rather than an assumption made in advance.
+
+The 80 m range is a **dynamics** specification, not a perception one. Tilt is
+capped for stability (section 7.1) and the simulation has no aerodynamic drag, so
+the achievable deceleration is only ~0.22 m/s²; stopping from 5 m/s therefore
+takes v²/2a ≈ 57 m. A 40 m rangefinder could not stop this aircraft at cruise
+speed no matter how good the logic — the sensor must be specified from the
+braking distance, not from a round number.
+
+**Control.** The layer emits **only a speed limit**, into the same `v_des`
+channel the navigator already uses — never a position target. This is the
+structural reason every controller invariant survives: the stabiliser sees
+nothing new, and in particular the lateral-position command that tumbles the
+aircraft (section 7.2) is never introduced. Four further constraints each came
+from an observed failure. Returns are gated by bearing and corridor, because
+braking on the raw nearest return let the wide fan latch onto scenery off to the
+side and the minimum then *flipped* between targets, handing cruise speed back
+mid-brake. The limit ratchets downward only, so a momentarily lost return cannot
+undo a brake. A reaction allowance is charged against the range, because the bare
+braking curve permits a drone strictly below it to keep accelerating — true only
+for a vehicle that can brake instantly. And braking uses a saturated gain with a
+latched station-keeping point once stopped, because a proportional brake fades as
+the speed error closes, and pure damping cannot null a steady hover drift: an
+early version stopped correctly at 12.7 m and then crept 13 m into the tower over
+the following 95 s.
+
+Frames captured while the layer is in control are tagged in `poses.json`, so the
+scorer can exclude them rather than mis-score them silently, and one-row-per-
+second telemetry is written to disk because the interesting seconds fall
+*between* waypoint captures.
+
+**Result.** The drone acquires the tower at 76 m, brakes, and holds a **12.20 m
+standoff to within ±2 cm for over 400 s** at 30.00 m altitude. The patrol does
+not finish, which is the intended outcome of this stage: it is detect-and-stop.
+Steering around the obstacle — expressed as a yaw bias on the same channel
+principle, and chosen over climbing precisely so the classifier's 30 m
+calibration is never broken — is the next stage and is not yet implemented.
+
 ## 8. Occupancy scoring (vision stage, v1)
 
 The first vision implementation (`vision/score_occupancy.py`) deliberately
@@ -522,27 +676,46 @@ with harder rendering (textures, shadows, lighting variation) or real
 imagery — the projection, view-selection and scoring stages are
 classifier-agnostic either way.
 
-### 8.2 First measured effect of the scenery
+### 8.2 Occlusion by scenery: a parallax false positive
 
 Adding buildings, greenery and light poles (section 4) and re-flying the
-held-out world moved it off saturation for the first time:
+calibration world moved it off saturation for the first time, to **99.1%**
+(TP 49, TN 61, FP 1, FN 0). The single false positive was diagnostic rather than
+noise. Bay 17579 was photographed from 110 px off-nadir, and a 7 m light pole
+standing *beside* it leaned across it under that parallax; the dark pole pixels
+put the core's dark fraction at 0.03 against a 0.02 threshold, with brightness at
+82 — exactly on the envelope's lower bound. The pole does not stand on the paint
+(the generator rejects that placement); it overhangs from above, which a real
+street lamp does too. That is the intended kind of hard case: a physically real
+occlusion, not a rendering artifact, and one a core-crop colour heuristic cannot
+fix because the occluding object is genuinely inside the crop.
 
-| `fmi_block_4st` | classified | TP | TN | FP | FN | accuracy |
-|---|---|---|---|---|---|---|
-| before scenery | 111/111 | 49 | 62 | 0 | 0 | 100% |
-| with scenery | 111/111 | 49 | 61 | 1 | 0 | **99.1%** |
+The measurement is no longer reproducible, and *why* is itself instructive. A
+later re-fly of the same world scores **100% with 111/111 bays covered**, because
+the flight path changed underneath the result: the capture geometry that put bay
+17579 110 px off-nadir no longer occurs, so the pole no longer leans across it.
+The failure *mechanism* is real and remains an argument for the learned
+classifier; the *number* was a property of one flight, not a stable property of
+the world. Section 9 draws the general lesson.
 
-The single false positive is diagnostic rather than noise. Bay 17579 was
-photographed from 110 px off-nadir, and a 7 m light pole standing *beside* it
-leans across it under that parallax; the dark pole pixels put the core's dark
-fraction at 0.03 against a 0.02 threshold, with brightness at 82 — exactly on
-the envelope's lower bound. The pole does not stand on the paint (the generator
-rejects that placement); it overhangs from above, which a real street lamp does
-too. So this is the intended kind of hard case: a physically real occlusion, not
-a rendering artifact — and it is a failure mode a core-crop colour heuristic
-cannot fix, since the occluding object is genuinely inside the crop. It is the
-first concrete argument in this project for the learned classifier, and it comes
-with a labelled example.
+### 8.3 An open failure: off-nadir projection error
+
+The held-out world `fmi_block` currently scores **95.2%** (42 classified, TP 17,
+TN 23, FP 2, FN 0) — two free bays, 17685 and 17686, reported occupied. Both are
+captured **136–146 px off the image centre**, and the cause is *projection*, not
+classification: at that eccentricity the projected bay polygon no longer lines up
+with the painted outline in the image, so white line pixels fall inside what the
+scorer treats as the bay's core. The measured features say so directly — paint
+fraction 0.07, brightness 105 against a free envelope of 82–102, texture std 40 —
+on what is physically empty asphalt.
+
+This is the same family as the gimbal-pitch error of section 8.1: a geometric
+misalignment that presents as a classification failure, and one that no amount of
+threshold tuning fixes because the crop is looking at the wrong pixels. It is
+recorded as an open defect. The scorer already logs each bay's distance from the
+image centre, so the data needed to characterise the effect — and to decide
+between correcting for eccentricity, shrinking the core crop as eccentricity
+grows, or rejecting views past a threshold — is already on disk.
 
 ## 9. Verification methodology
 
@@ -559,6 +732,31 @@ There is no unit-test suite; verification is empirical and scripted:
 - **Regression anchor**: the default world's 34-waypoint route, flown and
   verified in full, must survive algorithm changes byte-identical (it did for
   the postman migration and the origin pinning).
+- **Byte-identical metadata as the standing test**: after any generator change,
+  every world is regenerated and its `ground_truth.json` and `route.json` are
+  compared byte-for-byte against the previous build. The random streams are split
+  deliberately (occupancy, car choice, scenery cosmetics) so that cosmetic and
+  performance work *cannot* move the labels — and the byte comparison is what
+  proves it rather than assumes it. Both changes in section 4.1 were validated
+  this way.
+- **A/B with repeats when a change might affect accuracy**: the geometry merge
+  was validated by flying four patrols per variant and comparing confusion
+  matrices, not by a single before/after run.
+
+**Determinism, and the trap of a stale fixture.** Webots runs here are
+reproducible: the same world with the same controller yields identical frames,
+poses and scores (verified across eight runs). That is a strong property — it
+means any change in an accuracy figure points at a changed world or controller
+rather than at noise. It also sets a trap, which this project fell into. A
+"golden" result for the held-out world had been recorded as 100%, but the frames
+behind it were captured in July and merely *re-scored* in August after the
+scenery was added; they were never re-flown. The number therefore described a
+world that no longer existed, and it silently stopped being reproducible. Two
+rules follow, and both are now enforced: **a fixture must be re-flown, not
+re-scored, whenever the world or the controller changes**, and a stored result
+must carry the date of the *flight* rather than of the scoring. Re-flying both
+fixtures revealed one improvement (the calibration world, 99.1% → 100%) and one
+genuine open defect that had been masked for over a week (section 8.3).
 
 ## 10. Transfer to the real drone
 
@@ -650,21 +848,22 @@ the unchanged layers above it.
 
 ## 11. Current limitations and future work
 
-- **Vision is a calibrated heuristic that saturates the current scene**: after
-  the realistic-world and nadir fixes (section 8.1) it scores 100% on both the
-  calibration and the held-out world, but its thresholds encode the sim's
-  uniform lighting and untextured surfaces. It will not survive shadows,
-  surface texture, weathered markings or real imagery — the step to a learned
-  classifier over the identical bay crops belongs together with making the
-  scene harder, so that the comparison is meaningful. The scenery (section 4)
-  is the first instalment of that hardening, and a bounded one: the classifier
-  samples only the lengthwise *core* of each bay, so scenery that merely sits
-  beside a bay never enters the sampled pixels. It still cost the first point
-  of accuracy the project has lost — 100% → 99.1% on the held-out world, one
-  false positive from a light pole leaning across a bay under parallax
-  (section 8.2). The other exposed surface is bays that sit **on** a green
-  polygon: none in the two small worlds, 31 in the 1 km one, so that world is
-  where the next measurement should be taken.
+- **Vision is a calibrated heuristic**: it scores **100%** on the calibration
+  world (`fmi_block_4st`, 111/111 bays covered) and **95.2%** on the held-out
+  world, but its thresholds encode the sim's uniform lighting and untextured
+  surfaces. It will not survive shadows, surface texture, weathered markings or
+  real imagery — the step to a learned classifier over the identical bay crops
+  belongs together with making the scene harder, so that the comparison is
+  meaningful. The scenery (section 4) is the first instalment of that hardening,
+  and a bounded one: the classifier samples only the lengthwise *core* of each
+  bay, so scenery that merely sits beside a bay never enters the sampled pixels.
+  The exposed surface not yet measured is bays that sit **on** a green polygon:
+  none in the two small worlds, 31 in the 1 km one, so that world is where the
+  next measurement should be taken.
+- **Two open false positives on the held-out world** (section 8.3): a projection
+  misalignment at high image eccentricity, not a classification failure. This is
+  the highest-value outstanding fix, because it is geometric and therefore
+  solvable exactly, unlike the threshold work.
 - **Shadows are the real hardening lever, and are deliberately still off.**
   `castShadows FALSE` on the sun is not an aesthetic choice: shadow mapping over
   a 1.2 km ground plane painted streak artifacts across the nadir frames. Turning
@@ -673,30 +872,41 @@ the unchanged layers above it.
   make any accuracy change unattributable. The right sequence is its own
   experiment — a window-sized ground plane or a tighter shadow frustum first,
   measured on its own — alongside the learned classifier that has to survive it.
-- **Cruise speed**: capped at 2.5 m/s — a 5 m/s trial crashed the
-  neighbourhood patrol at a fast junction turn (section 7.4), and with
-  waypoints every 10 m the approach ramp keeps the median speed near 2.5 m/s
-  regardless. Measured on the two legs of the same 1 km flight, the wall-time
-  gain from the higher cap was marginal anyway (~8 s vs ~7–12 s per waypoint):
-  on the neighbourhood world wall time is bound by physics with ~700 car
-  models, not by flight speed or the camera. If faster flight is wanted, two
-  safe designs address the crash mechanism directly rather than capping
-  everything: **corner-aware speed** (cap `v_des` by the heading change to the
-  upcoming waypoint, so straights cruise fast and corners are braked into
-  ahead of time) and a **brake-saturation cap** (never let the brake command
-  reach the full tilt limit; longer overshoot, no lift dip). Both matter for
-  the real drone too, where flight time is battery-limited.
-- **Faster neighbourhood patrols** would come from attacking the actual
-  bottlenecks instead: **fly higher** — at 50 m the footprint grows ~1.7×, so
-  waypoint spacing could double, halving both waypoints and route length, at
-  the cost of ground resolution (16 → ~10 px/m; the classifier would need
-  re-verification at that scale) — and **cheaper physics** — the parked cars
-  only need to be seen, never collided with, so stripping their collision
-  geometry (or raising `basicTimeStep`, which would force a controller
-  re-tune) targets the saturated physics core directly.
+- **Cruise speed** is back at 5 m/s, made safe by a per-waypoint **speed
+  profile** rather than a blanket cap: each waypoint takes a corner limit from
+  the route's heading change there (full speed on straights, 2.0 m/s at ~90°,
+  0.8 m/s at a reversal), and a backward pass then propagates those limits
+  upstream along the kinematic braking curve so the drone is always slow enough
+  to stop for the corner ahead. The braking constant it plans against (0.22 m/s²)
+  is deliberately below the ~0.29 m/s² measured from flight logs; an earlier
+  linear-ramp brake model assumed roughly five times more deceleration than the
+  aircraft has and blew through waypoints into wide recovery loops. Sharp
+  reversals additionally stop and turn on the spot, because a U-turn taken with
+  momentum traces a wide teardrop rather than a tight pivot.
+- **Faster neighbourhood patrols**: world *load* is no longer the obstacle
+  (section 4.1 took it from >10 min to 57 s). What remains is simulated-flight
+  time. Two levers are untried: **fly higher** — at 50 m the footprint grows
+  ~1.7×, so waypoint spacing could double, halving both waypoints and route
+  length, at the cost of ground resolution (16 → ~10 px/m, which would require
+  re-verifying the classifier at that scale) — and **cheaper physics**, since the
+  parked cars only need to be seen and never collided with, so stripping their
+  collision geometry (or raising `basicTimeStep`, which would force a controller
+  re-tune) targets the physics core directly.
+- **The 1 km survey is unfinished**: 318 of 1976 waypoints captured, and not yet
+  scored. The load-cost work removes the practical barrier to completing it.
 - **Capture scatter**: occasional timeout arrivals capture up to ~15 m off the
-  waypoint; ~1% of bays can fall outside all footprints at zero margin.
+  waypoint; ~1% of bays can fall outside all footprints at zero margin (3 of 45
+  on the held-out world).
 - **Name matching**: 4 of 49 streets in the 1 km cut have no OSM name match
   and use the straight-line PCA fallback (fine for straight streets only).
 - **Angled bays**: "Косо" spaces are drawn at a fixed 45° to the street; the
   actual angle direction (left/right of the street) is not in the data.
+- **Obstacle avoidance stops at detection** (section 7.5). The drone brakes to a
+  stable standoff but cannot get past the obstacle, so a patrol that meets one
+  does not complete. Steering around it — a yaw bias on the navigator's existing
+  channel, preferred over climbing so the classifier's 30 m calibration is never
+  broken — is the next stage. The concave `trap` in the test world is expected to
+  defeat a purely reactive version and is the argument for keeping some route
+  memory.
+- **Shadows remain off** and are the single largest untested hardening lever;
+  see the note above on sequencing that as its own experiment.

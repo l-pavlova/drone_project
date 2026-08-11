@@ -16,6 +16,41 @@ All project math (Webots rotations, yaw errors, gimbal angles) is in radians.
 Four numbers `x y z θ`: rotate by angle θ (radians) around axis (x, y, z),
 right-hand rule. `0 1 0 0.4` = tilt down ~23° about the y-axis.
 
+## Braking distance (`v² / 2a`)
+
+From constant deceleration `a`, stopping from speed `v` takes
+
+```
+d = v² / (2a)
+```
+
+Quadratic in speed: doubling the speed **quadruples** the distance.
+
+In PARKDRONE this sizes the obstacle sensor, not the other way round. Tilt is
+capped for stability and the sim has no drag, so `a ≈ 0.22 m/s²`; from
+`V_MAX = 5 m/s` that is `25 / 0.44 ≈ 57 m`. A 40 m rangefinder therefore *cannot*
+stop this drone at cruise speed — hence the 80 m range. Add a reaction allowance
+(`v · t_react`) on top, because the aircraft does not begin braking the instant it
+sees something.
+
+The same relation runs backwards along the route to set the speed profile:
+`v_allowed² = v_next² + 2·a·d`, applied from the last waypoint upstream, gives the
+fastest speed at each waypoint that can still be braked down for the corner ahead.
+
+## Camera footprint at altitude
+
+For a pinhole camera at altitude `h` with horizontal field of view `fov`, looking
+straight down:
+
+```
+width = 2 · h · tan(fov / 2)
+```
+
+At `h = 30 m`, `fov = 0.785 rad (45°)`: `width ≈ 24.8 m` across 400 px, i.e.
+**≈ 16 px per metre**. That is why waypoints are 10 m apart (the footprint is only
+~25 × 15 m) and why flying higher trades resolution for coverage: at 50 m the
+footprint grows ~1.7× while the scale drops to ~10 px/m.
+
 ## WGS84 (EPSG:4326)
 
 The globe-shaped coordinate system GPS reports and the one we store: **lon/lat in
