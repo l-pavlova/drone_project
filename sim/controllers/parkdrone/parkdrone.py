@@ -96,7 +96,7 @@ camera = robot.getDevice("camera")
 # basic time step (~4 cm at 5 m/s) — same as with continuous sampling.
 CAM_WARMUP = 2             # steps between camera.enable() and saveImage()
 cam_warm = -1              # >=0 while a capture is scheduled (counts down)
-SNAP_DIAG = True           # timed snap_###.png diagnostics need a continuously
+SNAP_DIAG = False          # timed snap_###.png diagnostics need a continuously
 #   enabled camera; turn back on only when debugging capture itself.
 if SNAP_DIAG:
     camera.enable(dt)
@@ -145,6 +145,126 @@ cam_roll_pos = _gimbal_sensor(cam_roll, "camera roll")
 # the scorer assumes camera yaw == body yaw. Record the actual joint angle.
 cam_yaw = robot.getDevice("camera yaw")
 cam_yaw_pos = _gimbal_sensor(cam_yaw, "camera yaw")
+
+# --- forward obstacle sensors (stage D: detect and stop) -------------------
+# A fan of single-ray DistanceSensors in the drone's bodySlot, emitted by
+# generate_world.py ONLY for --collide worlds. Every survey world therefore has
+# none, getDevice returns None, and this whole layer switches itself off - the
+# patrol behaves exactly as it did before.
+#
+# These three constants MUST match generate_world.py (same convention as
+# ORIGIN). The controller needs the angles, not just the ranges: stage D only
+# brakes, but the bearing of the closest return is what stage B's yaw bias will
+# steer against, so it is read and logged from the start.
+DS_N = 9
+DS_SPREAD_DEG = 40.0
+DS_RANGE = 80.0
+# Standoff: where the drone comes to rest in front of an obstacle. Sized off the
+# 10 m route step and the ~6 m arrival basin, so a hover here is unambiguously
+# "stopped short of it" and not "arrived at a waypoint".
+OBST_STOP = 12.0
+# A return this close to DS_RANGE is the sensor saying "nothing out there"
+# rather than a hit at max range.
+OBST_CLEAR = DS_RANGE - 0.5
+# THREAT GATE. The fan is 80 deg wide, so most of what it sees is scenery the
+# drone will fly past, not into. Braking on the raw closest return is actively
+# harmful: in the first stage-D run the -40 deg ray picked up the course's mast
+# 66 m away and off to the side, the speed limit dropped for something that was
+# never in the path, and worse, the "closest return" then FLIPPED between that
+# ray and the tower ahead - so the limit kept rising again and the drone
+# accelerated back to cruise during the seconds it should have been braking. It
+# ran out of room and hit the tower at 2 m/s.
+#
+# A return counts as a threat if it is roughly ahead (OBST_BEARING) or, at close
+# range, laterally inside the corridor the drone occupies (OBST_CORRIDOR). The
+# bearing clause has to carry the long range: at 68 m even a 10 deg bearing is
+# 12 m of lateral offset, so a pure corridor test would reject the very obstacle
+# the route is curving toward.
+OBST_BEARING = math.radians(20.0)
+OBST_CORRIDOR = 8.0
+# Braking authority for the obstacle curve, DELIBERATELY below the A_BRAKE the
+# corner profile uses. Measured in that same run: 4.47 -> 2.02 m/s over 13 s is
+# 0.19 m/s^2, i.e. the 0.22 the corner profile plans against is optimistic here.
+# Overshooting a waypoint costs a wide turn; overshooting a wall costs the
+# aircraft, so this curve gets the pessimistic number.
+A_BRAKE_OBST = 0.15
+# Reaction allowance, in seconds of travel subtracted from the measured range.
+# The bare curve v = sqrt(2a(d-stop)) says a drone strictly below it may keep
+# ACCELERATING, which is true only for a vehicle that can switch to full braking
+# instantly. This one cannot: forward speed is a proportional velocity
+# controller working through a ~2 deg tilt limit, so it takes seconds to reverse
+# a trend. Second stage-D run, with gating and the ratchet already in: the
+# threat was acquired at 76 m, the curve there still allowed 4.38 m/s, the drone
+# duly accelerated 3.85 -> 4.30, and by 48 m it was a full 1 m/s ABOVE the curve
+# and never caught up - it reached the tower at 1.56 m/s and crashed.
+# Charging 3 s of travel against the range makes the constraint bind at
+# acquisition instead of 25 m later, so the drone stops accelerating the moment
+# it sees something and has margin to spare when it matters.
+OBST_REACT = 3.0
+# Braking gain used INSTEAD of K_VEL while the obstacle layer is slowing the
+# drone down. K_VEL=0.4 is a proportional velocity controller: tilt is
+# proportional to (v_des - v), so as the drone approaches the target speed it
+# stops pushing, and deceleration tails off exponentially instead of holding
+# constant. Third stage-D run measured the consequence - the drone braked from
+# 4.0 m/s over 60 m, an average of 0.133 m/s^2, BELOW the 0.15 the curve plans
+# against, and coasted to 0.39 m from the tower instead of stopping 12 m short.
+# It did not crash, but it had no margin at all. Braking against an obstacle
+# wants the tilt SATURATED, not proportional, so this gain is large enough to
+# clamp at TILT_MAX for any error above ~0.5 m/s. It is still only a pitch
+# command bounded by TILT_MAX - the same envelope corner braking already uses -
+# so the "TILT_MAX > 1.0 crashes" invariant is untouched.
+K_VEL_BRAKE = 2.0
+# Position hold for the halted state. Damping alone cannot null a steady drift -
+# it only opposes velocity, so any residual disturbance settles at whatever
+# speed the damping balances. Fifth stage-D run showed exactly that: hard
+# damping cut the creep from 0.19 to 0.07 m/s, but 0.07 m/s for 150 s is still
+# 10 m, and the drone quietly closed from its correct 12.67 m standoff to 2.95 m.
+# A safety supervisor that drifts into the thing it stopped for is not a safety
+# supervisor. So once fully stopped the drone latches where it is and holds it.
+#
+# This does NOT reintroduce the tumble bug. That invariant is about feeding a
+# lateral POSITION error straight to tilt: far from the target it saturates roll
+# while the drone is off-heading, and the drone flips. Here position error is
+# converted to a VELOCITY target first and clamped to HOLD_V_MAX, so the tilt
+# command is bounded by a 0.3 m/s velocity error no matter how big the position
+# error grows.
+K_HOLD = 0.3               # 1/s: position error -> velocity target
+HOLD_V_MAX = 0.3           # m/s ceiling on that target
+HOLD_LATCH = 0.25          # m/s ground speed at which the hold point is latched
+
+sensors = []
+for i in range(DS_N):
+    _d = robot.getDevice(f"ds_{i}")
+    if _d is None:
+        continue
+    _d.enable(dt)
+    sensors.append((math.radians(-DS_SPREAD_DEG + 2 * DS_SPREAD_DEG * i / (DS_N - 1)), _d))
+if sensors:
+    print(f"[parkdrone] obstacle sensors: {len(sensors)}/{DS_N} rays, "
+          f"+/-{DS_SPREAD_DEG:.0f} deg, {DS_RANGE:.0f} m, stopping {OBST_STOP:.0f} m short")
+else:
+    print("[parkdrone] no obstacle sensors on this drone (world built without "
+          "--collide) - flying obstacle-blind, as every survey world does")
+
+
+def scan():
+    """(threat_distance, threat_bearing, raw_closest). The threat is the closest
+    return that passes the gate above - that is what the speed limit is computed
+    from. raw_closest is every return regardless of bearing, kept only so the
+    flight log can show what was rejected and why. Bearings are body-relative,
+    positive to the left; both distances are inf when nothing qualifies."""
+    best_d, best_a, raw = float("inf"), 0.0, float("inf")
+    for a, s in sensors:
+        v = s.getValue()
+        if v >= OBST_CLEAR:
+            continue
+        raw = min(raw, v)
+        if abs(a) > OBST_BEARING and abs(v * math.sin(a)) > OBST_CORRIDOR:
+            continue
+        if v < best_d:
+            best_d, best_a = v, a
+    return best_d, best_a, raw
+
 
 motors = [robot.getDevice(n) for n in
           ("front left propeller", "front right propeller",
@@ -246,6 +366,19 @@ prev_alt = None
 wp_min = float("inf")     # closest approach to the current waypoint so far
 wp_steps = 0              # steps spent near the current waypoint
 hold_stop = False         # braking to a hover before a stop-and-turn reversal
+vx = vy = vz = 0.0        # last-step velocities (the heartbeat log reads these
+                          # before this step's finite difference is taken)
+obst_d, obst_a = float("inf"), 0.0   # closest gated threat this step
+obst_raw = float("inf")   # closest return of any bearing (diagnostic only)
+avoiding = False          # the obstacle layer is actively limiting speed
+obst_logged = -1.0        # distance at which the current encounter was announced
+obst_halted = False       # announced "stopped in front of it" for this encounter
+hold_pt = None            # latched (x, y) the halted drone station-keeps on
+obst_cap = float("inf")   # RATCHET: while one encounter is being tracked the
+#   speed limit may fall but never rise. Without it a momentary loss of the
+#   return (the ray slipping off an edge, or a nearer object stealing the
+#   minimum) hands full cruise speed back mid-brake, and the metres given away
+#   at 0.15 m/s^2 are not recoverable.
 wps = load_route()
 wp_vmax = speed_profile(wps)
 n_slow = sum(1 for v in wp_vmax if v < V_MAX - 0.01)
@@ -270,6 +403,17 @@ if poses:
     idx = max(p.get("frame_idx", p.get("i")) for p in poses) + 1
     print(f"[parkdrone] RESUME: {len(poses)} captures on disk -> "
           f"continuing at wp{idx}/{len(wps)}")
+# Flight telemetry to DISK, one row per heartbeat. Webots' stdout is routinely
+# lost (it block-buffers, and a killed run takes the buffer with it), which is
+# exactly the debugging that matters here: what the obstacle layer did in the
+# last seconds before a stop is invisible in poses.json, because poses are only
+# written at waypoint captures and the interesting part is between them.
+# Line-buffered and appended, so it survives a kill.
+LOG_FILE = os.path.join(OUT, "flight_log.csv")
+flight_log = open(LOG_FILE, "a", buffering=1, encoding="utf-8")
+if flight_log.tell() == 0:
+    flight_log.write("t,x,y,alt,yaw,speed,wp,wp_dist,obst_m,obst_deg,raw_m,avoiding\n")
+
 step = 0
 snap = 0                          # timed-snapshot counter (diagnostic capture)
 HEARTBEAT = max(1, int(1.0 / dt_s))      # ~1 s of steps
@@ -291,6 +435,7 @@ while robot.step(dt) != -1:
     roll, pitch, yaw = imu.getRollPitchYaw()
     x, y, alt = gps.getValues()
     roll_rate, pitch_rate, yaw_rate = gyro.getValues()
+    obst_d, obst_a, obst_raw = scan() if sensors else (float("inf"), 0.0, float("inf"))
 
     if step % HEARTBEAT == 0:
         if idx < len(wps):
@@ -298,9 +443,18 @@ while robot.step(dt) != -1:
             ye = wrap(math.atan2(wps[idx][1] - y, wps[idx][0] - x) - yaw)
         else:
             d = ye = 0.0
+        obs = (f" OBST={obst_d:5.1f}m@{math.degrees(obst_a):+5.1f}deg"
+               f"{' AVOIDING' if avoiding else ''}") if obst_d < float("inf") else ""
         print(f"[parkdrone] t={step*dt_s:6.1f}s alt={alt:6.2f} "
               f"pos=({x:7.1f},{y:7.1f}) wp{idx}/{len(wps)} dist={d:6.1f} "
-              f"yaw_err={ye:+5.2f} airborne={'Y' if alt > TARGET_ALT - 1.0 else 'n'}")
+              f"yaw_err={ye:+5.2f} airborne={'Y' if alt > TARGET_ALT - 1.0 else 'n'}{obs}")
+        flight_log.write(
+            f"{step*dt_s:.1f},{x:.2f},{y:.2f},{alt:.2f},{yaw:.3f},"
+            f"{math.hypot(vx, vy):.2f},{idx},{d:.1f},"
+            f"{'' if obst_d == float('inf') else f'{obst_d:.2f}'},"
+            f"{'' if obst_d == float('inf') else f'{math.degrees(obst_a):.1f}'},"
+            f"{'' if obst_raw == float('inf') else f'{obst_raw:.2f}'},"
+            f"{int(avoiding)}\n")
 
     # horizontal velocity (finite difference from GPS) for damping
     if prev_xy is None:
@@ -383,6 +537,16 @@ while robot.step(dt) != -1:
                         pose["cam_roll"] = cam_roll_pos.getValue()
                     if cam_yaw_pos is not None:
                         pose["cam_yaw"] = cam_yaw_pos.getValue()
+                    # Mark frames taken while the obstacle layer was in control.
+                    # The occupancy scorer is calibrated on a drone flying the
+                    # planned route at 30 m; a frame captured while braking (and,
+                    # from stage B, while steering off the route) is not
+                    # comparable, and silently scoring it produces a WRONG
+                    # occupancy answer rather than a missing one. Absent key ==
+                    # a normal frame, so nothing downstream has to change yet.
+                    if avoiding:
+                        pose["avoiding"] = True
+                        pose["obstacle_m"] = round(obst_d, 2)
                     poses.append(pose)
                     # write poses.json after every waypoint so progress survives
                     # even if the run is cut short before the patrol completes
@@ -431,8 +595,81 @@ while robot.step(dt) != -1:
                     v_des = (min(V_MAX,
                                  math.sqrt(wp_vmax[idx]**2 + 2 * A_BRAKE * dist))
                              if abs(yaw_err) < 0.5 else 0.0)
-                pitch_d = -clamp(K_VEL * (v_des - fwd_vel), -TILT_MAX, TILT_MAX)
-                roll_d = ROLL_SIGN * clamp(-K_VEL * lat_vel, -TILT_MAX, TILT_MAX)
+                # OBSTACLE LAYER (stage D). It emits a SPEED LIMIT and nothing
+                # else - no position target, no roll command - so every
+                # controller invariant survives by construction: the stabilizer
+                # below never sees a new kind of input, it just gets a smaller
+                # v_des. Stage B adds a yaw bias on the same principle; obst_a
+                # is already read for it.
+                #
+                # The limit is the same kinematic braking curve the corner
+                # profile uses, aimed at zero speed OBST_STOP metres short of
+                # the return: v = sqrt(2*A_BRAKE*(d - OBST_STOP)). That is not a
+                # cosmetic choice - A_BRAKE 0.22 m/s^2 means stopping from
+                # V_MAX needs 57 m, so anything that decides to brake later than
+                # this curve says cannot stop at all.
+                if obst_d < float("inf"):
+                    reach = obst_d - OBST_STOP - OBST_REACT * math.hypot(vx, vy)
+                    v_obst = math.sqrt(max(0.0, 2 * A_BRAKE_OBST * reach))
+                    obst_cap = min(obst_cap, v_obst)     # ratchet down only
+                    v_obst = obst_cap
+                else:
+                    # threat gone from the fan for good: release the ratchet
+                    v_obst = obst_cap = float("inf")
+                    hold_pt = None
+                was_avoiding = avoiding
+                # `<=`, not `<`, and gated on a threat actually being tracked.
+                # With a strict `<` the layer switched ITSELF OFF at exactly the
+                # moment it mattered: once stopped, the navigator's own v_des is
+                # also 0 (the yaw gate zeroes it while the nose swings), so
+                # `0 < 0` is false, `avoiding` went False, the station-keep never
+                # latched and the poses lost their `avoiding` flag - the halted
+                # drone looked like a normal one. Runs 5 and 6 were identical to
+                # four significant figures because of it.
+                avoiding = obst_d < float("inf") and v_obst <= v_des
+                if avoiding:
+                    if not was_avoiding or obst_d < obst_logged - 5.0:
+                        print(f"[parkdrone] OBSTACLE {obst_d:.1f} m ahead at "
+                              f"{math.degrees(obst_a):+.0f} deg (wp{idx}) "
+                              f"-> speed limit {v_obst:.2f} m/s")
+                        obst_logged = obst_d
+                    v_des = v_obst
+                    if not obst_halted and math.hypot(vx, vy) < HOLD_SPEED:
+                        obst_halted = True
+                        print(f"[parkdrone] HALTED {obst_d:.1f} m short of the "
+                              f"obstacle at wp{idx} ({x:.1f},{y:.1f}). Stage D "
+                              f"stops here by design - the patrol cannot finish.")
+                else:
+                    obst_halted = False
+                # Halted: latch this spot and station-keep on it, instead of
+                # merely damping toward zero speed (see K_HOLD above).
+                v_lat_des = 0.0
+                if avoiding and v_obst <= 0.0:
+                    if hold_pt is None and math.hypot(vx, vy) < HOLD_LATCH:
+                        hold_pt = (x, y)
+                        print(f"[parkdrone] station-keeping at ({x:.1f},{y:.1f}), "
+                              f"{obst_d:.1f} m from the obstacle")
+                    if hold_pt is not None:
+                        ex, ey = hold_pt[0] - x, hold_pt[1] - y
+                        v_des = clamp(K_HOLD * (c * ex + s * ey),
+                                      -HOLD_V_MAX, HOLD_V_MAX)
+                        v_lat_des = clamp(K_HOLD * (-s * ex + c * ey),
+                                          -HOLD_V_MAX, HOLD_V_MAX)
+                k_fwd = K_VEL_BRAKE if (avoiding and fwd_vel > v_des) else K_VEL
+                pitch_d = -clamp(k_fwd * (v_des - fwd_vel), -TILT_MAX, TILT_MAX)
+                # Sideways drift gets the hard gain too while avoiding. Fourth
+                # stage-D run: forward braking was finally correct - the drone
+                # stopped 13.25 m from the tower, right on the standoff - and
+                # then CREPT into it anyway, 13 m over 95 s at a steady
+                # 0.19 m/s, because the obstacle layer only ever controlled
+                # forward speed and K_VEL=0.4 damps lateral drift far too
+                # softly to hold a hover for minutes. Note this is still
+                # damping a VELOCITY, not chasing a position: the "never issue
+                # a lateral position command" invariant is about a position
+                # target saturating while off-heading, which this cannot do.
+                k_lat = K_VEL_BRAKE if avoiding else K_VEL
+                roll_d = ROLL_SIGN * clamp(k_lat * (v_lat_des - lat_vel),
+                                           -TILT_MAX, TILT_MAX)
         else:
             # Patrol done: station-keep by braking horizontal drift, otherwise the
             # drone slowly sails away (km-scale) with no control input.

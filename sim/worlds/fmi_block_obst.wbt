@@ -5475,7 +5475,81 @@ Solid {
 Mavic2Pro {
   translation 0 0 0.15
   controller "parkdrone"
-  controllerArgs [ "fmi_block_4st.route.json" ]
+  controllerArgs [ "fmi_block_obst.route.json" ]
+  bodySlot [
+    DistanceSensor {
+      translation 0.35 0 0
+      rotation 0 0 1 -0.6981
+      name "ds_0"
+      type "laser"
+      resolution -1
+      lookupTable [ 0 0 0, 80.0 80.0 0 ]
+    }
+    DistanceSensor {
+      translation 0.35 0 0
+      rotation 0 0 1 -0.5236
+      name "ds_1"
+      type "laser"
+      resolution -1
+      lookupTable [ 0 0 0, 80.0 80.0 0 ]
+    }
+    DistanceSensor {
+      translation 0.35 0 0
+      rotation 0 0 1 -0.3491
+      name "ds_2"
+      type "laser"
+      resolution -1
+      lookupTable [ 0 0 0, 80.0 80.0 0 ]
+    }
+    DistanceSensor {
+      translation 0.35 0 0
+      rotation 0 0 1 -0.1745
+      name "ds_3"
+      type "laser"
+      resolution -1
+      lookupTable [ 0 0 0, 80.0 80.0 0 ]
+    }
+    DistanceSensor {
+      translation 0.35 0 0
+      rotation 0 0 1 0.0000
+      name "ds_4"
+      type "laser"
+      resolution -1
+      lookupTable [ 0 0 0, 80.0 80.0 0 ]
+    }
+    DistanceSensor {
+      translation 0.35 0 0
+      rotation 0 0 1 0.1745
+      name "ds_5"
+      type "laser"
+      resolution -1
+      lookupTable [ 0 0 0, 80.0 80.0 0 ]
+    }
+    DistanceSensor {
+      translation 0.35 0 0
+      rotation 0 0 1 0.3491
+      name "ds_6"
+      type "laser"
+      resolution -1
+      lookupTable [ 0 0 0, 80.0 80.0 0 ]
+    }
+    DistanceSensor {
+      translation 0.35 0 0
+      rotation 0 0 1 0.5236
+      name "ds_7"
+      type "laser"
+      resolution -1
+      lookupTable [ 0 0 0, 80.0 80.0 0 ]
+    }
+    DistanceSensor {
+      translation 0.35 0 0
+      rotation 0 0 1 0.6981
+      name "ds_8"
+      type "laser"
+      resolution -1
+      lookupTable [ 0 0 0, 80.0 80.0 0 ]
+    }
+  ]
 }
 Solid {
   name "green_1493505379"
@@ -5616,7 +5690,7 @@ SimpleBuilding {
   wallType "windowed building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -53.717 -98.884 0
@@ -5627,7 +5701,7 @@ SimpleBuilding {
   wallType "old building"
   roofType "sheet metal"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 49.476 -40.462 0
@@ -5638,7 +5712,7 @@ SimpleBuilding {
   wallType "windowed building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 127.027 -124.475 0
@@ -5649,7 +5723,7 @@ SimpleBuilding {
   wallType "residential building"
   roofType "sheet metal"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -47.600 -169.489 0
@@ -5660,7 +5734,7 @@ SimpleBuilding {
   wallType "residential building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -135.182 -98.048 0
@@ -5671,7 +5745,7 @@ SimpleBuilding {
   wallType "residential building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 70.697 -133.506 0
@@ -5682,7 +5756,7 @@ SimpleBuilding {
   wallType "concrete building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 54.391 -90.195 0
@@ -5693,7 +5767,7 @@ SimpleBuilding {
   wallType "residential building"
   roofType "sheet metal"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 40.376 74.867 0
@@ -5704,7 +5778,7 @@ SimpleBuilding {
   wallType "residential building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -147.936 -137.971 0
@@ -5715,7 +5789,7 @@ SimpleBuilding {
   wallType "old building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -133.651 21.028 0
@@ -5726,7 +5800,7 @@ SimpleBuilding {
   wallType "concrete building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 74.441 136.553 0
@@ -5737,7 +5811,7 @@ SimpleBuilding {
   wallType "concrete building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -98.363 158.446 0
@@ -5748,7 +5822,7 @@ SimpleBuilding {
   wallType "residential building"
   roofType "sheet metal"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 157.792 169.218 0
@@ -5759,7 +5833,7 @@ SimpleBuilding {
   wallType "old building"
   roofType "sheet metal"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 28.797 115.528 0
@@ -5770,7 +5844,7 @@ SimpleBuilding {
   wallType "windowed building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -149.717 95.780 0
@@ -5781,7 +5855,7 @@ SimpleBuilding {
   wallType "residential building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -21.206 76.343 0
@@ -5792,7 +5866,7 @@ SimpleBuilding {
   wallType "windowed building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -119.993 145.449 0
@@ -5803,7 +5877,7 @@ SimpleBuilding {
   wallType "concrete building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -3.691 106.778 0
@@ -5814,7 +5888,7 @@ SimpleBuilding {
   wallType "old building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -89.422 -124.787 0
@@ -5825,7 +5899,7 @@ SimpleBuilding {
   wallType "residential building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 80.162 105.651 0
@@ -5836,7 +5910,7 @@ SimpleBuilding {
   wallType "residential building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -159.669 45.341 0
@@ -5847,7 +5921,7 @@ SimpleBuilding {
   wallType "concrete building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -138.374 136.745 0
@@ -5858,7 +5932,7 @@ SimpleBuilding {
   wallType "brick building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -8.913 44.912 0
@@ -5869,7 +5943,7 @@ SimpleBuilding {
   wallType "concrete building"
   roofType "sheet metal"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 112.875 107.518 0
@@ -5880,7 +5954,7 @@ SimpleBuilding {
   wallType "old building"
   roofType "sheet metal"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 125.320 -34.698 0
@@ -5891,7 +5965,7 @@ SimpleBuilding {
   wallType "old building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -42.526 27.802 0
@@ -5902,7 +5976,7 @@ SimpleBuilding {
   wallType "concrete building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 145.996 132.531 0
@@ -5913,7 +5987,7 @@ SimpleBuilding {
   wallType "concrete building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -64.987 27.923 0
@@ -5924,7 +5998,7 @@ SimpleBuilding {
   wallType "old building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -101.274 72.727 0
@@ -5935,7 +6009,7 @@ SimpleBuilding {
   wallType "windowed building"
   roofType "sheet metal"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -83.710 119.157 0
@@ -5946,7 +6020,7 @@ SimpleBuilding {
   wallType "windowed building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -154.170 129.927 0
@@ -5957,7 +6031,7 @@ SimpleBuilding {
   wallType "old building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -68.970 85.817 0
@@ -5968,7 +6042,7 @@ SimpleBuilding {
   wallType "concrete building"
   roofType "sheet metal"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 65.434 88.010 0
@@ -5979,7 +6053,7 @@ SimpleBuilding {
   wallType "brick building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 16.132 72.071 0
@@ -5990,7 +6064,7 @@ SimpleBuilding {
   wallType "residential building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 48.644 130.545 0
@@ -6001,7 +6075,7 @@ SimpleBuilding {
   wallType "old building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -47.464 94.891 0
@@ -6012,7 +6086,7 @@ SimpleBuilding {
   wallType "windowed building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 168.083 139.456 0
@@ -6023,7 +6097,7 @@ SimpleBuilding {
   wallType "brick building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -30.168 101.001 0
@@ -6034,7 +6108,7 @@ SimpleBuilding {
   wallType "windowed building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 117.812 155.487 0
@@ -6045,7 +6119,7 @@ SimpleBuilding {
   wallType "residential building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -112.313 -159.909 0
@@ -6056,7 +6130,7 @@ SimpleBuilding {
   wallType "residential building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 94.150 102.821 0
@@ -6067,7 +6141,7 @@ SimpleBuilding {
   wallType "brick building"
   roofType "sheet metal"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -62.525 70.204 0
@@ -6078,7 +6152,7 @@ SimpleBuilding {
   wallType "old building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -78.057 22.268 0
@@ -6089,7 +6163,7 @@ SimpleBuilding {
   wallType "brick building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -85.137 80.741 0
@@ -6100,7 +6174,7 @@ SimpleBuilding {
   wallType "windowed building"
   roofType "sheet metal"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 63.493 107.841 0
@@ -6111,7 +6185,7 @@ SimpleBuilding {
   wallType "concrete building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 134.386 162.514 0
@@ -6122,7 +6196,7 @@ SimpleBuilding {
   wallType "brick building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -127.505 114.871 0
@@ -6133,7 +6207,7 @@ SimpleBuilding {
   wallType "brick building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -76.778 -162.104 0
@@ -6144,7 +6218,7 @@ SimpleBuilding {
   wallType "concrete building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 148.473 61.972 0
@@ -6155,7 +6229,7 @@ SimpleBuilding {
   wallType "old building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -28.389 41.121 0
@@ -6166,7 +6240,7 @@ SimpleBuilding {
   wallType "old building"
   roofType "sheet metal"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 131.752 119.919 0
@@ -6177,7 +6251,7 @@ SimpleBuilding {
   wallType "old building"
   roofType "sheet metal"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -137.011 -169.117 0
@@ -6188,7 +6262,7 @@ SimpleBuilding {
   wallType "old building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -110.068 5.137 0
@@ -6199,7 +6273,7 @@ SimpleBuilding {
   wallType "brick building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -135.579 -73.043 0
@@ -6210,7 +6284,7 @@ SimpleBuilding {
   wallType "concrete building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -110.705 44.414 0
@@ -6221,7 +6295,7 @@ SimpleBuilding {
   wallType "brick building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -118.678 66.862 0
@@ -6232,7 +6306,7 @@ SimpleBuilding {
   wallType "concrete building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -93.928 11.927 0
@@ -6243,7 +6317,7 @@ SimpleBuilding {
   wallType "residential building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -108.434 109.404 0
@@ -6254,7 +6328,7 @@ SimpleBuilding {
   wallType "residential building"
   roofType "sheet metal"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -130.578 -6.301 0
@@ -6265,7 +6339,7 @@ SimpleBuilding {
   wallType "windowed building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 93.729 145.110 0
@@ -6276,7 +6350,7 @@ SimpleBuilding {
   wallType "concrete building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 101.527 148.074 0
@@ -6287,7 +6361,7 @@ SimpleBuilding {
   wallType "concrete building"
   roofType "sheet metal"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -142.459 59.527 0
@@ -6298,7 +6372,7 @@ SimpleBuilding {
   wallType "concrete building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -100.206 112.305 0
@@ -6309,7 +6383,7 @@ SimpleBuilding {
   wallType "brick building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation -134.337 62.295 0
@@ -6320,7 +6394,7 @@ SimpleBuilding {
   wallType "residential building"
   roofType "bitumen"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 152.242 -70.776 0
@@ -6331,7 +6405,7 @@ SimpleBuilding {
   wallType "old building"
   roofType "gravel"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 SimpleBuilding {
   translation 162.908 74.694 0
@@ -6342,7 +6416,7 @@ SimpleBuilding {
   wallType "brick building"
   roofType "sheet metal"
   roofShape "flat roof"
-  enableBoundingObject FALSE
+  enableBoundingObject TRUE
 }
 Solid {
   translation -108.71 -34.70 0
@@ -6359,6 +6433,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation -90.06 -16.01 0
@@ -6375,6 +6451,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation -63.88 -12.57 0
@@ -6391,6 +6469,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation -45.22 6.11 0
@@ -6407,6 +6487,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation -19.04 9.55 0
@@ -6423,6 +6505,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation 3.38 20.61 0
@@ -6439,6 +6523,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation 25.80 31.66 0
@@ -6455,6 +6541,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation 44.46 50.35 0
@@ -6471,6 +6559,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation 70.64 53.78 0
@@ -6487,6 +6577,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation 89.31 72.46 0
@@ -6503,6 +6595,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation 115.49 75.90 0
@@ -6519,6 +6613,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation -13.75 109.23 0
@@ -6535,6 +6631,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation -6.15 85.87 0
@@ -6551,6 +6649,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation 4.09 63.06 0
@@ -6567,6 +6667,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation 7.95 37.39 0
@@ -6583,6 +6685,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation 1.21 124.63 0
@@ -6599,6 +6703,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation -24.72 122.31 0
@@ -6615,6 +6721,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation -49.93 104.38 0
@@ -6631,6 +6739,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation -83.88 97.93 0
@@ -6647,6 +6757,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation -113.76 78.01 0
@@ -6663,6 +6775,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation -122.98 -59.91 0
@@ -6679,6 +6793,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation -114.51 -83.43 0
@@ -6695,6 +6811,8 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
 }
 Solid {
   translation -106.02 -106.92 0
@@ -6711,4 +6829,66 @@ Solid {
       appearance PBRAppearance { baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }
       geometry Box { size 0.28 0.5 0.14 } } ] }
   ]
+  boundingObject Pose { translation 0 0 3.50
+    children [ Cylinder { height 7.0 radius 0.09 } ] }
+}
+Solid {
+  translation -21.000 120.000 22.500
+  rotation 0 0 1 0.3617
+  name "obst_tower"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.58 0.56 0.52 roughness 1 metalness 0 }
+    geometry Box { size 8.000 8.000 45.000 }
+  } ]
+  boundingObject Box { size 8.000 8.000 45.000 }
+}
+Solid {
+  translation -4.125 89.392 19.000
+  rotation 0 0 1 -1.1449
+  name "obst_slab"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.58 0.56 0.52 roughness 1 metalness 0 }
+    geometry Box { size 18.000 6.000 38.000 }
+  } ]
+  boundingObject Box { size 18.000 6.000 38.000 }
+}
+Solid {
+  translation 2.700 57.400 20.000
+  rotation 0 0 1 -1.1449
+  name "obst_mast"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.85 0.45 0.10 roughness 1 metalness 0 }
+    geometry Box { size 0.900 0.900 40.000 }
+  } ]
+  boundingObject Box { size 0.900 0.900 40.000 }
+}
+Solid {
+  translation 132.408 89.196 17.000
+  rotation 0 0 1 0.4618
+  name "obst_trap_back"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.58 0.56 0.52 roughness 1 metalness 0 }
+    geometry Box { size 2.000 20.000 34.000 }
+  } ]
+  boundingObject Box { size 2.000 20.000 34.000 }
+}
+Solid {
+  translation 121.236 93.689 17.000
+  rotation 0 0 1 0.4618
+  name "obst_trap_left"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.58 0.56 0.52 roughness 1 metalness 0 }
+    geometry Box { size 12.000 2.000 34.000 }
+  } ]
+  boundingObject Box { size 12.000 2.000 34.000 }
+}
+Solid {
+  translation 129.257 77.575 17.000
+  rotation 0 0 1 0.4618
+  name "obst_trap_right"
+  children [ Shape {
+    appearance PBRAppearance { baseColor 0.58 0.56 0.52 roughness 1 metalness 0 }
+    geometry Box { size 12.000 2.000 34.000 }
+  } ]
+  boundingObject Box { size 12.000 2.000 34.000 }
 }

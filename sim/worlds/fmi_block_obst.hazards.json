@@ -1,0 +1,42 @@
+[
+{
+"osm_id": "obst_tower",
+"height_m": 45.0,
+"min_route_dist_m": 0.0,
+"centroid": [
+-21.0,
+120.0
+],
+"synthetic": true
+},
+{
+"osm_id": "obst_mast",
+"height_m": 40.0,
+"min_route_dist_m": 0.0,
+"centroid": [
+2.7,
+57.4
+],
+"synthetic": true
+},
+{
+"osm_id": "obst_slab",
+"height_m": 38.0,
+"min_route_dist_m": 2.9,
+"centroid": [
+-10.5,
+86.5
+],
+"synthetic": true
+},
+{
+"osm_id": "obst_trap",
+"height_m": 34.0,
+"min_route_dist_m": 0.0,
+"centroid": [
+119.88,
+82.96
+],
+"synthetic": true
+}
+]

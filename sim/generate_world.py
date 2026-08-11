@@ -8,7 +8,7 @@ keeps a square window around the centre, and writes:
   worlds/ground_truth.json    - bay_id -> occupied (for detection evaluation)
 
 Usage:
-    python generate_world.py [window_half_m] [occupied_fraction] [survey_area] [--collide] [--chase]
+    python generate_world.py [window_half_m] [occupied_fraction] [survey_area] [--collide] [--chase] [--obstacles]
     python generate_world.py 75 0.5                    # default fmi_block.wbt
     python generate_world.py 500 0.5 fmi_block_1km     # separate big world:
         writes fmi_block_1km.wbt + fmi_block_1km.route.json +
@@ -16,14 +16,26 @@ Usage:
         hands its route file to the controller via controllerArgs, so both
         worlds coexist and stay runnable (default keeps legacy route.json /
         ground_truth.json names).
+    python generate_world.py 130 0.5 fmi_block_obst --collide --obstacles --chase
+        # the obstacle-avoidance TEST world (see --obstacles below)
 
---collide gives the buildings a bounding object. OFF by default: the controller
-flies a fixed 30 m with no obstacle logic at all, so collision geometry would
-crash the drone on any tall block under the route (and burn the >1 h 1 km
-patrol). Webots range sensors only see nodes that HAVE a bounding object, so
-the obstacle-avoidance work turns this on and regenerates. Note StreetLight has
-no bounding object to enable - sensing poles will need a sibling Solid with a
-Cylinder bounding object, which belongs to that task.
+--collide gives collision geometry to the scenery: a bounding object on the
+buildings AND on the generated light poles (a Cylinder matching the mast). OFF
+by default: the controller flies a fixed 30 m with no obstacle logic at all, so
+collision geometry would crash the drone on any tall block under the route (and
+burn the >1 h 1 km patrol). Webots range sensors only see nodes that HAVE a
+bounding object, so the obstacle-avoidance work turns this on and regenerates.
+
+--obstacles builds an OBSTACLE COURSE: a handful of synthetic structures parked
+ON the flight route, tall enough to reach the 30 m cruise altitude. It exists
+because the only real world with anything to hit is fmi_block_1km, which takes
+>10 min to load - so the avoidance edit/run/observe loop needs a small world
+with a deliberate conflict. The course is deterministic (anchored to fractions
+along the route, nudged forward off any bay it would cover) and the structures
+are appended to <NAME>.hazards.json alongside the real ones, flagged
+"synthetic": true. It changes nothing unless the flag is passed, so the three
+survey worlds stay byte-identical. Use --collide with it or the drone flies
+straight through the course and the sensors see nothing.
 
 NOTE: not run/verified here — needs Webots installed to open. The Mavic2Pro proto
 is pulled via EXTERNPROTO pinned to R2023b; if your Webots differs, change WEBOTS_VER.
@@ -41,6 +53,7 @@ args = [a for a in sys.argv[1:] if not a.startswith("--")]
 COLLIDE = "--collide" in sys.argv          # see the docstring: off by default
 CHASE = "--chase" in sys.argv              # ride-along camera instead of the
                                            # tracking shot (viewing, not data)
+OBSTACLES = "--obstacles" in sys.argv      # synthetic obstacle course on the route
 WINDOW = float(args[0]) if len(args) > 0 else 75.0               # half-size, metres
 OCC = float(args[1]) if len(args) > 1 else 0.5
 NAME = args[2] if len(args) > 2 else "fmi_block"
@@ -458,7 +471,6 @@ parts.append(f'EXTERNPROTO "{GH}/robots/dji/mavic/protos/Mavic2Pro.proto"')
 parts.append(f'EXTERNPROTO "{GH}/objects/road/protos/Road.proto"')
 parts.append(f'EXTERNPROTO "{GH}/objects/road/protos/RoadLine.proto"')
 parts.append(f'EXTERNPROTO "{GH}/objects/buildings/protos/SimpleBuilding.proto"')
-parts.append(f'EXTERNPROTO "{GH}/objects/traffic/protos/StreetLight.proto"')
 for path in CAR_PROTOS.values():
     parts.append(f'EXTERNPROTO "{GH}/vehicles/protos/{path}.proto"')
 # --chase rides ON the drone (Mounted Shot) instead of trailing it; it only
@@ -472,14 +484,28 @@ VIEWPOINT = ("""  orientation 0 1 0 0.4
   position -8 -14 10
   follow "Mavic 2 PRO"
   followType "Tracking Shot\"""")
+# `near` is the other half of the flicker fix (see Z_LAYERS): depth precision is
+# governed by the near/far RATIO, so the default 0.05 m near plane against a
+# kilometre-deep scene leaves almost no resolution at ground level. Pushing it
+# to 0.4 m buys an order of magnitude and costs nothing - the chase camera sits
+# 0.5 m from the drone and nothing else is ever that close to the eye.
+NEAR = 0.4
 parts.append(f"""WorldInfo {{ basicTimeStep 8 }}
 Viewpoint {{
 {VIEWPOINT}
+  near {NEAR}
 }}
 Background {{ skyColor [ 0.5 0.7 1 ] }}
 DirectionalLight {{ direction 0.4 0.5 -1 intensity 2.5 castShadows FALSE }}""")
 GROUND = 2 * WINDOW + 200      # ground plane comfortably past the window
+# The ground sits BELOW z=0 so the surface stack above it has room to breathe.
+# Everything painted on the ground (grass, roads, bay pads, bay lines) is
+# stacked within ~10 cm, and at this scene scale (the plane is >1 km across)
+# the depth buffer cannot separate surfaces a few millimetres apart - they
+# flicker against each other as the viewpoint moves. See Z_LAYERS below.
+GROUND_Z = -0.10
 parts.append(f"""Solid {{
+  translation 0 0 {GROUND_Z}
   name "ground"
   children [ Shape {{
     appearance PBRAppearance {{ baseColor 0.32 0.33 0.34 roughness 1 metalness 0 }}
@@ -487,6 +513,19 @@ parts.append(f"""Solid {{
   }} ]
   boundingObject Plane {{ size {GROUND:.0f} {GROUND:.0f} }}
 }}""")
+
+# Z_LAYERS - the painted-surface stack, bottom to top. The ORDER is a hard
+# invariant (roads must cover grass, bay pads must cover roads); the GAPS exist
+# only to keep the depth buffer able to tell them apart, and were widened from
+# millimetres to centimetres after coplanar flicker showed up in the viewer:
+#   ground   -0.100          (Plane)
+#   grass     0.005 + 0.004*slot, slot <= 3   -> 105 mm above the ground
+#   roads     0.020 + 0.005*slot, slot <= 4 observed   -> 15 mm above grass
+#   bay pad   0.070 .. 0.090 -> 30 mm above the highest road
+#   bay lines 0.089 .. 0.101 -> 11 mm of line above the pad surface
+# Cars (0.4) and the drone (0.15) are well clear of all of it.
+ROAD_Z0, ROAD_DZ = 0.020, 0.005
+BAY_PAD_Z, BAY_LINE_Z = 0.080, 0.095
 
 # --- streets: OSM centerlines rendered as Road protos (asphalt + dashed line).
 # Same lon0/lat0 projection as the bays; no bounding objects, so physics is
@@ -742,28 +781,28 @@ if os.path.exists(ROADS):
         for run in clip_polyline(pts, lim):
             road_runs.append((pr.get("name") or "", run))
             emit.append((pr, run))
-    # Roads must stay BELOW the bay pads (pad box spans z 0.04..0.06): a plain
-    # per-road stagger 0.01+0.003*n grows past the pads once a world has >~17
-    # runs and paints the road OVER the parking strips — on the 1 km world this
-    # covered whole longitudinal bay rows in dark asphalt and produced 330
-    # occupancy false positives. Stagger is only needed between roads that
-    # actually overlap (junctions), so assign each run the lowest z-slot not
-    # used by any earlier overlapping run (greedy colouring): crossing roads
-    # keep the 3 mm separation, and the max z stays bounded by the junction
-    # degree (< 0.04) instead of the road count.
+    # Roads must stay BELOW the bay pads (see Z_LAYERS): a plain per-road
+    # stagger grows past the pads once a world has enough runs and paints the
+    # road OVER the parking strips — on the 1 km world this covered whole
+    # longitudinal bay rows in dark asphalt and produced 330 occupancy false
+    # positives. Stagger is only needed between roads that actually overlap
+    # (junctions), so assign each run the lowest z-slot not used by any earlier
+    # overlapping run (greedy colouring): crossing roads keep their separation,
+    # and the max z stays bounded by the junction degree, not the road count.
     slots = []    # slot index per emitted run
     for i, (pr, run) in enumerate(emit):
         used = {slots[j] for j in range(i)
                 if runs_overlap(run, road_width(pr), emit[j][1], road_width(emit[j][0]))}
         slot = next(k for k in range(len(used) + 1) if k not in used)
         slots.append(slot)
-    if slots and 0.01 + 0.003 * max(slots) >= 0.04:
+    pad_bottom = BAY_PAD_Z - 0.01
+    if slots and ROAD_Z0 + ROAD_DZ * max(slots) >= pad_bottom:
         print(f"WARNING: road z-slot {max(slots)} reaches the bay-pad layer "
-              f"(z >= 0.04) - roads may paint over parking bays")
+              f"(z >= {pad_bottom:.3f}) - roads may paint over parking bays")
     for (pr, run), slot in zip(emit, slots):
         wpts = ", ".join(f"{x:.2f} {y:.2f} 0" for x, y in run)
         parts.append(f"""Road {{
-  translation 0 0 {0.01 + 0.003 * slot:.3f}
+  translation 0 0 {ROAD_Z0 + ROAD_DZ * slot:.3f}
   name "road_{n_roads} {pr.get('name') or pr.get('highway')}"
   width {road_width(pr):.2f}
   numberOfLanes 2
@@ -881,7 +920,7 @@ BAY_ASPHALT = "0.20 0.20 0.21"
 def bay_marking(b):
     """Asphalt pad + 4 white outline lines for one bay, as Solid strings."""
     ca, sa = math.cos(b["ang"]), math.sin(b["ang"])
-    out = [solid(b["x"], b["y"], 0.05, b["ang"], b["L"], b["W"], 0.02,
+    out = [solid(b["x"], b["y"], BAY_PAD_Z, b["ang"], b["L"], b["W"], 0.02,
                  BAY_ASPHALT, name=f"bay_{b['id']}")]
     # (u, v) = centre of each line in the bay frame (u along length, v across),
     # with the line's box size; lines sit just above the pad
@@ -891,7 +930,7 @@ def bay_marking(b):
              (-(b["L"] - LINE_W) / 2, 0, LINE_W, b["W"])]
     for i, (u, v, sx, sy) in enumerate(lines):
         out.append(solid(b["x"] + u * ca - v * sa, b["y"] + u * sa + v * ca,
-                         0.065, b["ang"], sx, sy, 0.012,
+                         BAY_LINE_Z, b["ang"], sx, sy, 0.012,
                          "0.95 0.95 0.95", name=f"bay_{b['id']}_l{i}"))
     return out
 
@@ -933,13 +972,60 @@ for b in bays:
   name "car_{b['id']}"
 }}""")
 
+# --- forward obstacle sensors, mounted in the Mavic2Pro's bodySlot.
+#
+# Emitted ONLY with --collide, and that is deliberate rather than lazy: a range
+# sensor in a world whose scenery has no bounding object reads max range
+# forever, so the rig would be pure cost (9 ray casts per 8 ms step) buying
+# nothing. --collide already means "this is an obstacle world", so it arms the
+# whole chain - buildings, poles, and now the drone's own sensing.
+#
+# A FAN OF SINGLE-RAY SENSORS, not a Lidar, because it is what the hardware plan
+# actually specifies (Pixhawk + RPi + range finders) and because its weakness is
+# the thing worth measuring: rays diverge, so a thin obstacle fits between two of
+# them at range. That is exactly what the course's 0.9 m `mast` is for. If the
+# mast turns out to be undetectable in time, THAT is the evidence for swapping in
+# a Lidar - not an assumption made up front.
+#
+# Range is 80 m and not something tidier because braking is the binding
+# constraint: A_BRAKE is ~0.22 m/s^2 (TILT_MAX caps the tilt, and there is no
+# drag in the sim), so stopping from V_MAX 5 m/s takes v^2/2a = 57 m. A 40 m
+# sensor could not stop this drone at cruise speed no matter how good the logic.
+# DS_N / DS_SPREAD_DEG / DS_RANGE are duplicated in controllers/parkdrone —
+# keep them in step, same convention as ORIGIN.
+DS_N = 9                # rays in the fan (odd, so one looks straight ahead)
+DS_SPREAD_DEG = 40.0    # half-width of the fan
+DS_RANGE = 80.0         # m; must exceed the 57 m brake distance from V_MAX
+DS_X = 0.35             # mounted ahead of the body so the props aren't in view
+
+sensor_slot = ""
+if COLLIDE:
+    ds = []
+    for i in range(DS_N):
+        a = math.radians(-DS_SPREAD_DEG + 2 * DS_SPREAD_DEG * i / (DS_N - 1))
+        # a DistanceSensor casts along its own +x; rotating about z by +a swings
+        # that ray to the left. type "laser" is the same single ray as "generic"
+        # but Webots DRAWS it, which is the whole debugging story on the chase cam.
+        ds.append(f"""    DistanceSensor {{
+      translation {DS_X} 0 0
+      rotation 0 0 1 {a:.4f}
+      name "ds_{i}"
+      type "laser"
+      resolution -1
+      lookupTable [ 0 0 0, {DS_RANGE:.1f} {DS_RANGE:.1f} 0 ]
+    }}""")
+    sensor_slot = "\n  bodySlot [\n" + "\n".join(ds) + "\n  ]"
+
 # drone at centre (Mavic2Pro ships a gimbal camera named "camera");
 # controllerArgs tells parkdrone which route file belongs to THIS world
 parts.append(f"""Mavic2Pro {{
   translation 0 0 0.15
   controller "parkdrone"
-  controllerArgs [ "{ROUTE_FILE}" ]
+  controllerArgs [ "{ROUTE_FILE}" ]{sensor_slot}
 }}""")
+if COLLIDE:
+    print(f"drone: {DS_N}-ray forward sensor fan, +/-{DS_SPREAD_DEG:.0f} deg, "
+          f"{DS_RANGE:.0f} m range")
 
 # ---------------------------------------------------------------------------
 # Scenery emission. Appended AFTER the drone so the road/bay/car region of the
@@ -954,20 +1040,45 @@ rng_scene = random.Random(11)   # third stream: cosmetics only, so that neither
 # asphalt and can never cover a bay pad (0.04-0.06) or its paint (0.059-0.071).
 # Per the "harden the scene" decision, greenery is NOT subtracted around bays -
 # it runs to the kerb and under bay rows wherever OSM says so.
-GREEN_Z = 0.005
+# Greens also have to be separated from EACH OTHER: OSM stacks a lawn inside a
+# park inside a wood, and coplanar overlapping polygons dither against one
+# another exactly like the roads did at junctions. Same greedy slot colouring,
+# with a bbox overlap test (conservative - a false "overlap" only costs a slot).
+# Sorted largest-area first, so the smaller polygon lands on top, which is also
+# the right visual order.
+GREEN_Z0, GREEN_DZ = 0.005, 0.004      # slot 0..3 stays clear of ROAD_Z0
+
+def _bbox(ring):
+    xs = [p[0] for p in ring]; ys = [p[1] for p in ring]
+    return min(xs), min(ys), max(xs), max(ys)
+
+green_slots = []
+green_boxes = []
+for g in greens:
+    box = _bbox(g["ring"])
+    used = {green_slots[j] for j in range(len(green_boxes))
+            if not (box[2] < green_boxes[j][0] or box[0] > green_boxes[j][2] or
+                    box[3] < green_boxes[j][1] or box[1] > green_boxes[j][3])}
+    green_slots.append(next(k for k in range(len(used) + 1) if k not in used))
+    green_boxes.append(box)
+if green_slots and GREEN_Z0 + GREEN_DZ * max(green_slots) >= ROAD_Z0:
+    print(f"WARNING: green z-slot {max(green_slots)} reaches the road layer "
+          f"(z >= {ROAD_Z0}) - grass may paint over streets")
+
 GREEN_COLORS = {"grass": (0.35, 0.52, 0.24), "meadow": (0.35, 0.52, 0.24),
                 "park": (0.32, 0.48, 0.22), "garden": (0.32, 0.48, 0.22),
                 "forest": (0.20, 0.35, 0.16), "wood": (0.20, 0.35, 0.16),
                 "scrub": (0.24, 0.38, 0.18)}
 
 n_green = 0
-for g in greens:
+for g, slot in zip(greens, green_slots):
+    gz = GREEN_Z0 + GREEN_DZ * slot
     tris = triangulate(g["ring"])
     if not tris:
         continue                # self-intersecting ring; skip rather than emit garbage
     r, gr, b = GREEN_COLORS.get(g["kind"], GREEN_COLORS["grass"])
     jit = lambda c: max(0.0, min(1.0, c + rng_scene.uniform(-0.02, 0.02)))
-    pts = ", ".join(f"{x:.2f} {y:.2f} {GREEN_Z}" for x, y in g["ring"])
+    pts = ", ".join(f"{x:.2f} {y:.2f} {gz:.3f}" for x, y in g["ring"])
     idx = " ".join(f"{i} {j} {k} -1" for i, j, k in tris)
     parts.append(f"""Solid {{
   name "green_{g['id']}"
@@ -1061,44 +1172,196 @@ if os.path.exists(ROADS) and emit:
                            and abs(-(px-bb["x"])*math.sin(bb["ang"]) + (py-bb["y"])*math.cos(bb["ang"])) < bb["W"]/2 + 0.4
                            for bb in bays):
                         continue
-                    if any((px-qx)**2 + (py-qy)**2 < POLE_MIN_SEP**2 for qx, qy, _ in poles):
+                    if any((px-qx)**2 + (py-qy)**2 < POLE_MIN_SEP**2 for qx, qy, _, _ in poles):
                         continue
-                    poles.append((px, py, math.atan2(uy, ux)))
+                    poles.append((px, py, math.atan2(uy, ux), sd))
                     break
                 side = -side
             s -= seg
 
-for i, (px, py, ang) in enumerate(poles):
-    # `on FALSE`: the proto ships a live SpotLight (intensity 30, radius 1000).
-    # Hundreds of those would wreck performance AND shift the daylight exposure
-    # that the classifier's brightness thresholds are calibrated against. This
-    # is a daytime scene - the lamps are geometry, not light sources.
-    parts.append(f"""StreetLight {{
+# A lamp is a mast, an arm and a head - built here rather than taken from the
+# StreetLight proto. The proto is a 66 KB detailed mesh AND carries a live
+# SpotLight (intensity 30, radius 1000); 375 of them on the 1 km world slowed
+# capture from ~18 s to ~90 s per waypoint (a 49 h patrol) and would have
+# shifted the daylight exposure the classifier's brightness thresholds are
+# calibrated against. From 30 m a pole covers about 3 px, so the detail bought
+# nothing. This is a daytime scene: lamps are geometry, not light sources.
+# NB: in the R2023b ENU coordinate system a Cylinder's axis is already Z, so the
+# mast needs NO rotation - adding the VRML-era `rotation 1 0 0 pi/2` lays it flat.
+POLE_H, POLE_R = 7.0, 0.09
+ARM_L, HEAD_L = 1.6, 0.5
+POLE_COLOR = "0.25 0.25 0.27"
+# A pole is 7 m tall and the drone cruises at 30, so this collision geometry can
+# never be hit in level flight - it exists so a range sensor can SEE the mast
+# (Webots range devices only return nodes that have a bounding object), which
+# matters the moment avoidance is allowed to descend or the pole stands next to
+# a building the drone is skirting. Mast only: the arm and head are 10 cm boxes
+# 7 m up, not worth the extra collision shape.
+POLE_BOUND = f"""
+  boundingObject Pose {{ translation 0 0 {POLE_H/2:.2f}
+    children [ Cylinder {{ height {POLE_H} radius {POLE_R} }} ] }}""" if COLLIDE else ""
+
+for i, (px, py, ang, sd) in enumerate(poles):
+    arm = -sd * (ARM_L / 2)      # the arm reaches OUT over the road
+    head = -sd * (ARM_L + HEAD_L / 2 - 0.1)
+    parts.append(f"""Solid {{
   translation {px:.2f} {py:.2f} 0
   rotation 0 0 1 {ang:.4f}
   name "lamp_{i}"
-  on FALSE
+  children [
+    Pose {{ translation 0 0 {POLE_H/2:.2f} children [ Shape {{
+      appearance PBRAppearance {{ baseColor {POLE_COLOR} roughness 0.6 metalness 0.4 }}
+      geometry Cylinder {{ height {POLE_H} radius {POLE_R} }} }} ] }}
+    Pose {{ translation 0 {arm:.2f} {POLE_H - 0.05:.2f} children [ Shape {{
+      appearance PBRAppearance {{ baseColor {POLE_COLOR} roughness 0.6 metalness 0.4 }}
+      geometry Box {{ size 0.10 {ARM_L} 0.10 }} }} ] }}
+    Pose {{ translation 0 {head:.2f} {POLE_H - 0.12:.2f} children [ Shape {{
+      appearance PBRAppearance {{ baseColor 0.30 0.30 0.32 roughness 0.5 metalness 0.4 }}
+      geometry Box {{ size 0.28 {HEAD_L} 0.14 }} }} ] }}
+  ]{POLE_BOUND}
 }}""")
 if poles:
     print(f"scenery: {len(poles)} light poles   (every {spacing:.0f} m of street)")
 
 route = build_route(bays, road_runs)
 
+# ---------------------------------------------------------------------------
+# --- synthetic obstacle course (--obstacles). Four deliberate conflicts, each
+# anchored to a FRACTION along the finished route so the course scales with
+# whatever window it is generated at, and each tall enough to reach the 30 m
+# cruise level. They are emitted here, after build_route, because they are
+# placed relative to the route - and they are NEVER fed back into it: the route
+# stays the survey route, and running into these is the whole point.
+#
+# The four are different failure modes, not four copies of one test:
+#   tower  head-on, wide - the easy case, must be seen and gone around;
+#   slab   offset to one side, long - clips the corridor without blocking it,
+#          so an avoider that only reacts to a centred return will graze it;
+#   mast   0.9 m across - the sparse-DistanceSensor-fan blind spot: a narrow
+#          obstacle can sit between two rays at range and appear only when it
+#          is too late to brake (this is the case that argues for a Lidar);
+#   trap   a U opening TOWARD the drone - the classic concave deadlock. Pure
+#          reactive avoidance circles inside it forever, which is why the
+#          design calls for a timeout-and-escape hatch. Expect this one to
+#          fail first; that is what it is for.
+#
+# 'along' is the extent in the direction of travel, 'across' is lateral, 'off'
+# shifts the whole structure left(+)/right(-) of the route centreline.
+OBSTACLE_COURSE = [
+    {"name": "tower", "at": 0.10, "off":  0.0, "shape": "box",  "along":  8.0, "across":  8.0, "h": 45.0},
+    {"name": "slab",  "at": 0.22, "off":  7.0, "shape": "box",  "along": 18.0, "across":  6.0, "h": 38.0},
+    {"name": "mast",  "at": 0.35, "off":  0.0, "shape": "mast", "along":  0.9, "across":  0.9, "h": 40.0},
+    {"name": "trap",  "at": 0.50, "off":  0.0, "shape": "u",    "along": 14.0, "across": 20.0, "h": 34.0},
+]
+OBST_WALL = 2.0          # wall thickness of the U trap (m)
+OBST_NUDGE = 12          # waypoints to search past the anchor for a clear spot
+OBST_MIN_SEP = 30.0      # metres between structures. Route fractions are not
+                         # enough on their own: a postman route doubles back, so
+                         # two anchors 12 waypoints apart can land 15 m apart on
+                         # the same street and merge into one encounter
+OBST_CONCRETE = "0.58 0.56 0.52"
+OBST_MAST = "0.85 0.45 0.10"    # hazard orange: the thin one has to be findable
+
+def obstacle_boxes(spec, px, py, ang):
+    """(cx, cy, along, across, name_suffix) boxes making up one structure,
+    placed at (px, py) with the route heading ang."""
+    ca, sa = math.cos(ang), math.sin(ang)
+    def at(u, v):        # bay-frame (along, across) -> world
+        return px + u * ca - v * sa, py + u * sa + v * ca
+    off = spec["off"]
+    if spec["shape"] == "u":
+        d, w, t = spec["along"], spec["across"], OBST_WALL
+        # back wall across the path, two side walls running BACK toward the
+        # drone, so the mouth faces the approach
+        bx, by = at(d, off)
+        lx, ly = at(d / 2 - t / 2, off + (w - t) / 2)
+        rx, ry = at(d / 2 - t / 2, off - (w - t) / 2)
+        return [(bx, by, t, w, "back"), (lx, ly, d - t, t, "left"), (rx, ry, d - t, t, "right")]
+    cx, cy = at(0.0, off)
+    return [(cx, cy, spec["along"], spec["across"], "")]
+
+obstacle_hazards = []
+if OBSTACLES:
+    if len(route) < 4:
+        print("WARNING: --obstacles needs a route with at least 4 waypoints - skipped")
+    else:
+        bay_rects = [rect_corners(b["x"], b["y"], b["ang"], b["L"], b["W"]) for b in bays]
+        taken, centres = [], []
+        for spec in OBSTACLE_COURSE:
+            anchor = min(len(route) - 2, max(0, int(spec["at"] * (len(route) - 1))))
+            chosen = None
+            # walk FORWARD from the anchor for a placement that covers no bay
+            # and no earlier structure: a box standing on painted tarmac is a
+            # ground-truth bug (that bay could never hold a car), and two
+            # structures merged into one is a weaker test than two separate ones
+            for step in range(OBST_NUDGE + 1):
+                i = anchor + step
+                if i >= len(route) - 1:
+                    break
+                px, py = route[i]
+                if any(math.hypot(px - qx, py - qy) < OBST_MIN_SEP for qx, qy in centres):
+                    continue
+                ang = math.atan2(route[i+1][1] - py, route[i+1][0] - px)
+                boxes = obstacle_boxes(spec, px, py, ang)
+                rects = [rect_corners(bx, by, ang, bl + 1.0, bw + 1.0)
+                         for bx, by, bl, bw, _ in boxes]
+                if any(rects_overlap(r, q) for r in rects for q in bay_rects + taken):
+                    continue
+                chosen = (i, px, py, ang, boxes, rects)
+                break
+            if chosen is None:
+                print(f"WARNING: obstacle '{spec['name']}' found no bay-free spot "
+                      f"within {OBST_NUDGE} waypoints of wp{anchor} - not placed")
+                continue
+            i, px, py, ang, boxes, rects = chosen
+            taken.extend(rects)
+            centres.append((px, py))
+            color = OBST_MAST if spec["shape"] == "mast" else OBST_CONCRETE
+            for bx, by, bl, bw, suffix in boxes:
+                nm = f"obst_{spec['name']}" + (f"_{suffix}" if suffix else "")
+                parts.append(f"""Solid {{
+  translation {bx:.3f} {by:.3f} {spec['h']/2:.3f}
+  rotation 0 0 1 {ang:.4f}
+  name "{nm}"
+  children [ Shape {{
+    appearance PBRAppearance {{ baseColor {color} roughness 1 metalness 0 }}
+    geometry Box {{ size {bl:.3f} {bw:.3f} {spec['h']:.3f} }}
+  }} ]
+  boundingObject Box {{ size {bl:.3f} {bw:.3f} {spec['h']:.3f} }}
+}}""")
+            # one hazard entry per structure, ring = the union of its boxes, so
+            # the U trap reads as a single obstacle to whatever consumes the file
+            obstacle_hazards.append({"id": f"obst_{spec['name']}", "cx": px, "cy": py,
+                                     "top": spec["h"], "synthetic": True,
+                                     "rings": [rect_corners(bx, by, ang, bl, bw)
+                                               for bx, by, bl, bw, _ in boxes]})
+            print(f"obstacle: {spec['name']:5s} {spec['h']:.0f} m at wp{i} "
+                  f"({px:.1f}, {py:.1f})" + (f", {spec['off']:+.0f} m off-centre"
+                                             if spec["off"] else " ON the route"))
+        if not COLLIDE and obstacle_hazards:
+            print("WARNING: --obstacles without --collide - the buildings and poles "
+                  "have no collision geometry, so only the course itself is sensable")
+
 # --- route hazards. The controller holds a fixed altitude and has no obstacle
 # logic at all, so a building that reaches the flight level under the route is
 # a real conflict - reported whether or not --collide is on, because without
 # bounding objects the drone flies THROUGH it and the frames beneath it are
 # garbage either way. <NAME>.hazards.json is the handoff to the
-# obstacle-avoidance work: it needs exactly this list, in these metres.
+# obstacle-avoidance work: it needs exactly this list, in these metres. The
+# --obstacles course lands in the same file, flagged "synthetic": true, so a
+# controller that arms its sensors off this list needs no special case for the
+# test world.
 FLIGHT_ALT = 30.0      # keep in step with TARGET_ALT in controllers/parkdrone
 VERT_CLEAR = 5.0       # how close to the flight level still counts
 LATERAL_MARGIN = 10.0  # how far from the route centerline still counts
 
-hazards = []
-for bl in buildings:
-    if bl["top"] + VERT_CLEAR <= FLIGHT_ALT:
-        continue
-    ring = bl["ring"]
+# one item per structure; a structure can be several rings (the U trap's walls)
+haz_items = [{"id": bl["id"], "rings": [bl["ring"]], "cx": bl["cx"], "cy": bl["cy"],
+              "top": bl["top"], "synthetic": False} for bl in buildings]
+haz_items += obstacle_hazards
+
+def route_dist(ring):
+    """Closest approach of the route to one ring, or None if never in range."""
     rx = [p[0] for p in ring]; ry = [p[1] for p in ring]
     lo_x, hi_x = min(rx) - LATERAL_MARGIN, max(rx) + LATERAL_MARGIN
     lo_y, hi_y = min(ry) - LATERAL_MARGIN, max(ry) + LATERAL_MARGIN
@@ -1109,27 +1372,37 @@ for bl in buildings:
         if max(a[1], b[1]) < lo_y or min(a[1], b[1]) > hi_y:
             continue
         if point_in_poly(a, ring) or point_in_poly(b, ring):
-            best = 0.0
-            break
+            return 0.0
         d2 = min(_seg_seg_d2(a, b, ring[i], ring[(i+1) % len(ring)]) for i in range(len(ring)))
         best = d2 if best is None else min(best, d2)
-    if best is None:
+    return None if best is None else math.sqrt(best)
+
+hazards = []
+for it in haz_items:
+    if it["top"] + VERT_CLEAR <= FLIGHT_ALT:
         continue
-    d = math.sqrt(best)
+    ds = [d for d in (route_dist(r) for r in it["rings"]) if d is not None]
+    if not ds:
+        continue
+    d = min(ds)
     if d <= LATERAL_MARGIN:
-        hazards.append({"osm_id": bl["id"], "height_m": round(bl["top"], 1),
-                        "min_route_dist_m": round(d, 1),
-                        "centroid": [round(bl["cx"], 2), round(bl["cy"], 2)]})
+        h = {"osm_id": it["id"], "height_m": round(it["top"], 1),
+             "min_route_dist_m": round(d, 1),
+             "centroid": [round(it["cx"], 2), round(it["cy"], 2)]}
+        if it["synthetic"]:
+            h["synthetic"] = True
+        hazards.append(h)
 
 hazards.sort(key=lambda h: -h["height_m"])
 haz_file = os.path.join(WORLDS, f"{NAME}.hazards.json")
 json.dump(hazards, open(haz_file, "w"), indent=0)
-n_tall = sum(1 for bl in buildings if bl["top"] + VERT_CLEAR > FLIGHT_ALT)
+n_tall = sum(1 for it in haz_items if it["top"] + VERT_CLEAR > FLIGHT_ALT)
 if hazards:
     h0 = hazards[0]
+    label = h0["osm_id"] if h0.get("synthetic") else f"bld_{h0['osm_id']}"
     print(f"WARNING: {n_tall} structures reach the {FLIGHT_ALT:.0f} m flight level; "
           f"{len(hazards)} lie within {LATERAL_MARGIN:.0f} m of the route "
-          f"(tallest: bld_{h0['osm_id']} at {h0['height_m']:.0f} m, "
+          f"(tallest: {label} at {h0['height_m']:.0f} m, "
           f"{h0['min_route_dist_m']:.0f} m away)")
 elif n_tall:
     print(f"{n_tall} structures reach the {FLIGHT_ALT:.0f} m flight level, none near the route")
