@@ -147,10 +147,19 @@ for f, (clon, clat) in zip(feats, centers):
     if abs(x) > WINDOW or abs(y) > WINDOW:
         continue
     pr = f["properties"]
+    # `bearing_deg` is the STREET bearing, so the bay's own orientation has to be
+    # rebuilt from park_txt exactly as tools/make_bays.py built the geojson ring.
+    # These three cases MUST stay in step with make_bays.py: the world draws from
+    # (centre, bearing, L, W) while vision/score_occupancy.py reads the ring
+    # verbatim, so any disagreement silently mis-georeferences the bay. "Косо"
+    # was missing here and fell through to the parallel branch, drawing 12 bays
+    # in the 1 km world 45 deg off their painted rectangle (2.23 m corner error).
     brg = math.radians(pr.get("bearing_deg", 0.0))
-    if pr.get("park_txt") == "Напречн":
+    if pr.get("park_txt") == "Напречн":          # perpendicular: long axis across
         ang = brg + math.pi / 2; L, W = 4.8, 2.4
-    else:
+    elif pr.get("park_txt") == "Косо":           # angled, ANGLE_DEG in make_bays
+        ang = brg + math.radians(45.0); L, W = 5.4, 2.2
+    else:                                        # Надлъжн / default: parallel
         ang = brg; L, W = 5.4, 2.2
     bays.append({"id": pr.get("id"), "x": x, "y": y, "ang": ang, "L": L, "W": W,
                  "street": pr.get("mestopoloz"), "zona": pr.get("zona"),

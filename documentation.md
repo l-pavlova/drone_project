@@ -268,6 +268,24 @@ video memory peaked at 1315 MiB of an available 4096 MiB and was never close to
 full. **Component costs measured in isolation do not compose**; the change to the
 real system has to be measured directly.
 
+**What the speed-up is worth.** The natural yardstick for a neighbourhood survey
+is the manual alternative. The 1 km route is 19.0 km of street centerline; walked
+briskly at 5 km/h that is 3.8 hours, or about 4.2 with stops to write occupancy
+down. Measured by the median gap between captures, the simulated survey took
+**3.4 hours before this work and about 0.9 hours after** — so the simulation went
+from roughly a dead heat with a person on foot to about four times faster than
+one. For scale, the real aircraft would need 1.1 hours of pure flight for the
+same 19 km, plus three or four battery swaps: the simulation now completes a
+survey faster than the drone it simulates could fly it.
+
+Two honest qualifications. The load-time figures were measured directly; the
+per-frame flight rate is inferred from capture timestamps, and the earlier run
+predates other controller changes, so the 3.9× drop in per-frame cost is
+*consistent with* the node reduction rather than cleanly attributable to it. And
+the walking comparison is fair on distance but slightly generous to the drone on
+route structure, since a surveyor on foot sees both kerbs at once and does not
+need a waypoint every 10 m.
+
 Finally, the proxy cars answer a question the analysis had guessed at. It
 predicted that a box world would be an *easier* target for the classifier. It is
 not: scored on a low-poly copy of the calibration world, accuracy fell from 100%

@@ -41,9 +41,33 @@ EDGE_MARGIN = 2                  # px: ignore pixels this close to the frame edg
 INNER = 0.78                     # sample only the inner fraction of the bay
                                  # (excludes the painted outline + neighbours,
                                  # but keeps enough of a car's dark glass/wheels)
+                                 # Reporting/debug only since CORE_W/CORE_LEN
+                                 # took over the classified region.
 CORE_LEN = 0.55                  # central fraction of the bay's LONG axis used
                                  # for classification (immune to overhang from
                                  # the adjacent bays, which enters at the ends)
+CORE_W = 0.70                    # central fraction of the bay's SHORT axis.
+                                 # This is the clearance from the bay's OWN
+                                 # painted outline, and it is the binding one:
+                                 # on a 2.2 m bay the side lines run 0.98-1.10 m
+                                 # off centre, so INNER=0.78 left only 0.12 m
+                                 # (<2 px at 30 m) while the measured per-frame
+                                 # projection error reaches ~0.6 m. Paint then
+                                 # leaks into the crop and lifts chroma /
+                                 # brightness / std on a FREE bay towards the
+                                 # occupied side. 0.70 gives 0.21 m.
+                                 # CHOSEN ON THE CALIBRATION WORLD ONLY: 4st
+                                 # holds 100% from 0.78 down to 0.66 and starts
+                                 # missing real cars at 0.62, so 0.70 keeps two
+                                 # steps of margin from that cliff. Do NOT pick
+                                 # this by what scores best on fmi_block - that
+                                 # is the held-out world, and its curve is
+                                 # non-monotonic (95.2/95.2/97.6/95.2/95.2 at
+                                 # 0.78/0.74/0.70/0.66/0.62) because bay 17686
+                                 # sits right on the chroma threshold and flips.
+                                 # Shrinking the two axes SEPARATELY matters:
+                                 # the old uniform INNER shrink also ate the
+                                 # length, which CORE_LEN already guards.
 MIN_VIS = 0.70                   # a view is usable if at least this fraction of
                                  # the core area is inside the frame
 
@@ -102,16 +126,31 @@ def shrink(ring_px, frac):
     return [(cx + (x - cx) * frac, cy + (y - cy) * frac) for x, y in ring_px]
 
 
-def shrink_long(ring_px, frac):
-    """Shrink a 4-corner ring along its LONG axis only (keeps full width)."""
+def _shrink_axis(ring_px, frac, along_long):
+    """Shrink a 4-corner ring along ONE axis, leaving the other full.
+
+    Each corner slides toward its neighbour across the chosen axis, so the ring
+    stays a rectangle of the same orientation.
+    """
     t = (1.0 - frac) / 2.0
-    if (math.dist(ring_px[0], ring_px[1]) >= math.dist(ring_px[1], ring_px[2])):
-        pairs = [(0, 1), (1, 0), (2, 3), (3, 2)]    # long edges: 0-1 and 2-3
+    first_is_long = math.dist(ring_px[0], ring_px[1]) >= math.dist(ring_px[1], ring_px[2])
+    if first_is_long == along_long:
+        pairs = [(0, 1), (1, 0), (2, 3), (3, 2)]    # slide along edges 0-1 / 2-3
     else:
-        pairs = [(0, 3), (1, 2), (2, 1), (3, 0)]    # long edges: 1-2 and 3-0
+        pairs = [(0, 3), (1, 2), (2, 1), (3, 0)]    # slide along edges 1-2 / 3-0
     return [(ring_px[a][0] + (ring_px[b][0] - ring_px[a][0]) * t,
              ring_px[a][1] + (ring_px[b][1] - ring_px[a][1]) * t)
             for a, b in pairs]
+
+
+def shrink_long(ring_px, frac):
+    """Shrink a 4-corner ring along its LONG axis only (keeps full width)."""
+    return _shrink_axis(ring_px, frac, True)
+
+
+def shrink_short(ring_px, frac):
+    """Shrink a 4-corner ring across its SHORT axis only (keeps full length)."""
+    return _shrink_axis(ring_px, frac, False)
 
 
 def poly_area(poly):
@@ -149,10 +188,16 @@ def region_stats(img_arr, poly):
 
 
 def bay_features(img_arr, ring_px):
-    """Stats over the bay's inner region and its lengthwise core. Returns None
-    unless enough of the CORE is visible in this frame to classify from."""
-    inner_poly = shrink(ring_px, INNER)
-    core, core_vis = region_stats(img_arr, shrink_long(inner_poly, CORE_LEN))
+    """Stats over the bay's inner region and its core. Returns None unless
+    enough of the CORE is visible in this frame to classify from.
+
+    The core is shrunk on each axis for a different reason, so the two fractions
+    are separate: CORE_W across the width buys clearance from the bay's own
+    painted outline, CORE_LEN along the length keeps a neighbour's overhang out.
+    """
+    inner_poly = shrink(ring_px, INNER)                # reporting/debug only
+    core_poly = shrink_long(shrink_short(ring_px, CORE_W), CORE_LEN)
+    core, core_vis = region_stats(img_arr, core_poly)
     if core is None or core_vis < MIN_VIS:
         return None
     feat = {"core_" + k: v for k, v in core.items()}
