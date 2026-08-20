@@ -46,7 +46,7 @@ wound **counter-clockwise** so its normal faces +Z and the nadir camera (`rect_c
 clockwise, so `quad_mesh` reverses it). Nothing addresses a bay by scene-node name — the classifier
 works from `block_bays.geojson` + `poses.json` — but if that ever changes, `--bay-solids` restores
 the old per-bay emission and reproduces the pre-2026-08-11 generator **byte-for-byte**. Verified
-accuracy-neutral by an A/B of 4 flights per variant on `fmi_block` (95.2%, identical confusion
+accuracy-neutral by an A/B of 4 flights per variant on `fmi_block` (95.2% at the time, identical confusion
 matrix, 8/8 runs) and 1 each on `fmi_block_4st` (100% both).
 
 **`--lowpoly` — proxy box cars, big worlds ONLY.** A "Simple" vehicle proto is not low-poly
@@ -59,8 +59,9 @@ loop that can free a bay and rewrite `gt` — is deliberately untouched, so `gro
 `route.json` come out **byte-identical to the proto-car world of the same size** (verified). It is
 opt-in and changes nothing unless passed.
 **It changes what a car LOOKS like, so it changes what the accuracy number MEANS.** Measured on
-`fmi_block_4st_lp`: **98.2%** (TP=47 TN=62 FP=0 **FN=2**) vs 100% for the proto-car `fmi_block_4st`.
-Both misses are *dark* cars (`brightness` 68–70, `core_std` 10–11, `core_dark_frac` 0.00) — a
+`fmi_block_4st_lp`: **99.1%** (TP=48 TN=62 FP=0 **FN=1**) vs 100% for the proto-car `fmi_block_4st`
+(98.2%/FN=2 before the 2026-08-20 camera-model fix). The miss is a *dark* car (bay 17607,
+`brightness` 68, `core_std` 10, `core_dark_frac` 0.00) — a
 uniform dark box on dark asphalt looks like empty tarmac, because it has none of the panel gaps,
 glass or under-car shadow `classify()` leans on. So a box world is **harder** for dark vehicles, not
 easier as `docs/webots_1km_performance.md` originally guessed. **Never pass `--lowpoly` for
@@ -77,6 +78,9 @@ compared against a fresh one. This is why both golden fixtures were re-flown on 
 
 **`fmi_block_obst` — the obstacle-avoidance test world** (`python generate_world.py 130 0.5 fmi_block_obst --collide --obstacles --chase`). It exists because the only real world with anything to hit at 30 m is `fmi_block_1km`, which took >10 min to load when this world was built (2.8 min headless since the bay-paint merge), so the avoidance edit/run/observe loop needed a fast world with a deliberate conflict. Same window/route/bays as `fmi_block_4st`, plus `--obstacles`: four synthetic structures anchored to fractions along the finished route, each tall enough to reach cruise altitude, each a *different* failure mode — `tower` (45 m, head-on, wide), `slab` (38 m, offset 7 m so it clips the corridor without blocking it), `mast` (40 m but 0.9 m across — the sparse-DistanceSensor-fan blind spot, the case that argues for a Lidar) and `trap` (34 m U opening toward the drone — the concave deadlock that pure reactive avoidance circles inside forever; expect it to fail first). Placement is deterministic and nudged forward past any bay it would cover (a box on painted tarmac is a ground-truth bug) and enforces 30 m between structures, because a postman route doubles back and two anchors 12 waypoints apart can land 15 m apart. They land in `<name>.hazards.json` next to the real buildings, flagged `"synthetic": true`, so a controller arming sensors off that list needs no special case. `--obstacles` changes nothing unless passed — the three survey worlds regenerate byte-identical. **Baseline (verified 2026-08-09):** the obstacle-blind controller flies into `tower` at wp12 and stops there, 13 frames in; archived at `sim/output/fmi_block_obst_baseline/`.
 
+**How the whole avoidance layer works, in pseudocode with the reasoning:
+`docs/obstacle_avoidance.md`.** The sections below stay as the constants-and-failures record.
+
 **Obstacle layer, stage D (detect & stop) — done, verified.** `--collide` also mounts a **9-ray `DistanceSensor` fan** (±40°, 80 m, `type "laser"` so Webots draws the beams) in the Mavic2Pro's `bodySlot`; survey worlds get none, `getDevice` returns `None`, and the whole layer switches itself off. `DS_N`/`DS_SPREAD_DEG`/`DS_RANGE` are duplicated in `generate_world.py` and `parkdrone.py` — keep in step, same convention as `ORIGIN`. **The layer emits only a speed limit into the existing `v_des` channel** — never a position target — so the stabilizer sees nothing new and every controller invariant survives by construction; stage B's yaw bias will use the same principle (the threat *bearing* is already read and logged for it). Frames captured while it is in control get `"avoiding": true` + `"obstacle_m"` in `poses.json`, so the scorer can exclude them rather than silently mis-score. Telemetry goes to `output/<area>/flight_log.csv` (line-buffered, one row/s) because Webots' stdout is routinely lost and the interesting seconds fall *between* waypoint captures.
 
 Five things had to be right, each found by a failed run — do not regress them:
@@ -87,7 +91,146 @@ Five things had to be right, each found by a failed run — do not regress them:
 - **Brake with a saturated gain** (`K_VEL_BRAKE` 2.0 vs `K_VEL` 0.4) and **station-keep on a latched point** when stopped (`K_HOLD`, `HOLD_V_MAX` 0.3 m/s). Proportional braking fades as speed→target (measured 0.133 m/s², below the planned 0.15) and pure damping cannot null a steady hover drift — the drone stopped correctly at 12.7 m and then crept 13 m into the tower over 95 s. The hold converts position error to a *clamped velocity target*, which is why it does not reintroduce the lateral-position-command tumble.
 - Subtle one: `avoiding` must be `v_obst <= v_des` **and** a threat tracked. With a strict `<` the layer switched itself off exactly when stopped (the navigator's own `v_des` is 0 while yawing), so the hold never latched — two runs came out identical to four significant figures before this was spotted.
 
-**Verified result:** the drone acquires `tower` at 76 m, brakes, and **halts at a 12.20 m standoff, holding it to ±2 cm for 400+ s** at 30.00 m altitude; 7 of 11 frames carry `avoiding`. The patrol does not finish — that is stage D by design. Archived at `sim/output/fmi_block_obst.stageD-halt/`. **Stage B (steer around, chosen over climbing so the classifier's 30 m calibration is never broken) is not started.**
+**Verified result:** the drone acquires `tower` at 76 m, brakes, and **halts at a 12.20 m standoff, holding it to ±2 cm for 400+ s** at 30.00 m altitude; 7 of 11 frames carry `avoiding`. The patrol does not finish — that is stage D by design. Archived at `sim/output/fmi_block_obst.stageD-halt/`.
+
+**Obstacle layer, stage B (steer around) — first working version, verified 2026-08-19.** Steering,
+not climbing, so the classifier's 30 m calibration is never broken. Like stage D it writes only into
+channels the stabilizer already has — the aim **heading** (`yaw_err`) and the speed target — and
+never a lateral position command, so every controller invariant survives by construction. On
+detecting a gated return between `STEER_NEAR` (16 m) and `STEER_ENGAGE` (45 m) that lies within
+`CLEAR_R` of the route, it commits a **detour**: pick the side with more room from the ray fan
+(`open_side`, scored on each side's *minimum* range — one blocked ray is what a collision is), then
+fly the tangent to a remembered obstacle, `psi_des = bearing(T) ± (asin(R/d) + margin)`, capped at
+`STEER_V` 2 m/s. Waypoints buried inside the obstacle are **skipped and recorded** — a declared
+coverage gap is a correct survey result, an endless orbit is not. Frames captured during a detour
+get `"steering": true` in `poses.json` alongside stage D's `"avoiding"`; both mean *off the
+calibrated path, exclude rather than score*. `sim/analyze_stage_b.py` reports a run from disk.
+
+**Verified result:** the drone acquires `tower` at 45 m, turns, rounds it in a **21 s detour at
+2.54 m/s**, skips the 4 waypoints inside it, and **resumes the route on the far side** — reaching
+**wp20 of 97 with 17 frames**, where stage D halted at wp12 with 11 and the blind baseline flew into
+it at wp12. Closest approach over the whole flight is **12.16 m**, i.e. the standoff holds. It stops
+on the route's *second* pass through the same tower, which is stage B's honest limit today.
+Archived at `sim/output/fmi_block_obst.stageB-pass/`.
+
+Six things had to be right, each found by a failed run — do not regress them:
+- **The threat is remembered as a growing DISC, not a point.** Refreshing a point to the latest
+  return makes the memory *follow the drone*: on a wide structure the nearest face point slides
+  around it as the drone circles, so the threat is permanently "ahead" and the manoeuvre orbits —
+  measured as a full 150 s lap of the tower. Freezing a single point instead under-clears: the arc
+  misses that one face by `CLEAR_R` while the rest of the 8 m-wide tower still juts into the path,
+  and the drone re-detects at 13 m. A bounding disc that only ever grows has neither failure. It
+  grows only by **contiguity** (`STEER_MERGE` 12 m from the surface, capped at `STEER_GROW`): a
+  loose "within 40 m" window pulled unrelated buildings in and inflated the disc until it swallowed
+  waypoints 30 m clear of the tower.
+- **The leave condition is Bug2's, not a geometric one.** "Swept 110° around it" and "it is abeam"
+  both release while the goal is still on the *far* side, so the drone turns straight back into the
+  obstacle, re-engages, and wanders (measured: 60 m off-route, re-detouring the same tower ~10
+  times). Release only when the drone is **measurably closer to the waypoint than when it committed**
+  *and* can fly straight at it clear of the disc. (a) is what makes it terminate.
+- **Suppress the stop-and-turn latch while steering.** `hold_stop` exists for route reversals. Mid
+  detour the drone is deliberately 20 m off-route on a tangent, so the bearing to the next waypoint
+  is always wildly off and the latch fires on essentially every capture — pinning `v_des` to 0 until
+  ground speed drops below `HOLD_SPEED`, which it never does, because `K_VEL` is proportional and the
+  braking fades (the same mechanism stage D hit). Every detour crawled at a pinned 0.37 m/s and ran
+  itself into the timeout.
+- **Do NOT suppress the station-keep latch while steering.** The mirror image, and the dangerous one:
+  with it suppressed, a detour whose obstacle curve had already gone to zero drifted **11.94 m →
+  5.84 m over 110 s** at 0.07 m/s, straight into the tower. The hold only writes `v_des`/`v_lat_des`
+  — the detour's yaw command is untouched — so it does not freeze the manoeuvre; if the threat stays
+  inside the close-range corridor whatever the heading, there is genuinely no way round from here and
+  a safe stop is the right answer.
+- **Do not start a detour inside `STEER_NEAR`.** Turning needs room ahead; inside the standoff the
+  only correct answer is stage D's brake. Without the floor the controller committed to a detour with
+  a return **5.4 m** off the nose.
+- **Giving up is per-threat, not global.** A timed-out detour blacklists that disc and reverts to
+  stage D *there*. One unsolvable structure — `trap` is built to be exactly that — must not cost the
+  drone its avoidance for the remaining 90 waypoints.
+
+**Clearance is one constant, and the drone escalates rather than gives up.** `CLEAR_R` is the
+clearance flown past the obstacle's *measured* surface; the arc radius, the release test, the skip
+radius and stage D's standoff against the committed obstacle all derive from it, so they cannot
+disagree. It is **tight by default (5 m)** because a wide berth is what costs coverage and what
+makes the drone visibly wander: at 18 m the patrol skipped 28 of 97 waypoints and flew a mean 21.3 m
+off its own route, against 21 and 9.6 m at 5 m clearance (76 frames vs 69). Reliability is bought
+back not by widening every detour but by **retrying the awkward one**: a detour that times out
+doubles the clearance *for that obstacle* and tries again (`STEER_ESCALATE`, 3 levels), so the common
+case stays tight and only the difficult structure gets the wide berth.
+Three things make a tight arc flyable, and each was a failed run:
+- **Speed is limited by stopping distance, not just by turn radius.** Flying an arc at the fastest
+  the radius allows (`sqrt(A_LAT*r)`) means staying stoppable requires clearance ≥ 4.9× the
+  obstacle's own radius — ~16 m around this 8 m tower, which is exactly the wide, wandering
+  behaviour. Adding `sqrt(2*A_BRAKE_OBST*CLEAR_R)` inverts it: fly slowly and close is safe.
+- **The engage corridor must be at least stage D's standoff.** Narrower (8 m vs 12 m) opens a band of
+  structures that halt the drone but never qualify for a detour; the patrol froze 11.78 m from one.
+  And symmetrically, **anything that has actually stopped the drone is detourable regardless of the
+  route** — stage D brakes on bearing, stage B routes on the plan, and a structure beside the route
+  that the nose happens to point at froze the drone at 10.47 m with the route clear.
+- **A stopped drone may start a detour inside `STEER_NEAR`.** The floor exists because turning needs
+  room to stop; a drone at zero ground speed has already stopped. Without the exception, flying close
+  deadlocks routinely — the drone ends up inside the floor with no detour committed and stage D
+  station-keeps forever.
+**0.5 m clearance was tried and does not work** — it ends 1.3 m from the tower. Each detour releases
+as soon as it is marginally past, the drone re-aims at a route running through the structure, and it
+ratchets in: 45 → 30 → 19.6 → 8.4 → 4.3 → 1.3 m. Independently, the 9-ray fan is 10° apart, so at
+5 m range the gaps *between* rays are 0.9 m — wider than the clearance being asked for. That is the
+`mast` case arriving early, and it is a sensor argument, not a tuning one.
+
+**Verified result (2026-08-19, `sim/output/fmi_block_obst.stageB-tight/`): the patrol COMPLETES** —
+wp96 of 97, 76 frames, and all four structures passed, `trap` (the concave U built to defeat a
+reactive controller) included. Closest approach 6.21 m. The earlier wide-berth run is kept at
+`sim/output/fmi_block_obst.stageB-complete-r18/` for comparison.
+
+**A controller exception looks like a drone that simply stops flying.** Webots keeps running when the
+Python controller dies, and the filtered console shows nothing: the symptom is a `flight_log.csv`
+whose last timestamp stops advancing while `webots-bin.exe` is still alive at full memory. Cost an
+hour when `steer_off` entries grew a field and one stale 3-name unpack was left behind. Check the log
+mtime against the process before assuming the drone is merely stuck.
+
+**Survey worlds are unaffected, verified by A/B not by argument.** Stage B touches the shared
+navigator, so `fmi_block_4st` was flown twice — once with this controller, once with the committed
+one — from empty output directories. Both complete 97/97 waypoints and the trajectories agree to
+**under 0.1 mm**. Note that is *agreement*, not
+bit-equality: re-launched Webots runs match to ~1e-6, so comparing poses with `==` reports every
+frame as different and means nothing — compare with a tolerance.
+
+**Stage B, orbit fix — a detour must be a way PAST the obstacle, not a lap of it (2026-08-20).**
+The tight-clearance patrol completed, but watching it showed the drone flying **full circles** around
+structures instead of rounding them: measured in `sim/output/fmi_block_obst.stageB-tight-orbits/`,
+ten detours of which four swept **188°, 231°, 293° and 338°** — the last two around `mast`, a 0.9 m
+pole, at ~15 m radius, 70 s and 81 s each. Two causes, both about the question "is it in my way?"
+being asked differently at commit and at release:
+- **It committed for things it was not yet flying at.** The commit probed the route over the full
+  `STEER_HORIZON` (70 m), so a structure blocking the route two legs later took the drone off a
+  waypoint 12 m off its nose. The tangent law then flew it *to* that structure, and the leave
+  condition — which requires closing on the current waypoint — could not fire, because that waypoint
+  now lay behind. The only way to satisfy it was to come all the way round. The commit gate now uses
+  `STEER_LOOK` (12 m past the current waypoint, so the window is "this leg and the next"): the
+  obstacle has to be between the drone and where it is going, which makes rounding it *progress* and
+  makes the detour terminate in ~180°.
+- **It released while the obstacle still lay across the next leg.** The release only tested the run
+  to the current waypoint, so a detour committed at 43 m let go a few metres later and re-committed a
+  second afterwards — five engage/release cycles closing on `mast`, each nudging the approach further
+  off line, and a 270° orbit at the end of it. Release now also requires the *route ahead* (same
+  window) to be clear of the disc, or the disc to be behind.
+
+`fmi_block_4st` was re-flown against this controller as usual: 97/97 waypoints and poses **identical
+to the golden fixture to 0.000000 m** — every line of the fix sits inside the `if t_now` / `detour is
+not None` branches, and a survey world has no ray fan to produce a return.
+And a bound, because reactive avoidance can always find a new way to circle: `STEER_ORBIT` abandons a
+detour that has swept **270°**, suppressing re-commit against that disc for `STEER_COOL` (45 s) and
+handing the drone back to its route with stage D still protecting it. It deliberately does **not**
+escalate the clearance — an orbit is the one failure a wider berth makes worse. **270° and not less:
+200° was tried and the run ended in a CRASH** — bailing out earlier leaves the drone on the near side
+with the structure still across its route, it turns straight back at it, and at wp32 it clipped a
+building the ray fan had last seen 8 m away.
+**Verified result (`sim/output/fmi_block_obst.stageB-noorbit/`): the patrol still completes 97/97
+with all four structures passed, in 6 detours instead of 18, none of them a circle** (largest sweep
+238°, and that one is the tower the route re-enters three times), **79 frames** (76 before) in
+**1599 s**, closest approach **6.55 m**.
+
+**Remaining:** the tower the route doubles back through still costs one 238° swing and one
+`STEER_ORBIT` bail-out; `trap` is passed but only via the escalation ladder (two 150 s timeouts).
 
 ### 3. Flight-log analysis (real-flight debugging, separate from sim)
 ```bash
@@ -111,6 +254,33 @@ Critical run-time gotchas (each cost real debugging time):
 
 **Coordinate flow / georeferencing is the spine of the project.** Everything is tied together by a single local projection: lon/lat (EPSG:4326) → local ENU metres about the block centroid, using `mlat = 111320`, `mlon = 111320*cos(lat0)`. Both `generate_world.py` and the controller use this same convention. `poses.json` records the drone's `x, y, alt, yaw` in those metres at each captured frame — so a detected car's image position can be projected to ground metres and matched to the nearest bay in `block_bays.geojson`, then scored against `ground_truth.json`. When touching projection math, keep `generate_world.py`, the controller, and (future) the detector consistent.
 
+**Camera model: the camera is NOT nadir, and pretending it was cost 2.4 points of accuracy**
+(fixed 2026-08-20). `score_occupancy.project()` used to place a bay from `x, y, alt, yaw` alone.
+It now builds the optical axis from the attitude in `poses.json` — `camera_axes()` — because the
+Mavic2Pro gimbal does not do what the controller asks it to:
+- its **pitch** compensation works, so only the RESIDUAL pitch `pitch + (cam_pitch - pi/2)` tilts
+  the camera fore/aft — a few mrad of servo lag behind its own command;
+- its **roll** compensation never reaches the image. The lateral error tracked the FULL body roll
+  at slope **-1.02, R² 0.994** — exactly as if the joint were not there;
+- what that joint does instead is **spin the image** about the optical axis by `cam_roll`.
+All three follow from the joint order: the roll joint sits *below* the pitch joint, so once pitch
+is at the +pi/2 a nadir survey flies, the roll axis has been rotated onto the optical axis. It can
+no longer level the camera; it only rolls the picture. This is why `--chase`-era intuitions about
+"the gimbal keeps it level" are wrong at nadir specifically.
+**Result:** median per-frame misalignment **0.269 m → 0.043 m**, worst frame **0.97 m → 0.060 m**;
+`fmi_block` **97.6% → 100%** (the last false positive, bay 17685, was a *projection* error all
+along), `fmi_block_4st` unchanged at 100%, `fmi_block_4st_lp` 98.2% → 99.1%.
+Two committed diagnostics under `vision/diag/` (the previous set lived in a session scratchpad and
+was lost — do not repeat that): `paint_align.py` registers the projected outlines against the paint
+actually visible in a frame, sub-pixel, and `--self-test` proves the estimator on injected known
+shifts (0.10 px worst error, against a 0.63 m effect) before any number is believed; `offset_report.py` regresses the
+result against the pose covariates and is what named the cause. **Re-run
+`python vision/diag/offset_report.py fmi_block` after any change to the camera, the gimbal or the
+capture logic** — a correct model leaves every R² near zero, and a slope near ±1 against an
+`alt*angle` term names the angle being ignored.
+A pose carrying no attitude still projects as nadir, so every `poses.json` already on disk stays
+scorable — the same fallback discipline as `pose_idx()`'s legacy `i` key.
+
 **`parkdrone.py` is one control loop.** Each step: read IMU/GPS/gyro → point gimbal to nadir → optionally capture a frame → compute roll/pitch/yaw/vertical disturbances → mix into four propeller velocities (mixing & base gains adapted from Webots' official Mavic2Pro sample). On top of the stock stabilizer sits a **lawnmower waypoint navigator** that steers car-style: yaw to point the nose at the next waypoint, then throttle forward.
 
 Hard-won controller invariants — **do not regress these** (they are why the sim works now; details in the project memory):
@@ -119,7 +289,28 @@ Hard-won controller invariants — **do not regress these** (they are why the si
 - **Yaw needs rate damping** (`K_YAWD`, from the gyro's yaw rate), or it is pure-proportional and the drone spins in circles, never facing a waypoint.
 - **Steer with yaw + forward only; never roll-strafe toward the target** — a lateral *position* command saturates while off-heading and tumbles the drone. Roll is used only to damp sideways drift.
 - **Waypoint arrival: keep `WP_REACH` at 6 m and capture at closest approach.** At cruise speed the turn radius is ~4 m, so the drone can settle into a stable ORBIT inside a tighter basin (constant distance — the patrol hangs forever, circling). Arrival fires on `WP_CAPTURE` (2.5 m), receding >1 m past the closest pass, or a `WP_TIMEOUT` (8 s) orbit bail-out.
-- **`TILT_MAX` > ~1.0 dips lift and crashes.** Forward speed is a velocity-target controller (`v_des = clamp(K_POS*fwd_err, 0, V_MAX)`) that ramps down on approach so row-end U-turns stay tight; once the patrol finishes the controller station-keeps (brakes drift) instead of sailing off.
+- **`TILT_MAX` > ~1.0 dips lift and crashes.** Forward speed is a velocity-target controller (`v_des = clamp(K_POS*fwd_err, 0, V_MAX)`) that ramps down on approach so row-end U-turns stay tight; once the patrol finishes the controller **lands** (see below) instead of sailing off.
+- **The patrol ends with a landing, in two phases, and `yaw_d` must be DAMPED throughout.** The old
+  end-of-patrol branch damped forward and lateral drift but never touched yaw: `yaw_d` was reset to 0
+  every step, and zero yaw *command* is not zero yaw *rate* — there is no aerodynamic drag in the
+  sim, so whatever rotation the last waypoint left behind simply persisted and the drone hovered at
+  30 m turning on the spot indefinitely. The landing uses a **pure rate damper** (`-K_YAWD*yaw_rate`,
+  no heading target — there is no waypoint left to face); measured, yaw then holds within 0.3° for
+  the whole 35 s descent.
+  Phase 1 **brakes to a hover, then latches the spot**; phase 2 descends over it. The order matters:
+  the patrol ends at cruise speed and braking authority is ~0.22 m/s², so descending immediately
+  means descending along a ballistic curve — measured at **6.5 m** of sideways travel before this
+  phase existed, against **0.22 m** after. The descent walks a commanded altitude `alt_cmd` down at
+  `LAND_RATE` (1 m/s, easing to 0.35 below 6 m) rather than stepping the target to zero, so the
+  existing altitude loop tracks a ramp it can follow instead of dropping. Motors are cut at
+  `LAND_CUT_ALT` and the loop then short-circuits — `setVelocity` is sticky, so cutting once is
+  enough.
+  Two structural notes: the landing branch runs **outside the `settled` gate** (a descent is
+  unsettled by definition, and the navigator branch would otherwise stop producing any attitude
+  command at all — the drone would fall with roll, pitch and yaw all commanded to zero), and
+  `alt_cmd` exists precisely so `settled` and the altitude loop mean the *commanded* altitude. During
+  the patrol `alt_cmd == TARGET_ALT`, so the survey path is untouched — verified by A/B flight of
+  `fmi_block_4st`, 97/97 waypoints, max position delta 0.000000 m.
 - Working gains live at the top of the loop: `K_YAW=1.0 K_YAWD=0.8 K_POS=0.6 K_VEL=0.4 TILT_MAX=1.0 V_MAX=2.5` (plus the Webots-sample stabilizer gains `K_VT/K_VP/K_ROLL/K_PITCH`).
 
 ## Windows / Git Bash conventions
@@ -135,8 +326,9 @@ independent of the Python sim/vision code. Full design in `docs/web_infra_plan.m
 Diagrams: `web/docs/architecture.drawio` (system level), `docs/server_modules.md` +
 `docs/server_modules.drawio` (inside the server), `docs/db_schema_er.md` (schema).
 
-**Status: Phases 1–5 built & verified end-to-end; Phase 6 (admin dashboard) and Phase 7 (prod
-hardening) remain.** See project memory `project-web-infra.md` for the running log.
+**Status: Phases 1–6 built & verified end-to-end (re-verified 2026-08-20: migrations through
+`0008`, golden replay 42/42 at 100%, full-stack ingest 42/42, and the restart-recovery path
+reproducing both). Phase 7 (prod hardening) remains.** See project memory `project-web-infra.md` for the running log.
 
 ### Layout
 - `packages/contracts` — shared TS types + zod schemas + the ENU projection (mirrors
@@ -188,6 +380,12 @@ hardening) remain.** See project memory `project-web-infra.md` for the running l
   (`status`, `enqueued_at`, `finished_at`). Both are written in one transaction before the job is
   enqueued; a duplicate ingest creates no job row. `ON DELETE CASCADE` means clearing a survey
   area's `frame` rows still clears its jobs.
+- **The pose stored with a frame must include the GIMBAL angles** (`cam_pitch`, `cam_roll`,
+  migration `0008`), not just body roll/pitch. `project()` needs them (see **Camera model**), and
+  `jobs.recover()` rebuilds a restarted job's pose from the `frame` row — without them a recovered
+  frame would be re-projected as if the camera were nadir and could classify differently from the
+  same frame processed live. Nullable: pre-0008 rows and any drone that reports no gimbal fall back
+  to nadir, exactly as they did before.
 - **Bay ids: int in `block_bays.geojson`, string everywhere in the web tier**.
 - Frame ingest is idempotent on `UNIQUE(drone_id, survey_area, frame_idx)` — a re-send does NOT
   re-enqueue; to reprocess a survey area *within the retention window*, clear the `frame` table
@@ -250,11 +448,18 @@ pnpm db:migrate && pnpm db:seed         # loads all 1698 bays
 ```
 Verification harnesses (all Python, run from `apps/vision-worker`):
 - Vision golden test: `python -m parkdrone_vision.replay fmi_block`
-  (expect 42/42 match vs `occupancy_results.json`, **95.2%** vs GT). Imports the classifier only —
+  (expect 42/42 match vs `occupancy_results.json`, **100%** vs GT since the camera-model fix).
+  Imports the classifier only —
   no server needed. The fixture was re-flown 2026-08-11; the older "43/43, 100%" figure came from
   frames captured 2026-07-06 that were re-scored, never re-flown, after the scenery landed, so it
-  no longer reproduced. The 2 remaining FPs (bays 17685/17686) are a known open bug — see
-  **Known open issues** at the end of this file.
+  no longer reproduced; the 95.2% and 97.6% figures that followed it are both superseded by the
+  camera-model fix below.
+- Restart recovery (what migration `0008` protects): stage frames with the server started as
+  `CLASSIFY_THREADS=0`, kill it, start it normally — `recovered_on_start` should equal the staged
+  count and the resulting `bay_state` must match the live-path result exactly. Verified 2026-08-20
+  (34 frames, 42/42 at 100% both ways). It is a real check, not a formality: stripping
+  `cam_pitch`/`cam_roll` from a pose moves bay 17685's projected outline by 0.35–1.55 m on the
+  frames that see it, against a 0.21 m core-crop clearance.
 - Full stack E2E: register a drone `python -m parkdrone_vision.register_drone drone-1`, then
   `API_KEY=<key> python -m parkdrone_vision.replay_ingest fmi_block` (expect 52 WS deltas + final
   `/bays` matching the offline result, 42/42). To re-run, clear the survey area's `frame`,
@@ -333,21 +538,13 @@ queue (used to stage frames for the restart-recovery test).
 
 ## Known open issues
 
-**Off-nadir projection FPs on `fmi_block` (found 2026-08-11, not fixed).** The world scores 95.2%,
-not 100%: bays **17685 and 17686** are free but classified occupied, both from frame 26 at
-**136–146 px off image centre**. It is a *projection* bug, not a classification one — the same
-family as the fixed gimbal-pitch offset. At that eccentricity the projected bay polygon no longer
-lines up with the painted outline in the image, so white line pixels fall inside the "core" crop:
-`core_paint_frac` 0.07, `core_brightness` 105 (the free envelope is 82–102) and `core_std` 40, which
-trips the occupied cues on empty asphalt. The debug overlay (`sim/output/fmi_block/debug/
-debug_026.png`) shows the misalignment directly.
-- **Not caused by the bay-paint merge** — an A/B of 4 flights per variant reproduces 95.2% with the
-  original per-bay `Solid`s too.
-- It went unnoticed because the old fixture was never re-flown after the scenery landed (July frames,
-  re-scored in August). `fmi_block_4st` is unaffected: 111/111 covered, 100%.
-- Likely directions: correct the projection for camera eccentricity/lens centre, shrink the core
-  crop as `center_off_px` grows, or down-weight/reject views past an eccentricity threshold (the
-  scorer already records `center_off_px` per bay, so the data to calibrate it is on disk).
+**Off-nadir projection FPs on `fmi_block` — FIXED 2026-08-20, see "Camera model" above.**
+The world now scores **100%** (was 95.2%, then 97.6% after the `CORE_W` change). Root cause was
+`project()` assuming a nadir camera: the gimbal's roll joint sits below its pitch joint, so at the
++pi/2 pitch this survey flies it spins the image about the optical axis instead of levelling the
+camera, and the FULL body roll displaced every frame laterally. Kept here only as the pointer —
+the diagnosis, the numbers and the two committed diagnostics are in **Camera model** above.
 
 **Longer-standing, unchanged:** capture scatter leaves ~3 bays uncovered on `fmi_block`; the 1 km
-flight is unfinished (318/1976 frames) and unscored; the learned classifier v2 is not started.
+flight is unfinished and unscored (its last attempt stopped at **87 of 1976** frames on 2026-08-17,
+stopped by hand rather than by any fault); the learned classifier v2 is not started.

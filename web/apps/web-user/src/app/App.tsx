@@ -31,7 +31,7 @@ export default function App() {
   const [fc, setFc] = useState<BayFC | null>(null);
   const [zones, setZones] = useState<ZoneSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const { live, connected } = useOccupancySocket();
+  const { live, connected, syncVersion } = useOccupancySocket();
 
   const [userPos, setUserPos] = useState<UserPos | null>(FMI_DEFAULT);
   const [focusKey, setFocusKey] = useState(0);
@@ -47,6 +47,16 @@ export default function App() {
     fetchBays().then(setFc).catch((e) => setError(String(e)));
     fetchSummary().then((s) => setZones(s.zones)).catch(() => {});
   }, []);
+
+  // The initial REST snapshot and opening the socket are separate requests.
+  // Reconcile after the socket has replayed its missed events so a burst of
+  // completed frames during page load/reconnect cannot wait for a browser
+  // refresh to become visible. Live deltas keep winning while this fetch runs.
+  useEffect(() => {
+    if (!syncVersion) return;
+    fetchBays().then(setFc).catch((e) => setError(String(e)));
+    fetchSummary().then((s) => setZones(s.zones)).catch(() => {});
+  }, [syncVersion]);
 
   // transient status line, so it can't linger over the route toast
   const flashTimer = useRef<number | null>(null);

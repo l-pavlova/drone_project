@@ -26,6 +26,19 @@ WORLDS = os.path.join(HERE, "..", "..", "worlds")
 os.makedirs(OUT, exist_ok=True)
 
 TARGET_ALT = 30.0          # metres
+# --- landing (end of patrol) ----------------------------------------------
+# The patrol used to end by damping horizontal drift and nothing else, which
+# leaves the drone hovering at 30 m indefinitely - and SPINNING, because
+# yaw_d was reset to 0 every step and never given a damping term. Zero yaw
+# command is not zero yaw RATE: there is no aerodynamic drag in the sim, so
+# whatever rotation the last waypoint left it with simply persists. The drone
+# was still turning on the spot minutes after finishing.
+LAND_RATE = 1.0            # m/s descent while high
+LAND_SLOW_ALT = 6.0        # m: below this, come down gently for the touchdown
+LAND_RATE_SLOW = 0.35      # m/s
+LAND_CUT_ALT = 0.30        # m: cut the motors here rather than driving them
+#   into the ground - the last 30 cm is a settle, and holding thrust against
+#   the floor makes the airframe skate.
 WP_REACH = 6.0             # arrival basin (m); must stay generous or the drone
 #   orbits waypoints it can't converge into. The frame is NOT taken on entering
 #   the basin but at closest approach, so captures stay tight to the route:
@@ -232,6 +245,159 @@ K_HOLD = 0.3               # 1/s: position error -> velocity target
 HOLD_V_MAX = 0.3           # m/s ceiling on that target
 HOLD_LATCH = 0.25          # m/s ground speed at which the hold point is latched
 
+# ---------------------------------------------------------------------------
+# STAGE B: steer around the obstacle instead of stopping in front of it.
+#
+# Same principle as stage D: this layer writes into channels the stabilizer
+# already has - the aim HEADING (yaw_err) and the speed target - and never
+# issues a lateral position command. Steering, not climbing: climbing would
+# break the 30 m calibration the occupancy classifier is tuned against.
+#
+# The detour is committed against a REMEMBERED THREAT POINT in world metres,
+# not against the live return. It has to be: the whole point of steering is to
+# turn the nose off the obstacle, which immediately pushes it outside the
+# +/-20 deg threat gate, so a controller that steered against the live bearing
+# would lose its own target the instant it started working and snap back onto
+# the collision course. Route memory is also what a purely reactive controller
+# lacks (see the `trap` structure in the test world).
+STEER_ENGAGE = 45.0        # m: range at which a detour is committed. Must be
+#   comfortably ABOVE the standoff, or the stage D brake curve has already
+#   taken the speed to zero and the drone pirouettes on the spot instead of
+#   flowing around. At 45 m the curve still allows ~3 m/s.
+STEER_NEAR = 16.0          # m: closer than this, do not start a detour WHILE
+#   MOVING. Turning is a manoeuvre that needs room ahead; committing to one with
+#   a return 5.4 m off the nose at cruise speed is how a drone flies into the
+#   thing it just decided to go around.
+#   A STOPPED drone is the exception, and it has to be, or the two layers
+#   deadlock: flying close means routinely ending up inside this floor with no
+#   detour committed (a detour releases as soon as it is past), and stage D then
+#   station-keeps forever with stage B forbidden from starting. Measured
+#   exactly that - frozen at 8.42 m from the tower for 10 000 s, nose-on, with
+#   its route running straight through the structure.
+#   The exception is safe for the same reason the floor exists: the danger of
+#   turning close is having no room to stop, and a drone at zero ground speed
+#   has already stopped. It turns in place, then leaves along the arc - which is
+#   what a pilot does when they find themselves stopped facing a wall.
+CLEAR_R = 5.0              # m: CLEARANCE flown past the obstacle's measured
+#   surface. This is the one number that sets the shape of an avoidance: the arc
+#   radius, the release test and which waypoints count as unreachable are all
+#   derived from it, so turning it up or down moves them together and they
+#   cannot disagree.
+#   Flying close is what buys COVERAGE: the wider the berth, the more of the
+#   route falls inside the obstacle's shadow and is skipped uncaptured. At 18 m
+#   the patrol completed but skipped 28 of 97 waypoints (29%).
+#   Two things fight a small value and both are handled below rather than by
+#   quietly rounding it up: the arc demands lateral acceleration v^2/r, which
+#   this aircraft has very little of (STEER_ARC slows to what the radius can
+#   actually be flown at), and stage D would otherwise brake to a halt 12 m
+#   short of the very obstacle we have decided to round (the standoff against
+#   the COMMITTED obstacle is derived from this clearance instead).
+A_LAT = 0.25               # m/s^2 usable lateral acceleration on the arc, from
+#   the same tilt limit A_BRAKE comes from. Turn radius is v^2/A_LAT, so the
+#   speed a radius r can be flown at is sqrt(A_LAT*r) - at 2 m/s the tightest
+#   circle is ~16 m, which is why a close arc MUST slow down rather than simply
+#   commanding a tighter turn the drone cannot make.
+STEER_BLOCK = OBST_STOP    # m: half-width of the corridor the drone
+#   treats as its own path when asking "is this structure in my way".
+#   It MUST exceed stage D's standoff, and that is not a tuning preference but
+#   a consistency requirement between the two layers: anything stage D will
+#   brake to a halt for has to be something stage B is willing to route around.
+#   Set to 8 m - narrower than the 12 m standoff - it opened a band of
+#   structures that stop the drone dead but never qualify for a detour, and the
+#   patrol froze at 11.78 m from one of them with no way to proceed. Tying it TO
+#   the standoff states the rule exactly: if stage D would stop for it, stage B
+#   will route around it. Wider than that only buys detours around things the
+#   drone was never going to hit.
+STEER_MARGIN = math.radians(12.0)   # aim a little wide of the pure tangent, so
+#   the arc is entered from outside rather than exactly grazing it.
+STEER_V = 2.0              # m/s cap while detouring, i.e. V_TURN: the drone is
+#   flying an arc off the planned route, and the corner profile already proved
+#   this is the speed a tight turn is safe at.
+STEER_AMBIG = math.radians(25.0)   # below this bearing separation between the
+#   obstacle and the point the route resumes at, the geometry is not telling us
+#   which way round is shorter and the fan's open side decides instead.
+STEER_LOOK = 12.0          # m of route walked PAST THE CURRENT WAYPOINT that a
+#   detour may be committed for (the run to that waypoint is always included, so
+#   the window is "this leg and the next"). STEER_HORIZON (below) is how far the
+#   route is examined; this is how far ahead a blocking structure has to be
+#   COMMITTED for. STEER_HORIZON (below) is how far the route is examined; this
+#   before the drone is willing
+#   to leave the route for it, and the two are not the same question. Judging
+#   the commit over the full 70 m horizon is what made the drone fly CIRCLES:
+#   with the mast 31 m away but blocking the route two legs later,
+#   the drone abandoned a waypoint 12 m off its nose, flew the tangent to the
+#   mast, and then could not release - the leave condition needs progress
+#   toward that waypoint, which now lay behind it, so it orbited the mast at
+#   ~15 m all the way round to where it started. Measured twice in one flight:
+#   293 deg and 338 deg swept, 70 s and 81 s, for a 0.9 m pole. Committing only
+#   for what blocks the next stretch of route means the obstacle is genuinely
+#   between the drone and where it is going, so rounding it is progress and the
+#   detour terminates in ~180 deg. The cost is engaging closer (~25 m instead
+#   of ~45 m) and a bout of commit/release chatter if the window is generous -
+#   at 25 m fixed the drone committed at 43 m, released a few metres later
+#   because its own waypoint was never behind the obstacle, and re-committed,
+#   five times over, before orbiting anyway. Tying the window to the current
+#   leg is what makes "it is in my way" mean the same thing at commit and at
+#   release. Stage D brakes in the meantime, and a stopped drone is
+#   explicitly allowed to start a detour inside STEER_NEAR.
+STEER_ORBIT = math.radians(270.0)  # accumulated sweep at which a detour is
+#   declared an orbit and abandoned on the spot, rather than left to burn the
+#   full STEER_TIMEOUT. A manoeuvre three quarters of the way round a structure
+#   is not going to resolve by going round again - and, unlike
+#   a timeout, which means "too tight, give it more room" - more clearance makes
+#   an orbit BIGGER. So this path does not escalate: it drops the detour and
+#   suppresses re-committing against that disc for STEER_COOL seconds, which
+#   hands the drone back to its route (stage D still protects it).
+#   270 deg and NOT less: 200 was tried, and the run ENDED IN A CRASH. Bailing
+#   out earlier leaves the drone on the near side with the structure still
+#   across its route, it turns straight back at it, and at wp32 it clipped a
+#   building the fan had last seen 8 m away. A detour is allowed to be a long
+#   way round; what it is not allowed to be is a closed circle.
+STEER_COOL = 45.0          # s of no-detour against a disc that was just orbited.
+STEER_HORIZON = 70.0       # m of route walked ahead when asking whether a
+#   return is in the way. A little beyond STEER_ENGAGE, so a structure is
+#   judged against the stretch of route the drone will actually fly while it is
+#   in sensor range - and no further, or a postman route that doubles back
+#   would detour now for something it does not meet for another kilometre.
+# Release and skip radii, as fractions of the clearance, so they keep their
+# ordering at any value of it: a waypoint is abandoned only if it is inside
+# SKIP_F of the surface, and the detour is released once the run to the goal
+# clears the surface by PASS_F. PASS_F < SKIP_F is required - otherwise a
+# waypoint kept because it sits just outside the obstacle could never be flown
+# to, and the detour would orbit waiting for a condition that cannot happen.
+PASS_F = 0.8
+SKIP_F = 0.9
+STEER_MIN = 6.0            # s: minimum committed detour. A manoeuvre that can be
+#   abandoned in the same second it began is not a manoeuvre.
+STEER_MERGE = 12.0         # m: a return only joins the remembered obstacle if it
+#   is within this of the disc's SURFACE, i.e. if it is plausibly the same
+#   structure. A plain "within 40 m of the centre" window was tried and is far
+#   too loose: flying an arc puts unrelated buildings inside it, the disc
+#   inflated to swallow waypoints 30 m clear of the tower, and stage B started
+#   skipping perfectly good captures.
+STEER_GROW = 25.0          # m: hard ceiling on the remembered radius. Beyond
+#   this it is not one obstacle any more and the honest answer is to stop.
+STEER_SWEEP = math.radians(110.0)   # accumulated bearing change around the
+#   frozen threat point. NOT an exit condition - it was tried as one and it is
+#   the wrong question (see the leave condition below) - but it is the number
+#   that says "this was an orbit, not a detour" when one times out.
+STEER_ESCALATE = 3         # how many times an obstacle may be retried with more
+#   room before the drone gives up on it. This is what lets CLEAR_R be TIGHT.
+#   A close arc is what the survey wants - it keeps the drone near its route
+#   (measured 2.9 m mean excursion at 5 m clearance vs 21.3 m at 18 m) and it
+#   keeps waypoints capturable (2 skipped vs 28) - but a close arc is also more
+#   likely to end up somewhere it cannot resolve. Rather than choose one
+#   clearance for every obstacle in advance, try the tight one and DOUBLE it for
+#   that obstacle each time a detour times out. The common case stays tight; the
+#   awkward structure gets the wide berth it needs, and only that structure.
+#   A permanent give-up instead ended the patrol outright: the tower timed out
+#   once, was vetoed for good, and the drone then station-kept 10.47 m from it
+#   for the rest of the flight with no way past.
+STEER_TIMEOUT = 150.0      # s: a detour that has not resolved in this long is
+#   not going to (the concave `trap` is the designed example). Give up, disable
+#   stage B for the rest of the flight and let stage D halt the drone - a
+#   documented stop is a better failure than an endless orbit.
+
 sensors = []
 for i in range(DS_N):
     _d = robot.getDevice(f"ds_{i}")
@@ -248,14 +414,20 @@ else:
 
 
 def scan():
-    """(threat_distance, threat_bearing, raw_closest). The threat is the closest
-    return that passes the gate above - that is what the speed limit is computed
-    from. raw_closest is every return regardless of bearing, kept only so the
-    flight log can show what was rejected and why. Bearings are body-relative,
-    positive to the left; both distances are inf when nothing qualifies."""
+    """(threat_distance, threat_bearing, raw_closest, rays). The threat is the
+    closest return that passes the gate above - that is what the speed limit is
+    computed from. raw_closest is every return regardless of bearing, kept only
+    so the flight log can show what was rejected and why. `rays` is the whole
+    fan as (bearing, range) with clear rays reported at DS_RANGE, which is what
+    stage B picks a side from: the gate deliberately throws away everything off
+    to the sides, and "which side is open" is exactly that discarded
+    information. Bearings are body-relative, positive to the left; both
+    distances are inf when nothing qualifies."""
     best_d, best_a, raw = float("inf"), 0.0, float("inf")
+    rays = []
     for a, s in sensors:
         v = s.getValue()
+        rays.append((a, v))
         if v >= OBST_CLEAR:
             continue
         raw = min(raw, v)
@@ -263,7 +435,61 @@ def scan():
             continue
         if v < best_d:
             best_d, best_a = v, a
-    return best_d, best_a, raw
+    return best_d, best_a, raw, rays
+
+
+def side_clear(rays):
+    """(left_min, right_min): how much room the fan sees on each side. Scored on
+    the MINIMUM range per side rather than the mean, because one blocked ray is
+    what a collision is - an otherwise open side with a single 5 m return is not
+    a way out. This only ever VETOES a side; which way to go round is a question
+    about the goal, not about the sensor (see the engage block)."""
+    left = [v for a, v in rays if a > 1e-6]
+    right = [v for a, v in rays if a < -1e-6]
+    return (min(left) if left else DS_RANGE,
+            min(right) if right else DS_RANGE)
+
+
+def seg_dist(px, py, ax, ay, bx, by):
+    """Distance from point p to the SEGMENT a-b. Used to ask whether the
+    straight line from here to the waypoint still passes through the threat -
+    the test for a detour being finished. A line-distance would answer the
+    wrong question once the threat is behind us."""
+    dx, dy = bx - ax, by - ay
+    L2 = dx * dx + dy * dy
+    t = 0.0 if L2 == 0.0 else clamp(((px - ax) * dx + (py - ay) * dy) / L2, 0.0, 1.0)
+    return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+
+
+def route_probe(wps, idx, x, y, pt, r, horizon):
+    """(closest, resume) for a point against the PLANNED ROUTE ahead.
+
+    `closest` is the least distance from `pt` to the route walked from the
+    drone's position through the next `horizon` metres of it - the honest answer
+    to "is this thing in my way", which a bearing to a single lookahead waypoint
+    is not once the route bends.
+
+    `resume` is the index of the first waypoint AFTER the run of waypoints that
+    lie within `r` of the point, i.e. where the route comes out the far side.
+    That is the waypoint a detour is trying to reach, so it is also what decides
+    which way round to go. None when the route never gets that close, or when it
+    goes in and never comes out within the horizon."""
+    cx, cy = pt
+    best = seg_dist(cx, cy, x, y, wps[idx][0], wps[idx][1])
+    run = math.hypot(wps[idx][0] - x, wps[idx][1] - y)
+    i, entered, resume = idx, False, None
+    while i < len(wps) and run < horizon:
+        inside = math.hypot(wps[i][0] - cx, wps[i][1] - cy) <= r
+        if inside:
+            entered = True
+        elif entered and resume is None:
+            resume = i
+        if i + 1 < len(wps):
+            best = min(best, seg_dist(cx, cy, wps[i][0], wps[i][1],
+                                      wps[i+1][0], wps[i+1][1]))
+            run += math.hypot(wps[i+1][0] - wps[i][0], wps[i+1][1] - wps[i][1])
+        i += 1
+    return best, resume
 
 
 motors = [robot.getDevice(n) for n in
@@ -366,6 +592,17 @@ prev_alt = None
 wp_min = float("inf")     # closest approach to the current waypoint so far
 wp_steps = 0              # steps spent near the current waypoint
 hold_stop = False         # braking to a hover before a stop-and-turn reversal
+landing = False           # patrol finished: descending to land
+landed = False            # on the ground, motors cut
+alt_cmd = TARGET_ALT      # COMMANDED altitude. Separate from TARGET_ALT because
+#   the landing ramps it down, and several gates (`settled`, the diagnostics)
+#   ask "am I at my altitude" - they have to mean the commanded one, or the
+#   moment a descent starts the drone counts as unsettled and the navigator
+#   drops out, leaving the landing with no attitude control at all.
+land_pt = None            # (x, y) the descent holds over
+v_des_log = fwd_log = 0.0 # last step's speed TARGET and body-forward speed, for
+#   the log: "why is it flying at 0.37 m/s" is unanswerable from ground speed
+#   alone, and it cost a whole run to find that out.
 vx = vy = vz = 0.0        # last-step velocities (the heartbeat log reads these
                           # before this step's finite difference is taken)
 obst_d, obst_a = float("inf"), 0.0   # closest gated threat this step
@@ -374,6 +611,22 @@ avoiding = False          # the obstacle layer is actively limiting speed
 obst_logged = -1.0        # distance at which the current encounter was announced
 obst_halted = False       # announced "stopped in front of it" for this encounter
 hold_pt = None            # latched (x, y) the halted drone station-keeps on
+obst_rays = []            # the whole fan this step, for stage B's side choice
+steering = False          # stage B is flying a detour arc around a threat
+detour = None             # committed detour: {"T": (x,y), "side": +-1, "t0": s}
+steer_off = []            # (cx, cy, r, level) per obstacle a detour has timed
+#   out on. NOT a veto - a level, which doubles the clearance the next detour
+#   around that obstacle is flown at. Per-obstacle, so one unsolvable structure
+#   - the concave `trap` is built to be exactly that - costs the drone nothing
+#   anywhere else on a 97 waypoint route. Only past STEER_ESCALATE does it
+#   become a real give-up, and then stage D's halt is the behaviour.
+steer_cool = []           # (cx, cy, r, t_expire): discs a detour was just
+#   ABANDONED as an orbit against. Not an escalation - an orbit is the one
+#   failure that more clearance makes worse - just a short window in which the
+#   drone flies its route past the thing instead of leaving the route for it.
+last_side = None          # ((x,y), side, goal_idx) of the last threat we
+#   committed against, so the same obstacle for the same goal keeps its side.
+skipped = []              # waypoints abandoned because a threat sits on them
 obst_cap = float("inf")   # RATCHET: while one encounter is being tracked the
 #   speed limit may fall but never rise. Without it a momentary loss of the
 #   return (the ray slipping off an edge, or a nearer object stealing the
@@ -412,7 +665,8 @@ if poses:
 LOG_FILE = os.path.join(OUT, "flight_log.csv")
 flight_log = open(LOG_FILE, "a", buffering=1, encoding="utf-8")
 if flight_log.tell() == 0:
-    flight_log.write("t,x,y,alt,yaw,speed,wp,wp_dist,obst_m,obst_deg,raw_m,avoiding\n")
+    flight_log.write("t,x,y,alt,yaw,speed,wp,wp_dist,obst_m,obst_deg,raw_m,"
+                     "avoiding,steering,side,v_des,fwd,hold,rho\n")
 
 step = 0
 snap = 0                          # timed-snapshot counter (diagnostic capture)
@@ -431,11 +685,14 @@ def capture(path):
 
 
 while robot.step(dt) != -1:
+    if landed:
+        continue          # on the ground with the motors cut; nothing to do
     step += 1
     roll, pitch, yaw = imu.getRollPitchYaw()
     x, y, alt = gps.getValues()
     roll_rate, pitch_rate, yaw_rate = gyro.getValues()
-    obst_d, obst_a, obst_raw = scan() if sensors else (float("inf"), 0.0, float("inf"))
+    obst_d, obst_a, obst_raw, obst_rays = \
+        scan() if sensors else (float("inf"), 0.0, float("inf"), [])
 
     if step % HEARTBEAT == 0:
         if idx < len(wps):
@@ -454,7 +711,10 @@ while robot.step(dt) != -1:
             f"{'' if obst_d == float('inf') else f'{obst_d:.2f}'},"
             f"{'' if obst_d == float('inf') else f'{math.degrees(obst_a):.1f}'},"
             f"{'' if obst_raw == float('inf') else f'{obst_raw:.2f}'},"
-            f"{int(avoiding)}\n")
+            f"{int(avoiding)},{int(steering)},"
+            f"{'' if detour is None else detour['side']},"
+            f"{v_des_log:.2f},{fwd_log:.2f},{int(hold_stop)},"
+            f"{'' if detour is None else round(detour['rho'], 1)}\n")
 
     # horizontal velocity (finite difference from GPS) for damping
     if prev_xy is None:
@@ -493,14 +753,84 @@ while robot.step(dt) != -1:
     # Only start steering toward waypoints once altitude has actually settled
     # (near target AND not climbing/falling fast). Pitching forward mid-climb is
     # what tumbled the drone into the ground before.
-    settled = abs(TARGET_ALT - alt) < 1.5 and abs(vz) < 0.8
+    settled = abs(alt_cmd - alt) < 1.5 and abs(vz) < 0.8
     roll_d = pitch_d = yaw_d = 0.0
-    if settled:
+    if landing:
+        # DESCENT. Deliberately outside the `settled` gate: a descent makes the
+        # drone unsettled by definition, and the navigator's branch would then
+        # stop producing any attitude command at all - the drone would fall with
+        # roll, pitch and yaw all commanded to zero.
+        c, s_ = math.cos(yaw), math.sin(yaw)
+        fwd_vel = c * vx + s_ * vy
+        lat_vel = -s_ * vx + c * vy
+        # Stop the rotation. This is the bug the whole landing was reported for:
+        # a PURE RATE damper, with no heading target, so the drone simply stops
+        # turning wherever it happens to be pointing. Chasing a heading here
+        # would be worse than useless - there is no waypoint left to face.
+        yaw_d = clamp(-K_YAWD * yaw_rate, -1.0, 1.0)
+        # Hold the latched spot, via a CLAMPED VELOCITY target rather than a
+        # position command - the same construction the obstacle station-keep
+        # uses, and for the same reason: a raw lateral position error saturates
+        # tilt while off-heading and tumbles the drone.
+        if land_pt is None:
+            # PHASE 1, brake. The patrol ends at cruise speed, and starting the
+            # descent straight away means descending along a ballistic curve:
+            # braking authority is ~0.22 m/s^2, so shedding 2 m/s takes about
+            # 9 s and 9 m of travel. Measured before this phase existed - the
+            # drone touched down 6.5 m from where it finished, still moving.
+            # So: hold the descent until it has actually stopped, THEN latch.
+            v_f = v_l = 0.0
+            if math.hypot(vx, vy) < HOLD_SPEED:
+                land_pt = (x, y)
+                print(f"[parkdrone] stopped at ({x:.1f},{y:.1f}) - descending")
+        else:
+            # PHASE 2, descend over the latched spot.
+            ex, ey = land_pt[0] - x, land_pt[1] - y
+            v_f = clamp(K_HOLD * (c * ex + s_ * ey), -HOLD_V_MAX, HOLD_V_MAX)
+            v_l = clamp(K_HOLD * (-s_ * ex + c * ey), -HOLD_V_MAX, HOLD_V_MAX)
+            # Walk the COMMANDED altitude down rather than stepping it to zero,
+            # so the existing altitude loop tracks a ramp it can actually follow
+            # and the descent stays at a chosen rate instead of becoming a drop.
+            rate = LAND_RATE if alt > LAND_SLOW_ALT else LAND_RATE_SLOW
+            alt_cmd = max(0.0, alt_cmd - rate * dt_s)
+        pitch_d = -clamp(K_VEL_BRAKE * (v_f - fwd_vel), -TILT_MAX, TILT_MAX)
+        roll_d = ROLL_SIGN * clamp(K_VEL_BRAKE * (v_l - lat_vel),
+                                   -TILT_MAX, TILT_MAX)
+        if land_pt is not None and alt < LAND_CUT_ALT:
+            # Terminal state. setVelocity is sticky in Webots, so cutting the
+            # motors once here is enough - the loop then short-circuits at the
+            # top and stops touching them at all.
+            landed = True
+            for _m in motors:
+                _m.setVelocity(0.0)
+            print(f"[parkdrone] LANDED at ({x:.1f},{y:.1f}), alt {alt:.2f} m "
+                  f"- motors off")
+    elif settled:
         # body-frame ground velocity (used for speed control + drift damping)
         c, s = math.cos(yaw), math.sin(yaw)
         fwd_vel =  c * vx + s * vy
         lat_vel = -s * vx + c * vy
         if idx < len(wps):
+            # A waypoint the obstacle is SITTING ON can never be arrived at, and
+            # a detour that keeps aiming at one circles the obstacle until the
+            # timeout. The route is an OSM street centerline and the test world
+            # anchors its structures to it, so this is the normal case, not an
+            # edge one. Abandon the waypoint, record it, and move on: a declared
+            # coverage gap is a correct survey result, an endless orbit is not.
+            while (detour is not None and idx < len(wps) and
+                   math.hypot(wps[idx][0] - detour["C"][0],
+                              wps[idx][1] - detour["C"][1])
+                   < detour["rho"] + detour["C_R"] * SKIP_F):
+                print(f"[parkdrone] STAGE B: wp{idx} "
+                      f"({wps[idx][0]:.1f},{wps[idx][1]:.1f}) is inside the "
+                      f"obstacle - skipping it, no frame there")
+                skipped.append(idx)
+                idx += 1
+                wp_min = float("inf")
+                wp_steps = 0
+                cam_warm = -1
+            if idx >= len(wps):
+                continue
             tx, ty = wps[idx]
             dx, dy = tx - x, ty - y
             dist = math.hypot(dx, dy)
@@ -547,6 +877,10 @@ while robot.step(dt) != -1:
                     if avoiding:
                         pose["avoiding"] = True
                         pose["obstacle_m"] = round(obst_d, 2)
+                    if steering:
+                        pose["steering"] = True
+                        if obst_d < float("inf"):
+                            pose["obstacle_bearing"] = round(math.degrees(obst_a), 1)
                     poses.append(pose)
                     # write poses.json after every waypoint so progress survives
                     # even if the run is cut short before the patrol completes
@@ -561,9 +895,22 @@ while robot.step(dt) != -1:
                     idx += 1
                     if idx == len(wps):
                         print("[parkdrone] patrol complete")
-                    elif abs(wrap(math.atan2(wps[idx][1] - y, wps[idx][0] - x)
-                                  - yaw)) > HOLD_TURN:
+                    elif (not steering and
+                          abs(wrap(math.atan2(wps[idx][1] - y, wps[idx][0] - x)
+                                   - yaw)) > HOLD_TURN):
                         hold_stop = True   # big turn ahead: stop, spin, then go
+                    # `not steering` is load-bearing. The stop-and-turn exists for
+                    # ROUTE REVERSALS - the drone is pointing the wrong way along
+                    # its own path and should pirouette rather than loop. Mid
+                    # detour the drone is deliberately 20 m off-route flying a
+                    # tangent, so the bearing to the next waypoint is always
+                    # wildly off and this latch fires on essentially every
+                    # capture. It then pins v_des to 0 until ground speed falls
+                    # below HOLD_SPEED - which it never does, because K_VEL is
+                    # proportional and the deceleration fades out (the same
+                    # fading-brake mechanism stage D hit). Measured: every detour
+                    # crawled at a pinned 0.37 m/s, taking 6x as long as its
+                    # 2 m/s budget and running the manoeuvre into its timeout.
             elif arrived:
                 camera.enable(dt)
                 cam_warm = CAM_WARMUP
@@ -578,6 +925,305 @@ while robot.step(dt) != -1:
                 # heading PD: point the nose at the aim point (steer like a car;
                 # we do NOT strafe with roll, which would tumble the drone).
                 yaw_err = wrap(math.atan2(ay - y, ax - x) - yaw)
+
+                # ---- STAGE B: steer around ------------------------------
+                # Everything below only replaces the AIM HEADING and caps the
+                # speed target. The stabilizer underneath is untouched, exactly
+                # as in stage D.
+                if obst_d < float("inf"):
+                    # the live return, frozen into world metres
+                    t_now = (x + obst_d * math.cos(yaw + obst_a),
+                             y + obst_d * math.sin(yaw + obst_a))
+                else:
+                    t_now = None
+                # The threat is remembered as a DISC (centre C, radius rho)
+                # that only ever GROWS to enclose the returns seen during this
+                # encounter. Both simpler models were tried and both failed on a
+                # real structure:
+                #   - Refreshing a single point to the latest return: on a wide
+                #     structure the nearest face point slides around it as the
+                #     drone circles, so the memory follows the drone, the threat
+                #     stays permanently "ahead", and the detour orbits until it
+                #     times out. Measured: a full 150 s lap of the tower.
+                #   - Freezing a single point at first contact: the arc then
+                #     clears that one face point by CLEAR_R while the rest of the
+                #     structure still juts into the path, so the drone re-detects
+                #     at ~13 m and re-engages. Measured at wp19 against the same
+                #     tower, whose face is ~20 m across.
+                # A growing bounding disc has neither failure: it cannot chase
+                # the drone (it only ever encloses more), and it converges on the
+                # real extent, so the arc radius grows with the structure.
+                if detour is not None and t_now is not None:
+                    gap = math.hypot(t_now[0] - detour["C"][0],
+                                     t_now[1] - detour["C"][1])
+                    if detour["rho"] < gap < min(detour["rho"] + STEER_MERGE,
+                                                 2 * STEER_GROW):
+                        # smallest circle enclosing the old disc and the new
+                        # return: expand by half the excess, move the centre the
+                        # same amount along the line to it
+                        grow = (gap - detour["rho"]) / 2.0
+                        detour["rho"] = min(detour["rho"] + grow, STEER_GROW)
+                        detour["C"] = (detour["C"][0] + (t_now[0] - detour["C"][0]) * grow / gap,
+                                       detour["C"][1] + (t_now[1] - detour["C"][1]) * grow / gap)
+                # IS IT ON MY PATH? Asked of the ROUTE ITSELF, over the next
+                # STEER_HORIZON metres of it - not of the bearing to one
+                # lookahead waypoint, which was the previous version and which
+                # is wrong wherever the route bends. Measured cost of getting
+                # this wrong: on the leg west along y~130 the fan picked up the
+                # `slab` 37 m away and ~27 m SOUTH of that whole stretch of
+                # route. A single-bearing test called it "ahead", the drone
+                # committed a detour for a structure that was never in its way,
+                # and the detour is what drove it 25 m south INTO the slab,
+                # where it stopped and burned the 150 s timeout. The route
+                # polyline cannot make that mistake: it answers the question
+                # actually being asked.
+                blocked, resume = route_probe(wps, idx, x, y, t_now, CLEAR_R,
+                                              STEER_HORIZON) if t_now else (1e9, None)
+                # ... and asked again over the NEAR stretch only, which is what
+                # actually authorises a detour (see STEER_LOOK). The wide probe
+                # still answers "where does the route come out the far side",
+                # i.e. it is what picks the side to go round.
+                near, _ = route_probe(wps, idx, x, y, t_now, CLEAR_R,
+                                      math.hypot(tx - x, ty - y) + STEER_LOOK)                     if t_now else (1e9, None)
+                # NOTE the escalation-level test below REPLACES the old
+                # "is it blacklisted" veto. Leaving both in place is not merely
+                # redundant, it is fatal: steer_off entries carry a level now,
+                # so the old 3-name unpack raised ValueError the instant the
+                # first escalation was recorded. Webots keeps running when a
+                # controller dies, so this presents as a drone that simply stops
+                # flying - the flight log ends mid-mission with no error in the
+                # filtered console. Check the log's last timestamp against the
+                # process still being alive.
+                if (detour is None and t_now is not None
+                        and (obst_d > STEER_NEAR or
+                             math.hypot(vx, vy) < HOLD_SPEED)
+                        and obst_d < STEER_ENGAGE
+                        and (near < STEER_BLOCK or
+                             (avoiding and math.hypot(vx, vy) < HOLD_SPEED))
+                        and not any(math.hypot(t_now[0] - bx, t_now[1] - by) < br
+                                    and step * dt_s < t_end
+                                    for bx, by, br, t_end in steer_cool)
+                        and max((lv for bx, by, br, lv in steer_off
+                                 if math.hypot(t_now[0] - bx, t_now[1] - by) < br),
+                                default=0) <= STEER_ESCALATE):
+                    # The second clause closes the last deadlock between the two
+                    # layers. Stage D brakes for anything inside its BEARING
+                    # gate; stage B, left to itself, only detours for what
+                    # blocks the ROUTE. A structure beside the route that the
+                    # drone happens to be pointing at therefore stopped it
+                    # permanently - stage D would not release (at close range
+                    # the corridor clause keeps it a threat whichever way the
+                    # nose turns) and stage B declined to take it. Measured:
+                    # frozen at 10.47 m, station-keeping, with the route clear.
+                    # So: if it stopped us, go around it, whatever the route
+                    # says. A halted drone has no cheaper option to try.
+                    # WHICH WAY ROUND is a question about the GOAL, not about
+                    # the sensor: go the way the waypoint already lies, which is
+                    # the short way round. Choosing purely on "which side has
+                    # more room" sends the drone round the long side whenever
+                    # the obstacle is not symmetric, and the leave condition
+                    # then cannot be satisfied at all - it requires getting
+                    # CLOSER to the goal, and the long way round begins by
+                    # getting further away. Measured on the route's second pass
+                    # at the tower: the goal sat 68 deg to the RIGHT, the drone
+                    # committed left, and the detour burned its full 150 s
+                    # timeout from a dead stop 13 m off the structure.
+                    # The target that decides the side is where the route
+                    # comes out the OTHER SIDE of the obstacle - not the current
+                    # waypoint, which during a doubling-back route can sit
+                    # behind the drone and point the detour the long way round.
+                    gx, gy = wps[resume] if resume is not None else (tx, ty)
+                    b_T = math.atan2(t_now[1] - y, t_now[0] - x)
+                    rel = wrap(math.atan2(gy - y, gx - x) - b_T)
+                    l_min, r_min = side_clear(obst_rays)
+                    if abs(rel) > STEER_AMBIG:
+                        side = 1 if rel > 0 else -1
+                    else:
+                        # HEAD-ON, the common case: the route goes straight
+                        # through and comes out the far side, so the resume
+                        # point is nearly collinear with the obstacle and the
+                        # geometry says nothing - measured at 1 deg on the first
+                        # tower encounter, i.e. pure noise, and the side duly
+                        # flipped between encounters and thrashed. When the goal
+                        # cannot tell us, the sensor can: take the roomier side.
+                        side = 1 if l_min > r_min else -1
+                    mine, other = (l_min, r_min) if side > 0 else (r_min, l_min)
+                    if mine < STEER_BLOCK and other > mine + 5.0:
+                        # The short way is blocked and the other side is clearly
+                        # open: room beats distance. This is the ONLY thing the
+                        # fan decides here.
+                        side = -side
+                    if (last_side is not None and last_side[2] == idx and
+                            math.hypot(t_now[0] - last_side[0][0],
+                                       t_now[1] - last_side[0][1]) < 25.0):
+                        # Same threat AND same goal as the detour just flown: do
+                        # not change our mind, or a drone pushed off its arc
+                        # picks left, right, left in front of the obstacle.
+                        # Scoped to the goal deliberately - a NEW goal genuinely
+                        # can lie the other way round. The route doubles back
+                        # through this course, and reusing a stale side across
+                        # that reversal is exactly what broke the second pass:
+                        # the sign is BODY-relative, so "left" on the way out is
+                        # the opposite physical side on the way back.
+                        side = last_side[1]
+                    # Clearance for THIS detour: the base value, doubled once
+                    # per previous timeout on this obstacle.
+                    lvl = max((lv for bx, by, br, lv in steer_off
+                               if math.hypot(t_now[0] - bx, t_now[1] - by) < br),
+                              default=0)
+                    detour = {"C_R": CLEAR_R * (2 ** lvl), "lvl": lvl,
+                              "C": t_now, "rho": 0.0, "side": side,
+                              "t0": step * dt_s, "swept": 0.0, "goal": idx,
+                              "a": math.atan2(t_now[1] - y, t_now[0] - x),
+                              "d0": math.hypot(tx - x, ty - y)}
+                    last_side = (t_now, side, idx)
+                    # Release the stage D ratchet and any latched hold point:
+                    # both exist to make a drone that is stopping STAY stopped,
+                    # and the decision just taken is that it is not stopping.
+                    # The ratchet re-arms from live returns within a step, so a
+                    # threat that stays in the gate is still braked against.
+                    obst_cap = float("inf")
+                    hold_pt = None
+                    hold_stop = False    # a stop-and-turn latched a moment ago
+                    #   is about a route heading we have just decided to leave.
+                    print(f"[parkdrone] STAGE B: detour {'left' if side > 0 else 'right'} "
+                          f"around obstacle {obst_d:.1f} m ahead at "
+                          f"{math.degrees(obst_a):+.0f} deg (wp{idx}) "
+                          f"| threat ({t_now[0]:.1f},{t_now[1]:.1f}) blocks route "
+                          f"by {blocked:.1f} m, resume wp"
+                          f"{resume if resume is not None else '?'}, "
+                          f"goal-rel {math.degrees(rel):+.0f} deg, "
+                          f"room L{l_min:.0f}/R{r_min:.0f}")
+                steering = False
+                if detour is not None:
+                    Tx, Ty = detour["C"]
+                    d_T = math.hypot(Tx - x, Ty - y)
+                    bear_T = math.atan2(Ty - y, Tx - x)
+                    # Every radius is measured from the disc's SURFACE, so a
+                    # 20 m-wide tower is rounded 20 m further out than a mast.
+                    arc_R = detour["rho"] + detour["C_R"]
+                    pass_R = detour["rho"] + detour["C_R"] * PASS_F
+                    # Speed the arc can actually be flown at. A radius of r
+                    # needs v^2/r of lateral acceleration, and this aircraft has
+                    # ~A_LAT; commanding a tighter turn than that just produces a
+                    # drone that cannot hold its own path.
+                    # TWO limits, and the second is what makes a TIGHT arc
+                    # possible at all:
+                    #   sqrt(A_LAT*arc_R) - the fastest this radius can be
+                    #     turned at with the lateral acceleration available;
+                    #   sqrt(2*A_BRAKE_OBST*CLEAR_R) - slow enough to stop
+                    #     within the clearance we chose to fly at.
+                    # Using only the first maximises speed for the radius, and
+                    # then staying stoppable REQUIRES a big radius (the algebra
+                    # comes out at clearance >= 4.9x the obstacle's own radius,
+                    # i.e. ~16 m around this tower). That is why the early
+                    # versions could only avoid things by swinging wide, which
+                    # is both the 29% of waypoints skipped and the wandering
+                    # off-route flight the user watched. Adding the second limit
+                    # turns it around: fly SLOWLY and a close arc is safe.
+                    v_arc = max(0.5, min(STEER_V,
+                                         math.sqrt(A_LAT * arc_R),
+                                         math.sqrt(2 * A_BRAKE_OBST * detour["C_R"])))
+                    # Tangent law: to pass a point at CLEAR_R, fly a heading
+                    # offset from its bearing by asin(CLEAR_R/d). As d shrinks
+                    # to CLEAR_R the offset grows to 90 deg, i.e. the drone
+                    # naturally rolls out onto a circle around it rather than
+                    # needing a separate "circle" mode.
+                    # How far AROUND the obstacle we have actually travelled,
+                    # integrated from the bearing to the frozen point. This, not
+                    # the instantaneous geometry, is what says the manoeuvre is
+                    # done: it is immune to the yaw wobble the tangent law
+                    # induces, and it cannot be fooled by a return reappearing.
+                    detour["swept"] += wrap(bear_T - detour["a"])
+                    detour["a"] = bear_T
+                    off = math.asin(clamp(arc_R / max(d_T, arc_R), -1.0, 1.0))
+                    yaw_err = wrap(bear_T + detour["side"] * (off + STEER_MARGIN) - yaw)
+                    steering = True
+                    # LEAVE CONDITION. Geometric "have I gone round it yet"
+                    # tests do not terminate, and two runs proved it: releasing
+                    # on swept angle (or on the threat being abeam) let the drone
+                    # go while its waypoint was still on the FAR side, so it
+                    # turned straight back into the tower, re-engaged, and
+                    # wandered 60 m off-route re-detouring the same structure
+                    # over and over. Neither test asks the question that matters,
+                    # which is about the GOAL, not the obstacle.
+                    #
+                    # So this is Bug2's leave condition: give the detour back
+                    # only when the drone is (a) measurably closer to the
+                    # waypoint than when it committed, and (b) able to fly
+                    # straight at it without the remembered threat in the way.
+                    # (a) is what makes it terminate - every detour that ends
+                    # has made real progress, so it cannot cycle.
+                    if detour["goal"] != idx:
+                        # Waypoints get skipped out from under a detour (they are
+                        # inside the obstacle); re-baseline onto the new goal
+                        # rather than comparing against a distance to a waypoint
+                        # we are no longer flying to.
+                        detour["goal"] = idx
+                        detour["d0"] = math.hypot(tx - x, ty - y)
+                    # ... and, symmetrically with the commit gate, the ROUTE
+                    # ahead has to be clear of it too - or the thing has to be
+                    # behind us. Testing only the run to the current waypoint
+                    # releases a detour whose obstacle still sits across the
+                    # next leg, and the drone re-commits a second later: five
+                    # engage/release cycles closing on the mast, each one
+                    # nudging the approach further off line, and then a 270 deg
+                    # orbit at the end of it. "In my way" must mean the same
+                    # thing when letting go as when taking hold.
+                    ahead, _ = route_probe(wps, idx, x, y, (Tx, Ty), CLEAR_R,
+                                           math.hypot(tx - x, ty - y) + STEER_LOOK)
+                    behind = (Tx - x) * (tx - x) + (Ty - y) * (ty - y) < 0.0
+                    clear = (d_T > arc_R and
+                             step * dt_s - detour["t0"] > STEER_MIN and
+                             math.hypot(tx - x, ty - y) < detour["d0"] - 2.0 and
+                             seg_dist(Tx, Ty, x, y, tx, ty) > pass_R and
+                             (ahead > STEER_BLOCK or behind))
+                    if clear:
+                        print(f"[parkdrone] STAGE B: clear of the obstacle at "
+                              f"({x:.1f},{y:.1f}), {d_T:.1f} m from it "
+                              f"-> resuming route at wp{idx}")
+                        detour = None
+                        steering = False
+                    elif abs(detour["swept"]) > STEER_ORBIT:
+                        # ORBIT, not detour: three quarters of the way round and
+                        # still not released. Going round again cannot help and
+                        # neither can a wider berth (it just makes the circle
+                        # bigger), so drop it here and fly the route; stage D
+                        # still brakes for anything actually in front.
+                        print(f"[parkdrone] STAGE B: orbiting "
+                              f"({math.degrees(detour['swept']):+.0f} deg swept, "
+                              f"{step * dt_s - detour['t0']:.0f} s) - abandoning "
+                              f"the detour and resuming the route "
+                              f"(no detour against it for {STEER_COOL:.0f} s)")
+                        steer_cool[:] = [c for c in steer_cool
+                                         if math.hypot(detour["C"][0] - c[0],
+                                                       detour["C"][1] - c[1]) >= c[2]]
+                        steer_cool.append((detour["C"][0], detour["C"][1],
+                                           detour["rho"] + STEER_BLOCK,
+                                           step * dt_s + STEER_COOL))
+                        detour = None
+                        steering = False
+                    elif step * dt_s - detour["t0"] > STEER_TIMEOUT:
+                        print(f"[parkdrone] STAGE B: detour unresolved after "
+                              f"{STEER_TIMEOUT:.0f} s ("
+                              f"{math.degrees(detour['swept']):+.0f} deg swept, "
+                              f"{'orbit' if abs(detour['swept']) > STEER_SWEEP else 'stuck'}"
+                              f") - retrying at {CLEAR_R * (2 ** (detour['lvl'] + 1)):.0f} m "
+                              f"clearance (level {detour['lvl'] + 1}"
+                              f"/{STEER_ESCALATE})"
+                              if detour["lvl"] + 1 <= STEER_ESCALATE else
+                              f") - giving up on it, stage D takes over")
+                        # Raise this obstacle's level and drop any older entry
+                        # for it, so the next attempt gets more room rather than
+                        # no attempt at all.
+                        steer_off[:] = [b for b in steer_off
+                                        if math.hypot(detour["C"][0] - b[0],
+                                                      detour["C"][1] - b[1]) >= b[2]]
+                        steer_off.append((detour["C"][0], detour["C"][1],
+                                          detour["rho"] + STEER_BLOCK,
+                                          detour["lvl"] + 1))
+                        detour = None
+                        steering = False
                 yaw_d = clamp(K_YAW * yaw_err - K_YAWD * yaw_rate, -1.0, 1.0)
                 # Velocity-target forward control against the corner-aware
                 # profile: the allowed speed decays along the kinematic
@@ -595,6 +1241,21 @@ while robot.step(dt) != -1:
                     v_des = (min(V_MAX,
                                  math.sqrt(wp_vmax[idx]**2 + 2 * A_BRAKE * dist))
                              if abs(yaw_err) < 0.5 else 0.0)
+                if steering:
+                    # SPEED ON THE ARC, and the reason the drone no longer
+                    # pirouettes in front of an obstacle. The route's speed law
+                    # is a hard yaw gate - zero forward command whenever the
+                    # heading error exceeds 0.5 rad - which is right on a route
+                    # (stop, turn, then go) and badly wrong on an arc, where a
+                    # standing heading error is the normal condition: the
+                    # tangent heading keeps rotating as the drone travels round,
+                    # so the gate kept cutting thrust and the drone stopped and
+                    # span instead of flowing around.
+                    # A cosine taper asks the same question smoothly - full
+                    # speed when pointing where we want to go, nothing when
+                    # pointing 90 deg off it, no discontinuity in between - so
+                    # the drone keeps moving through the turn.
+                    v_des = v_arc * max(0.0, math.cos(yaw_err))
                 # OBSTACLE LAYER (stage D). It emits a SPEED LIMIT and nothing
                 # else - no position target, no roll command - so every
                 # controller invariant survives by construction: the stabilizer
@@ -609,7 +1270,20 @@ while robot.step(dt) != -1:
                 # V_MAX needs 57 m, so anything that decides to brake later than
                 # this curve says cannot stop at all.
                 if obst_d < float("inf"):
-                    reach = obst_d - OBST_STOP - OBST_REACT * math.hypot(vx, vy)
+                    # Standoff. Against the obstacle we have COMMITTED to round,
+                    # it is the clearance we chose to fly at; against anything
+                    # else it stays the full OBST_STOP. Without this split the
+                    # two layers contradict each other outright - stage B aims
+                    # to pass a structure at CLEAR_R while stage D brakes to a
+                    # dead stop 12 m short of it, and stage D wins, which is
+                    # what produced the "halts and never gets round" runs.
+                    # Anything NOT part of the committed disc is still an
+                    # unknown, and unknowns get the full standoff.
+                    stop_r = OBST_STOP
+                    if steering and t_now is not None and                             math.hypot(t_now[0] - detour["C"][0],
+                                       t_now[1] - detour["C"][1])                             < detour["rho"] + STEER_MERGE:
+                        stop_r = detour["rho"] + detour["C_R"] * PASS_F
+                    reach = obst_d - stop_r - OBST_REACT * math.hypot(vx, vy)
                     v_obst = math.sqrt(max(0.0, 2 * A_BRAKE_OBST * reach))
                     obst_cap = min(obst_cap, v_obst)     # ratchet down only
                     v_obst = obst_cap
@@ -643,6 +1317,21 @@ while robot.step(dt) != -1:
                     obst_halted = False
                 # Halted: latch this spot and station-keep on it, instead of
                 # merely damping toward zero speed (see K_HOLD above).
+                # Station-keeping stays armed DURING a detour. Suppressing it
+                # while steering is the obvious move and it is wrong: it
+                # reintroduces the exact creep bug stage D was built to fix.
+                # Measured, with the latch suppressed - a detour whose obstacle
+                # curve had already gone to zero drifted from 11.94 m to 5.84 m
+                # over 110 s at a steady 0.07 m/s, i.e. straight at the thing it
+                # was going around, ending 5.34 m off a 45 m tower.
+                # It does not freeze the manoeuvre either, because the hold only
+                # writes v_des/v_lat_des - the detour's YAW command is untouched,
+                # so the drone still swings onto the arc heading while holding
+                # station. If the threat then stays inside the close-range
+                # corridor whatever the heading, there is genuinely no way round
+                # from here: the detour times out, the disc is blacklisted, and
+                # this becomes the stage D halt. A safe stop is the correct
+                # answer to a manoeuvre that has run out of room.
                 v_lat_des = 0.0
                 if avoiding and v_obst <= 0.0:
                     if hold_pt is None and math.hypot(vx, vy) < HOLD_LATCH:
@@ -655,6 +1344,7 @@ while robot.step(dt) != -1:
                                       -HOLD_V_MAX, HOLD_V_MAX)
                         v_lat_des = clamp(K_HOLD * (-s * ex + c * ey),
                                           -HOLD_V_MAX, HOLD_V_MAX)
+                v_des_log, fwd_log = v_des, fwd_vel
                 k_fwd = K_VEL_BRAKE if (avoiding and fwd_vel > v_des) else K_VEL
                 pitch_d = -clamp(k_fwd * (v_des - fwd_vel), -TILT_MAX, TILT_MAX)
                 # Sideways drift gets the hard gain too while avoiding. Fourth
@@ -671,16 +1361,20 @@ while robot.step(dt) != -1:
                 roll_d = ROLL_SIGN * clamp(k_lat * (v_lat_des - lat_vel),
                                            -TILT_MAX, TILT_MAX)
         else:
-            # Patrol done: station-keep by braking horizontal drift, otherwise the
-            # drone slowly sails away (km-scale) with no control input.
-            pitch_d = -clamp(-K_VEL * fwd_vel, -TILT_MAX, TILT_MAX)
-            roll_d = ROLL_SIGN * clamp(-K_VEL * lat_vel, -TILT_MAX, TILT_MAX)
+            # Patrol done: land, rather than hovering at 30 m for ever. Latch
+            # the spot first - the descent holds over it, so the drone comes
+            # down where it finished instead of drifting during the descent.
+            if not landing:
+                landing = True
+                land_pt = None      # latched once stopped, see below
+                print(f"[parkdrone] patrol finished - braking to a hover, "
+                      f"then landing from {alt:.1f} m")
 
     # propeller mixing
     roll_in = K_ROLL * clamp(roll, -1, 1) + roll_rate + roll_d
     pitch_in = K_PITCH * clamp(pitch, -1, 1) + pitch_rate + pitch_d
     yaw_in = yaw_d
-    vert = K_VP * clamp(TARGET_ALT - alt + K_VOFF, -1, 1) ** 3 - K_VD * vz
+    vert = K_VP * clamp(alt_cmd - alt + K_VOFF, -1, 1) ** 3 - K_VD * vz
 
     motors[0].setVelocity(K_VT + vert - roll_in + pitch_in - yaw_in)   # front-left
     motors[1].setVelocity(-(K_VT + vert + roll_in + pitch_in + yaw_in))  # front-right

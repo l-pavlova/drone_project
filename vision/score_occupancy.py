@@ -20,7 +20,7 @@ stays clean on a free bay). Views that show only part of the bay still count
 as long as enough of the core is visible. Swap `classify()` for a learned
 model later — projection, view selection and scoring stay unchanged.
 """
-import json, math, os, sys, collections
+import json, math, os, sys, collections, functools
 import numpy as np
 from PIL import Image, ImageDraw
 
@@ -93,15 +93,73 @@ def pose_idx(pose):
     return pose["frame_idx"] if "frame_idx" in pose else pose["i"]
 
 
+def _rot(v, axis, ang):
+    """Rodrigues: rotate v about a unit axis by ang."""
+    ax, ay, az = axis
+    vx, vy, vz = v
+    c, s = math.cos(ang), math.sin(ang)
+    dot = ax * vx + ay * vy + az * vz
+    return (vx * c + (ay * vz - az * vy) * s + ax * dot * (1 - c),
+            vy * c + (az * vx - ax * vz) * s + ay * dot * (1 - c),
+            vz * c + (ax * vy - ay * vx) * s + az * dot * (1 - c))
+
+
+@functools.lru_cache(maxsize=8192)
+def camera_axes(yaw, roll, pitch_res, cam_roll):
+    """Optical axis, image-right and image-down unit vectors in world ENU.
+
+    The camera is NOT nadir, and the way it misses nadir was measured, not
+    assumed (vision/diag/paint_align.py against the captured paint, 2026-08-20):
+
+      * the gimbal's PITCH compensation works, so only the RESIDUAL pitch
+        `pitch + (cam_pitch - pi/2)` tilts the camera fore/aft -- the joint
+        lags its own command by a few mrad;
+      * the gimbal's ROLL compensation does NOT reach the image. The lateral
+        offset tracks the FULL body roll at slope -1.02 with R2 0.994, i.e.
+        exactly as if the roll joint were not there;
+      * what that joint does instead is SPIN the image about the optical axis
+        by `cam_roll`.
+
+    All three follow from the joint order in the Mavic2Pro gimbal: the roll
+    joint sits below the pitch joint, so once the pitch joint is at the +pi/2
+    this survey flies, the roll axis has been rotated onto the optical axis. It
+    can no longer level the camera; it only rolls the picture. Modelling all
+    three takes the median residual from 0.266 m to 0.038 m and the worst frame
+    from 0.636 m to 0.085 m.
+    """
+    fwd = (math.cos(yaw), math.sin(yaw), 0.0)          # drone nose
+    left = (-math.sin(yaw), math.cos(yaw), 0.0)
+    d = _rot(_rot((0.0, 0.0, -1.0), fwd, roll), left, pitch_res)
+    r = _rot(_rot((-left[0], -left[1], -left[2]), fwd, roll), left, pitch_res)
+    b = _rot(_rot((-fwd[0], -fwd[1], -fwd[2]), fwd, roll), left, pitch_res)
+    if cam_roll:
+        r, b = _rot(r, d, cam_roll), _rot(b, d, cam_roll)
+    return d, r, b
+
+
 def project(px, py, pose):
-    """Ground ENU point -> pixel (u, v) for a nadir camera at the pose.
-    Image up = drone heading; square pixels; horizontal FOV across IMG_W."""
-    k = IMG_W / (2.0 * pose["alt"] * math.tan(FOV / 2.0))
-    c, s = math.cos(pose["yaw"]), math.sin(pose["yaw"])
-    rx, ry = px - pose["x"], py - pose["y"]
-    along = c * rx + s * ry          # + ahead of the drone
-    cross = -s * rx + c * ry         # + left of the drone
-    return IMG_W / 2.0 - cross * k, IMG_H / 2.0 - along * k
+    """Ground ENU point -> pixel (u, v) for the camera at this pose.
+    Image up = drone heading; square pixels; horizontal FOV across IMG_W.
+
+    A pose that carries no attitude falls back to the exact nadir geometry, so
+    every poses.json already on disk stays scorable -- same reasoning as
+    pose_idx()'s legacy `i` key. A MISSING angle and a null one mean the same
+    thing here: the web tier's frame columns are nullable, so a pose rebuilt
+    from the database can carry an explicit None."""
+    def ang(key, default=0.0):
+        v = pose.get(key)
+        return default if v is None else v
+
+    d, r, b = camera_axes(pose["yaw"], ang("roll"),
+                          ang("pitch") + ang("cam_pitch", math.pi / 2) - math.pi / 2,
+                          ang("cam_roll"))
+    f = IMG_W / (2.0 * math.tan(FOV / 2.0))
+    wx, wy, wz = px - pose["x"], py - pose["y"], -pose["alt"]
+    z = wx * d[0] + wy * d[1] + wz * d[2]              # depth along the axis
+    if z < 0.01:                     # at or behind the camera plane: clamp, so
+        z = 0.01                     # a degenerate pose cannot divide by zero
+    return (IMG_W / 2.0 + f * (wx * r[0] + wy * r[1] + wz * r[2]) / z,
+            IMG_H / 2.0 + f * (wx * b[0] + wy * b[1] + wz * b[2]) / z)
 
 
 def load_bays():

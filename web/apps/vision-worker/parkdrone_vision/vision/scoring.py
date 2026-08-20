@@ -30,8 +30,15 @@ to_enu = so.to_enu
 pose_idx = so.pose_idx
 
 
+# The camera is not exactly nadir (see score_occupancy.camera_axes), so the
+# footprint is not centred on the drone. Measured worst-case displacement over a
+# real flight is ~0.6 m at 30 m; a tilt of this many radians covers it with room
+# to spare, and the reach is only a conservative rejection radius anyway.
+TILT_ALLOW = 0.06
+
+
 def footprint_reach(alt):
-    """Half-diagonal, in metres, of the ground rectangle a nadir frame covers.
+    """Half-diagonal, in metres, of the ground rectangle a frame covers.
 
     Inverts `project`'s scale: it maps ground metres to pixels with
     k = IMG_W / (2*alt*tan(FOV/2)), so the visible half-width is alt*tan(FOV/2)
@@ -39,11 +46,13 @@ def footprint_reach(alt):
     i.e. the ~25x15 m footprint the patrol spacing is designed around.
 
     A point farther than this from the drone cannot be inside the frame, which is
-    what makes it a safe rejection radius.
+    what makes it a safe rejection radius -- plus an allowance for the camera
+    tilt, which slides the footprint off the drone's own position and would
+    otherwise let this cheap test reject a bay that is genuinely in shot.
     """
     half_w = alt * math.tan(FOV / 2.0)
     half_h = half_w * (IMG_H / IMG_W)
-    return math.hypot(half_w, half_h)
+    return math.hypot(half_w, half_h) + alt * math.tan(TILT_ALLOW)
 
 
 def score_frame(img_arr, bays, pose, index=None):

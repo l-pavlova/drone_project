@@ -98,6 +98,9 @@ export interface BayState {
 
 export const bayDeltaSchema = z.object({
   type: z.literal("bay_delta"),
+  // Monotonic, process-local sequence used by reconnecting clients to request
+  // the hub's bounded replay buffer. Optional for older senders.
+  cursor: z.string().optional(),
   bay_id: z.string(),
   occupied: z.boolean(),
   confidence: z.number(),

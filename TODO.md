@@ -1,27 +1,65 @@
 # PARKDRONE — open work
 
-Last revised 2026-08-12. Five tracks. Detail that only matters while a task is
+Last revised 2026-08-20. Five tracks. Detail that only matters while a task is
 being worked lives in the task itself; the *why* lives here so a task can be
 picked up cold.
 
-Order agreed 2026-08-12: **#2 → #3 → obstacle track (#4)**. The vision track
-(#5, #6, #7) is handled separately.
+Order agreed 2026-08-12: **#2 → #3 → obstacle track (#4)**. #2 and #3 are done;
+the vision track (#5, #6, #7) is handled separately.
 
 ---
 
 ## Obstacle avoidance
 
-### 4. Stage B — steer around the obstacle
-Stage D (detect and stop) is **done and verified**: the drone acquires the tower
-at 76 m and holds a 12.20 m standoff to ±2 cm for 400+ s. The patrol never
-completes — that is stage D by design.
+### 4. Stage B — steer around the obstacle — **WORKING, patrol COMPLETES**
+Stage D (detect and stop) is done and verified. Stage B flies **past** every
+structure: it commits a detour, rounds the obstacle on a tangent to a remembered
+growing disc, skips waypoints buried inside it, and resumes the route on the far
+side. Full write-up and the constants live in CLAUDE.md; `sim/analyze_stage_b.py`
+reports a run from disk.
 
-Design decisions already taken:
+Design decisions, now implemented:
 - **Steer, not climb.** Climbing would break the classifier's 30 m calibration.
 - **A yaw bias into the navigator's existing channel** — never a lateral position
   command. A lateral position command saturates while off-heading and tumbles the
-  drone; that is a standing controller invariant. The threat *bearing* is already
-  computed and logged by the stage D layer, so the input exists.
+  drone; that is a standing controller invariant.
+- The threat is remembered as a **growing bounding disc** in world metres, and the
+  detour is released on **Bug2's leave condition** (closer to the goal than at
+  commit, and a clear straight run to it). Both were arrived at the hard way; the
+  geometric alternatives do not terminate.
+- Clearance is one tight constant (`CLEAR_R` 5 m) that everything derives from,
+  with per-obstacle escalation (double it, retry) instead of giving up.
+
+**2026-08-19 — the patrol first completed:** wp96 of 97, 76 frames, all four
+structures passed including `trap`.
+
+**2026-08-20 — detours stopped being circles.** The completing run was still
+flying full laps around structures (four detours sweeping 188–338°, two of them
+around `mast`, a 0.9 m pole). Cause: commit and release asked "is it in my way?"
+over *different* windows. Both now use `STEER_LOOK` (12 m past the current
+waypoint), and `STEER_ORBIT` abandons any detour that has swept 270°, cooling
+off that disc for 45 s. **270° and not less — a 200° cap ended in a CRASH.**
+Result: still 97/97, in **6 detours instead of 18, none a circle**, 79 frames,
+closest approach 6.55 m.
+
+**Still open on this track:**
+- **21 of 97 waypoints are still skipped.** The floor is not the arc radius but
+  stage D's 12 m standoff: a waypoint closer than that to a structure cannot be
+  flown to at all, so it can never be captured. Getting that coverage back needs
+  a different mechanism — capture at closest *legal* approach and flag the
+  frame, rather than skipping the waypoint. That changes what the frame means to
+  the scorer, so it is a decision, not a tweak. **This is the next task on the
+  track.**
+- The tower the route re-enters three times still costs one 238° swing and one
+  `STEER_ORBIT` bail-out; `trap` is passed only via the escalation ladder (two
+  150 s timeouts).
+- Detour timeouts still cost 150 s each before escalating. A cheaper failure
+  test (no progress for N seconds) would make a run much shorter.
+- **Closest approach is 6.55 m**, inside the 12 m standoff by design (the
+  committed obstacle gets the clearance-derived standoff). Worth a deliberate
+  answer on what the real minimum should be for the hardware, given the 9-ray
+  fan's 0.9 m gaps at that range.
+- `--lowpoly`/1 km worlds have never been flown with the obstacle layer on.
 
 Test world `fmi_block_obst` carries four deliberate failure modes: `tower` (wide,
 head-on), `slab` (offset 7 m, clips the corridor without blocking it), `mast`
@@ -29,72 +67,66 @@ head-on), `slab` (offset 7 m, clips the corridor without blocking it), `mast`
 (concave U — expected to defeat a purely reactive controller, and the argument
 for keeping some route memory).
 
-Baseline: `sim/output/fmi_block_obst_baseline/`. Stage D:
-`sim/output/fmi_block_obst.stageD-halt/`.
-
 ---
 
 ## Vision — accuracy *(handled separately)*
 
-### 2. Root-cause the ~0.6 m per-frame projection error — IN PROGRESS
-Bay 17685 on `fmi_block` is a false positive from a **single view** at 146 px
-eccentricity; the world sits at 97.6% instead of 100%.
+### 2. Root-cause the ~0.6 m per-frame projection error — **DONE 2026-08-20**
+`fmi_block` now scores **100%** (was 95.2%, then 97.6% after the `CORE_W` split).
+`fmi_block_4st` unchanged at 100%; `fmi_block_4st_lp` 98.2% → 99.1%.
 
-**Mechanism established.** Measured with a 1-D brightness profile across each
-bay's short axis — no search, so it cannot lock onto a neighbour's line:
+**Cause: `project()` assumed a nadir camera.** The Mavic2Pro gimbal's roll joint
+sits *below* its pitch joint, so at the +pi/2 pitch a nadir survey flies, the
+roll axis has been rotated onto the optical axis — it can no longer level the
+camera, it only spins the picture. So the FULL body roll displaced every frame
+laterally (slope **-1.02, R² 0.994**) while the compensated pitch contributed
+only its few-mrad servo lag. `score_occupancy.camera_axes()` now models all
+three effects; median per-frame misalignment **0.269 m → 0.043 m**, worst frame
+**0.97 m → 0.060 m**, and every covariate R² is now ≤ 0.04.
 
-- **Within a frame the offset is consistent** (frame 29: three bays at
-  +0.14 / +0.08 / +0.14 m, sd 0.029 m) → a per-**frame** pose error, not per-bay.
-- **Most frames are fine**, 0.01–0.14 m.
-- **Frame 26 — which carries both false positives — is the outlier at +0.64 m.**
+What is left is understood and deliberately not chased: a constant **3.7 cm**
+along-track bias, which is the size hypothesis 7 computed for the camera's
+mounting offset ahead of the GPS (~3.8 cm). At 0.6 px it is below what the
+classifier can feel.
 
-Paint then leaks into the core crop and lifts chroma/brightness/std on empty
-asphalt past the occupied thresholds (the FP bay reads chroma 12.99 against a
-12.7 threshold; a correctly-classified free bay reads 12.34).
+Bay 17685 was therefore a *projection* error the whole time, exactly as the
+2026-08-11 note suspected — but the mechanism was neither eccentricity nor lens
+centre, which is why the affine test (hypothesis 1) could not see it.
 
-**Seven hypotheses refuted — do not re-test:**
+**What made it findable, having failed with the 1-D profile:** measure in **2-D**
+and prove the measurement first. `vision/diag/paint_align.py` registers the
+projected outlines against the paint sub-pixel and `--self-test` recovers
+injected shifts to 0.10 px; `vision/diag/offset_report.py` regresses the result
+against the pose. The direction of the offset — almost pure cross-track — is
+what ruled out timing and named roll in one step, and a 1-D profile across the
+bay's short axis could not produce it. Both are **committed** this time; the
+previous set lived in a session scratchpad and was lost.
 
-| # | Hypothesis | Result |
-|---|---|---|
-| 1 | Eccentricity/scale error | Affine fit residual 6.81 px vs raw 6.70 px — explains nothing |
-| 2 | Generator vs scorer bay geometry | Agree to 2 mm, all 45 bays |
-| 3 | Camera not truly nadir | Frame 26 residual tilt 0.0036 rad = 0.106 m, ~⅙ of the error; frame 29 has the *lowest* tilt yet still shows offset |
-| 4 | Stale image / temporal lag | Along-track lag median 0.00 m; capture sequence verified — pose and image read on the same step |
-| 5 | `ORIGIN` drift | Identical in all three files |
-| 6 | Orbit-timeout / hard turning at capture | Frame 26 is 5.68 m off its waypoint, but so are several clean frames — no correlation |
-| 7 | Camera-to-GPS mounting offset | A fitted constant explains 36% of variance at 0.35 m, but summing the proto's gimbal chain gives the **real** offset as ~3.8 cm forward / 1.4 cm left / 3 cm down, with GPS and IMU at the robot origin — an order of magnitude too small |
+Also fixed on the way, because the change made them matter: the web `frame`
+table now stores `cam_pitch`/`cam_roll` (migration `0008`) so a job recovered
+after a restart projects identically to the live path; `project()` treats a
+null angle as absent; and `footprint_reach()` allows for the tilt so its cheap
+rejection test cannot drop a bay that is genuinely in shot (verified equivalent
+to the unindexed path over all 76 bay-views of `fmi_block`).
 
-**Important caveat on #7.** Measured half-width comes out consistently 0.7–0.9 px
-*under* predicted, which means the profile peak-finder has a systematic bias.
-The fitted 0.35 m is therefore most likely an artifact of the measurement, not
-physics. **Fix the measurement before trusting any constant-offset fit.**
-
-**Next leads:**
-1. Validate the measurement — locate each painted line by its *centroid* over a
-   width window rather than by `argmax`, and see whether the residual offsets
-   survive.
-2. Frame 26 specifically — render several bays in that frame and confirm visually
-   whether the *whole frame* is shifted or only that neighbourhood.
-3. Eliminate a half-step GPS/physics sampling error (2 cm at 5 m/s — too small,
-   but cheap to rule out).
-
-Diagnostics in the session scratchpad: `profile_test.py` (1-D profile, the
-reliable one), `solve_offset.py`, `align_fit.py`, `lag_test.py`, `bay_zoom.py`
-(magnified overlay — clearest evidence), `pose_outliers.py`.
-
-**Partial fix already applied:** the crop's two shrink axes were coupled through
-one uniform `INNER`, so buying clearance from the bay's own paint also ate the
-bay's length, which `CORE_LEN` already guarded. They are now independent
-(`CORE_W = 0.70`, clearance 0.21 m). `fmi_block` 95.2% → 97.6%,
-`fmi_block_4st` unchanged at 100%. `CORE_W` was chosen **on the calibration world
-only**; the held-out curve is non-monotonic, so part of that gain is luck.
+**Verified end-to-end 2026-08-20**, once Docker was up: migration `0008`
+applied; `replay fmi_block` **42/42, 100%**; full-stack `replay_ingest` **42/42,
+100%** with all 34 frame rows carrying `cam_pitch`/`cam_roll`; and the
+restart-recovery path (stage frames with `CLASSIFY_THREADS=0`, restart,
+`recovered_on_start: 34`) reproduces the **same 42/42 at 100%** — which is the
+whole point of `0008`. That check can fail: stripping the two columns from a
+pose moves bay 17685's projected outline by **0.35–1.55 m** on the frames that
+see it, against a 0.21 m core-crop clearance.
 
 ### 5. Learned classifier v2 — *blocked by #6*
-`classify()` is five hand-tuned thresholds calibrated on `fmi_block_4st`. It is
-visibly at its limit: bays now separate in the third decimal place (a false
-positive at chroma 12.99 against a correct free bay at 12.34), the `CORE_W` sweep
-is non-monotonic because a bay flips across a threshold, and the light-pole
-parallax case is a physically real occlusion no colour heuristic can fix.
+`classify()` is five hand-tuned thresholds calibrated on `fmi_block_4st`. The
+case for replacing it is now **weaker on the numbers and unchanged in
+principle**: the chroma-12.99 false positive that used to be the headline
+evidence turned out to be #2's projection bug, not a classifier limit, and both
+survey worlds are at 100%. What still stands: the `CORE_W` sweep is
+non-monotonic because a bay flips across a threshold, `fmi_block_4st_lp`'s
+remaining miss is a dark car a colour heuristic cannot separate from asphalt,
+and the light-pole parallax case is a physically real occlusion.
 
 `classify()` is deliberately the only swap point — projection, view selection,
 voting and scoring stay unchanged. Labelled crops are already on disk.
@@ -116,10 +148,11 @@ The single largest untested hardening lever.
 Timeout arrivals capture up to ~15 m off the waypoint, so ~1% of bays fall
 outside every footprint: 3 of 45 on `fmi_block`, 0 of 111 on `fmi_block_4st`.
 
-More interesting than the count: bay 17685 (#2) is decided by a **single** view
-while correctly-classified free bays get 2–3. The multi-view majority vote is the
+More interesting than the count: bay 17685 (#2) was decided by a **single** view
+while correctly-classified free bays got 2–3. The multi-view majority vote is the
 designed defence against one bad look, and it is exactly the thinly-covered bays
-that fail — so coverage work also hardens the vote.
+that failed — so coverage work also hardens the vote. (#2 is fixed, so 17685 is
+no longer wrong; the structural point stands.)
 
 Untried: fly higher for a larger footprint (costs resolution, 16 → ~10 px/m at
 50 m, and needs the classifier re-verified at that scale); re-aim the capture
@@ -132,7 +165,9 @@ inside a tighter basin, hanging the patrol forever.
 ## Infrastructure
 
 ### 3. A consistency test for constants duplicated across files — **DONE**
-`tools/check_consistency.py`, 26 checks, exits 1 on mismatch. Covers the ENU
+`tools/check_consistency.py`, exits 1 on mismatch. The check count is
+data-driven (one per world, one per captured-frame set), so it moves as worlds
+and flight outputs come and go — currently 25. Covers the ENU
 projection (`ORIGIN`/`MLAT`/`MLON` across the two Python files *and* `geo.ts`,
 including that all three still *derive* `MLON` rather than hardcoding it), the
 `DS_*` sensor fan, the bay dimension and orientation rules, a per-bay
@@ -178,18 +213,23 @@ caught the `Косо` bug (drawn rectangle vs geojson ring, 2 mm tolerance).
 
 ## Data / scale
 
-### 1. Score the 1 km survey
-Flight restarted 2026-08-12 00:33 on the angled-bay-corrected world: 1593 bays,
-728 cars, 1976 waypoints, 19.0 km. When it lands, score it and archive the result
-as the world's first clean fixture.
+### 1. Score the 1 km survey — **the flight is DEAD, not pending**
+`sim/output/fmi_block_1km/poses.json` stopped at **87 of 1976 frames** on
+2026-08-17 15:29 — stopped by hand (confirmed with the author 2026-08-20), not
+by a crash or by the obstacle track's `taskkill`. So there is nothing to
+diagnose: this task starts by simply *relaunching* it. A folder with existing
+captures makes the controller resume, so a long flight can be picked up rather
+than restarted.
+
+Flight parameters on the angled-bay-corrected world: 1593 bays, 728 cars, 1976
+waypoints, 19.0 km. When it lands, score it and archive the result as the
+world's first clean fixture.
 
 This is the project's first neighbourhood-scale accuracy number, and the first
 score of a world containing angled bays **and** 31 bays sitting on green
 polygons — neither exists in the two small worlds, so the bays-on-grass effect
 should show up here for the first time.
 
-Old partial run (three world builds stale) archived at
-`sim/output/fmi_block_1km.2026-08-05-partial/`.
 
 ### 9. Street-name matching for the 4 PCA-fallback streets
 4 of 49 streets in the 1 km cut have no OSM name match and fall back to a
@@ -204,12 +244,21 @@ abbreviation/transliteration (Арх. / Архитект, Св. / Свети), n
 
 ## Web
 
-### 8. Reconcile the web tier's status, then P6/P7
-Untouched for over a week. **First resolve a documentation contradiction**:
-`CLAUDE.md`'s status line says Phase 6 (admin dashboard) remains, while the same
-file documents `apps/web-admin` as built and running on :5174. Establish which is
-true by running `cd web && pnpm quickstart` before planning any work — this is the
-same documentation-drift class as the stale fixture.
+### 8. Web tier: P6 is BUILT and the stack is VERIFIED; P7 hardening remains
+The documentation contradiction is resolved: **`apps/web-admin` is fully built**
+(App + 5 components + `useMetrics` + `lib/format.ts`) and the whole stack came up
+and passed end-to-end on 2026-08-20 — see #2's verification note. The stale line
+was the status summary, not the body.
+
+**Uncommitted work sitting in the tree, from an earlier session and not logged
+anywhere until now:** a WebSocket **reconnect-cursor** feature across
+`api/hub.py` (an asyncio lock serialising connect+broadcast, plus a cursor on
+every delta), `useOccupancySocket.ts` (`?since=`, process-restart detection that
+drops a stale overlay), `App.tsx` (REST reconcile on `syncVersion`) and
+`contracts/src/index.ts`. It looks complete and it survived the E2E run, but it
+was never deliberately reviewed or tested against an actual reconnect. **Do that
+before it gets committed** — a mid-flight drop with a stale cursor is exactly the
+case it exists for and exactly the case nothing has exercised.
 
 Then P7 hardening, whose items are already known: put `/api/v1/metrics` and
 `/metrics` behind admin auth (currently unauthenticated like every read route);
@@ -217,10 +266,6 @@ and note that **single-replica is a correctness requirement, not a preference** 
 `jobs.recover()` re-enqueues every queued row with no ownership filter, so two
 replicas would double-count the vote. Scaling out needs job claiming, a shared
 delta channel and a global cursor first.
-
-Also: the replay golden expectation moved 43/43 → 42/42 tonight and the fixture
-is now 97.6%; it moves again when #2 lands. Re-run
-`python -m parkdrone_vision.replay fmi_block` to confirm it still matches.
 
 ---
 

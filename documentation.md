@@ -3,9 +3,9 @@
 *Draft for thesis use. Covers the problem statement, the data and world-building
 pipeline, the simulation scales and their cost, the flight controller, waypoint
 navigation, the evolution of the route-planning algorithm (DFS → rural postman),
-obstacle detection, and the occupancy-scoring vision stage with its measured
-failure modes. Numbers are from verified simulation runs; last revised
-2026-08-11.*
+obstacle detection and avoidance, and the occupancy-scoring vision stage with
+its measured failure modes. Numbers are from verified simulation runs; last
+revised 2026-08-20.*
 
 ---
 
@@ -140,7 +140,7 @@ World contents:
   non-convex faces unreliably) and painted at z = 0.005: above the ground and
   *below* the road ribbons, so a park that crosses a street renders under the
   asphalt and can never cover a bay. Unlike buildings they are **clipped** to
-  the window (Sutherland–Hodgman), because an unclipped 1 km park would carpet
+  the window (Sutherland–Hodgman), because an unclipped 1 km park would
   the whole visible ground of the 150 m world.
 - **Buildings**: OSM footprints as Webots `SimpleBuilding` protos, at their real
   heights — `building:levels` where mapped, else the `height` tag (split into
@@ -201,11 +201,12 @@ verified this way: all three worlds' `ground_truth.json` and `route.json` are
 byte-identical before and after.
 
 **Obstacles and the flight path.** The buildings carry no bounding object by
-default (`--collide` turns them on). The controller holds a fixed 30 m and has
-no obstacle logic whatsoever, so collision geometry would simply crash it into
-the first tall block under the route; Webots range sensors, on the other hand,
-only detect nodes that *have* a bounding object, so the switch is what the
-obstacle-avoidance stage will flip. Either way the generator reports the
+default (`--collide` turns them on, together with the drone's range sensors).
+Without avoidance the controller holds a fixed 30 m and would simply fly into the
+first tall block under the route, and Webots range sensors only detect nodes that
+*have* a bounding object — so the same switch is what makes structures both
+solid and visible, which is why the survey worlds leave it off and the obstacle
+world turns it on (section 7.5). Either way the generator reports the
 conflict: buildings that reach the flight level within 10 m of the route are
 printed as a warning and written to `<name>.hazards.json` (id, height, distance
 to the route, centroid in the shared local metres). On the 1 km world 7
@@ -520,7 +521,7 @@ controller now reads the incrementally-written `poses.json` on startup and
 continues from the first uncaptured waypoint, so a multi-hour patrol survives
 crashes and host interruptions without re-flying.
 
-### 7.5 Obstacle avoidance: detect and stop
+### 7.5 Obstacle avoidance
 
 The survey controller holds a fixed 30 m and, by design, knows nothing about
 obstacles: the three survey worlds contain no collision geometry at all, so a
@@ -540,9 +541,11 @@ toward the drone, the case where purely reactive avoidance circles forever.
 Placement is deterministic, is nudged past any bay it would otherwise cover (a
 box on painted tarmac would be a ground-truth bug), and enforces a 30 m
 separation — because a postman route doubles back, and two anchors twelve
-waypoints apart can land 15 m from each other. The obstacle-blind baseline is
-recorded: the controller flies into the tower at waypoint 12 and stops, 13 frames
-into the patrol.
+waypoints apart can land 15 m from each other.
+
+The obstacle-blind controller provides the control baseline: flown on this world
+it enters the tower at waypoint 12 and stops there, 13 frames into the patrol.
+Every result below is measured against that.
 
 **Sensing.** Nine `DistanceSensor` rays in a ±40° fan, 80 m range, mounted in the
 drone's body slot. A fan of single-ray sensors rather than a Lidar, because that
@@ -559,34 +562,127 @@ takes v²/2a ≈ 57 m. A 40 m rangefinder could not stop this aircraft at cruise
 speed no matter how good the logic — the sensor must be specified from the
 braking distance, not from a round number.
 
-**Control.** The layer emits **only a speed limit**, into the same `v_des`
-channel the navigator already uses — never a position target. This is the
-structural reason every controller invariant survives: the stabiliser sees
-nothing new, and in particular the lateral-position command that tumbles the
-aircraft (section 7.2) is never introduced. Four further constraints each came
-from an observed failure. Returns are gated by bearing and corridor, because
-braking on the raw nearest return let the wide fan latch onto scenery off to the
-side and the minimum then *flipped* between targets, handing cruise speed back
-mid-brake. The limit ratchets downward only, so a momentarily lost return cannot
-undo a brake. A reaction allowance is charged against the range, because the bare
-braking curve permits a drone strictly below it to keep accelerating — true only
-for a vehicle that can brake instantly. And braking uses a saturated gain with a
-latched station-keeping point once stopped, because a proportional brake fades as
-the speed error closes, and pure damping cannot null a steady hover drift: an
-early version stopped correctly at 12.7 m and then crept 13 m into the tower over
-the following 95 s.
+**The channel principle.** Avoidance is built in two stages, *detect and stop*
+and *steer around*, and both obey one structural rule: they write only into
+channels the navigator already owns — the speed target `v_des` and the heading
+error `yaw_err` — and never a lateral position target. That is the reason every
+controller invariant of sections 7.1–7.3 survives untouched: the stabiliser sees
+nothing it did not already see, and in particular the lateral-position command
+that tumbles the aircraft (section 7.2) is never introduced. Adding avoidance
+therefore cannot destabilise the survey flight, and this is verified rather than
+argued: a survey world flown with and without the layer produces trajectories
+agreeing to under 0.1 mm.
 
-Frames captured while the layer is in control are tagged in `poses.json`, so the
-scorer can exclude them rather than mis-score them silently, and one-row-per-
-second telemetry is written to disk because the interesting seconds fall
-*between* waypoint captures.
+**Stage 1 — detect and stop.** This stage emits only a speed limit. Four
+properties make that limit safe:
 
-**Result.** The drone acquires the tower at 76 m, brakes, and holds a **12.20 m
-standoff to within ±2 cm for over 400 s** at 30.00 m altitude. The patrol does
-not finish, which is the intended outcome of this stage: it is detect-and-stop.
-Steering around the obstacle — expressed as a yaw bias on the same channel
-principle, and chosen over climbing precisely so the classifier's 30 m
-calibration is never broken — is the next stage and is not yet implemented.
+- Returns are **gated by bearing and corridor** before they count. A ±40° fan
+  sees scenery well off to the side; without the gate the running minimum jumps
+  between unrelated targets, and a limit computed from it can rise again while
+  the drone is still braking.
+- The limit **ratchets downward only**, so a momentarily lost return cannot hand
+  cruise speed back.
+- A **reaction allowance** is charged against the measured range. The bare
+  braking curve permits an aircraft strictly below it to keep accelerating, which
+  is only true of a vehicle that can brake instantly; this one needs about three
+  seconds of travel to reverse a trend.
+- Braking uses a **saturated gain**, and once stopped the drone **station-keeps
+  on a latched point**. A proportional brake fades as the speed error closes, and
+  pure damping cannot null a steady hover drift, so a proportional-only stop
+  holds its distance briefly and then creeps. The hold converts position error
+  into a *clamped velocity target*, which keeps it inside the channel principle.
+
+Alone, this stage halts the drone at a 12.20 m standoff and holds it to within
+±2 cm for over 400 s at 30.00 m. The patrol does not finish, which is the
+intended scope of the stage.
+
+**Stage 2 — steer around.** The manoeuvre is a turn, not a climb: climbing would
+change the ground sampling distance and invalidate the classifier's 30 m
+calibration (section 8). On detecting a gated return that lies within the
+clearance radius of the route ahead, the controller commits to a **detour**,
+picks the side with more room from the ray fan (scored on each side's *minimum*
+range, since one blocked ray is what a collision is), and flies a tangent:
+
+```python
+# Speed on the arc is limited by two things, and the second is the one that
+# makes a tight arc safe: the turn radius the lateral acceleration allows, and
+# the speed from which the drone can still stop inside its own clearance.
+v_arc = max(0.5, min(STEER_V,
+                     math.sqrt(A_LAT * arc_R),
+                     math.sqrt(2 * A_BRAKE_OBST * detour["C_R"])))
+
+# Tangent law: to pass a point at CLEAR_R, fly a heading offset from its
+# bearing by asin(CLEAR_R/d). As d shrinks to CLEAR_R the offset grows to 90
+# degrees, so the drone rolls out onto a circle around the obstacle naturally,
+# without needing a separate "circle" mode.
+off = math.asin(clamp(arc_R / max(d_T, arc_R), -1.0, 1.0))
+yaw_err = wrap(bear_T + detour["side"] * (off + STEER_MARGIN) - yaw)
+```
+
+Four design decisions carry this stage:
+
+- **The threat is remembered as a growing bounding disc**, in world metres, not
+  as a point. A point refreshed to the latest return effectively follows the
+  drone: on a wide structure the nearest face slides around it as the drone
+  circles, so the threat stays permanently "ahead" and the manoeuvre becomes an
+  orbit. A single frozen point under-clears instead, since the rest of an 8 m
+  structure still juts into the path. The disc only ever grows, and only by
+  contiguity, so unrelated buildings cannot inflate it.
+- **The leave condition is Bug2's, and it is about the goal, not the obstacle.**
+  Geometric tests — "swept 110° around it", "it is abeam" — release while the
+  waypoint is still on the far side, so the drone turns straight back into the
+  structure. The detour is given back only when the drone is measurably closer to
+  its waypoint than when it committed *and* can fly straight at it clear of the
+  disc. The first half is what guarantees termination: every completed detour has
+  made real progress, so the manoeuvre cannot cycle.
+- **Commit and release ask the same question over the same window.** Both test
+  the route from the drone to 12 m past the current waypoint — "this leg and the
+  next". A wider commit horizon takes the drone off a waypoint just ahead for
+  something blocking the route two legs later, and the leave condition then
+  cannot fire, because that waypoint now lies behind; the only way to satisfy it
+  is to go all the way round.
+- **Bounded, and escalating rather than surrendering.** A reactive controller can
+  always find a new way to circle, so a detour that accumulates 270° of sweep is
+  abandoned, with a short cooldown against that disc and the drone handed back to
+  its route with stage 1 still protecting it. A detour that instead *times out*
+  doubles the clearance for that obstacle alone and retries. Giving up is
+  per-threat, never global: one unsolvable structure must not cost the drone its
+  avoidance for the remaining ninety waypoints.
+
+**Clearance is a single constant.** The arc radius, the release test, the skip
+radius and stage 1's standoff against the committed obstacle all derive from
+`CLEAR_R`, so they cannot disagree. It is deliberately tight (5 m), because a
+wide berth is what costs coverage: at 18 m clearance the patrol skips 28 of 97
+waypoints and flies a mean 21.3 m off its own route, against 21 and 9.6 m at 5 m.
+Reliability is bought back by retrying the awkward obstacle, not by widening
+every detour. Tightness has a floor set by the sensor rather than by the tuning:
+the nine rays are 10° apart, so at 5 m range the gaps *between* them are 0.9 m —
+the mast case arriving early, and an argument for a Lidar rather than for a
+smaller number.
+
+Waypoints that fall inside the remembered disc cannot be flown to at all, so they
+are skipped and recorded. A declared coverage gap is a correct survey result; an
+endless orbit is not.
+
+Frames captured while either stage is in control are tagged in `poses.json`, so
+the scorer can exclude them rather than mis-score them silently, and
+one-row-per-second telemetry is written to disk because the interesting seconds
+fall *between* waypoint captures.
+
+**Result.** The patrol **completes**: 96 of 97 waypoints, 79 frames, in 1599 s,
+with all four structures passed — including `trap`, the concave U built
+specifically to defeat a reactive controller. Six detours are flown, none of them
+a circle, and the closest approach over the whole flight is 6.55 m. Against the
+obstacle-blind baseline, which ended at waypoint 12, and against stage 1 alone,
+which ended at waypoint 12 with 11 frames, the layer converts a collision into a
+completed survey.
+
+The cost is coverage: 21 of 97 waypoints are skipped, and the binding constraint
+is stage 1's 12 m standoff rather than the arc — a waypoint closer than that to a
+structure cannot be reached at all. Recovering it needs capture at the closest
+*legal* approach with the frame flagged, which changes what such a frame means to
+the scorer; that is a design decision rather than a tuning change, and it is
+listed in section 11.
 
 ## 8. Occupancy scoring (vision stage, v1)
 
@@ -716,24 +812,78 @@ The failure *mechanism* is real and remains an argument for the learned
 classifier; the *number* was a property of one flight, not a stable property of
 the world. Section 9 draws the general lesson.
 
-### 8.3 An open failure: off-nadir projection error
+### 8.3 The camera was never nadir
 
-The held-out world `fmi_block` currently scores **95.2%** (42 classified, TP 17,
-TN 23, FP 2, FN 0) — two free bays, 17685 and 17686, reported occupied. Both are
-captured **136–146 px off the image centre**, and the cause is *projection*, not
-classification: at that eccentricity the projected bay polygon no longer lines up
-with the painted outline in the image, so white line pixels fall inside what the
-scorer treats as the bay's core. The measured features say so directly — paint
+The held-out world `fmi_block` sat at **95.2%** while the calibration world was
+perfect: two free bays, 17685 and 17686, were reported occupied. Both were
+captured **136–146 px off the image centre**, and the cause was *projection*, not
+classification. At that eccentricity the projected bay polygon no longer lined up
+with the painted outline in the image, so white line pixels fell inside what the
+scorer treats as the bay's core. The measured features said so directly — paint
 fraction 0.07, brightness 105 against a free envelope of 82–102, texture std 40 —
 on what is physically empty asphalt.
 
 This is the same family as the gimbal-pitch error of section 8.1: a geometric
-misalignment that presents as a classification failure, and one that no amount of
-threshold tuning fixes because the crop is looking at the wrong pixels. It is
-recorded as an open defect. The scorer already logs each bay's distance from the
-image centre, so the data needed to characterise the effect — and to decide
-between correcting for eccentricity, shrinking the core crop as eccentricity
-grows, or rejecting views past a threshold — is already on disk.
+misalignment presenting as a classification failure, and one that no amount of
+threshold tuning fixes, because the crop is looking at the wrong pixels.
+
+**Measuring it properly was most of the work.** A first attempt sampled a
+one-dimensional brightness profile across each bay's short axis and located the
+painted line by its peak. That measurement is both biased — the recovered line
+half-width came out consistently under the predicted one — and, being
+one-dimensional, incapable of reporting the *direction* of the error. Direction
+turned out to be the entire diagnosis.
+
+The replacement (`vision/diag/paint_align.py`) registers the whole predicted
+outline pattern against the paint visible in the frame, in two dimensions and at
+sub-pixel resolution: the observed image is reduced to a ridge response — grey
+minus a local box mean, kept only where the pixel is near-achromatic, so a thin
+painted line survives and a car roof does not — and matched to the rasterised
+prediction by normalised cross-correlation. Crucially, the estimator is
+**validated before it is believed**: known shifts are injected into the observed
+image and must be recovered, which they are to 0.10 px against an effect of ten
+pixels. Two details of that validation mattered. Fitting a parabola to the
+correlation peak recovers whole-pixel shifts perfectly but is biased on
+fractional ones, because the correlation of a thin-line pattern is far too
+sharply peaked for a quadratic; a direct sub-pixel search replaces it. And the
+test must run on a frame that contains enough paint to locate, which is a
+property of the frame rather than of the method.
+
+**The result was unambiguous.** The offset was almost purely *cross-track*, which
+by itself eliminates timing and lag, and it tracked the drone's body roll at a
+slope of −1.02 with R² 0.994 — as if the gimbal's roll compensation did not exist.
+The fore/aft component followed the *residual* pitch, the few milliradians by
+which the pitch joint lags its own command, so that joint was working.
+
+The explanation is the joint order of the gimbal. Its roll joint sits below its
+pitch joint, so once the pitch joint is driven to the +π/2 that a nadir survey
+requires, the roll axis has been rotated onto the optical axis. It can no longer
+level the camera; it only rotates the picture. The controller was commanding roll
+compensation, the joint was obeying, a position sensor confirmed the motion — and
+none of it reached the image. This is a case where every individual component
+behaves correctly and the composition does not, which is precisely the kind of
+error that survives inspection and is only caught by measurement.
+
+`project()` therefore no longer assumes a nadir camera. It builds the optical
+axis and image axes from the attitude already recorded in `poses.json`: a tilt by
+the full body roll, a tilt by the residual pitch, and an image rotation by the
+gimbal's roll angle. A pose carrying no attitude still projects as nadir, so
+earlier captures remain scorable.
+
+| | before | after |
+|---|---|---|
+| median per-frame misalignment | 0.269 m | 0.043 m |
+| worst frame | 0.97 m | 0.060 m |
+| `fmi_block` accuracy | 95.2% | **100%** |
+| `fmi_block_4st` accuracy | 100% | 100% |
+
+A companion tool (`vision/diag/offset_report.py`) regresses the residual against
+every candidate cause in the pose, and is the standing check on the camera model:
+a correct model leaves every R² near zero, while a slope near ±1 against an
+`alt × angle` term names the angle being ignored. After the fix, every R² is at
+most 0.04. What remains is a constant 3.7 cm along-track bias, which matches the
+computed offset of the camera ahead of the GPS antenna and is well below what the
+classifier can resolve.
 
 ## 9. Verification methodology
 
@@ -774,7 +924,8 @@ rules follow, and both are now enforced: **a fixture must be re-flown, not
 re-scored, whenever the world or the controller changes**, and a stored result
 must carry the date of the *flight* rather than of the scoring. Re-flying both
 fixtures revealed one improvement (the calibration world, 99.1% → 100%) and one
-genuine open defect that had been masked for over a week (section 8.3).
+genuine defect that had been masked for over a week — the camera model of
+section 8.3, since fixed.
 
 ## 10. Transfer to the real drone
 
@@ -867,8 +1018,8 @@ the unchanged layers above it.
 ## 11. Current limitations and future work
 
 - **Vision is a calibrated heuristic**: it scores **100%** on the calibration
-  world (`fmi_block_4st`, 111/111 bays covered) and **95.2%** on the held-out
-  world, but its thresholds encode the sim's uniform lighting and untextured
+  world (`fmi_block_4st`, 111/111 bays covered) and, since the camera-model fix
+  of section 8.3, **100%** on the held-out world too — but its thresholds encode the sim's uniform lighting and untextured
   surfaces. It will not survive shadows, surface texture, weathered markings or
   real imagery — the step to a learned classifier over the identical bay crops
   belongs together with making the scene harder, so that the comparison is
@@ -878,10 +1029,12 @@ the unchanged layers above it.
   The exposed surface not yet measured is bays that sit **on** a green polygon:
   none in the two small worlds, 31 in the 1 km one, so that world is where the
   next measurement should be taken.
-- **Two open false positives on the held-out world** (section 8.3): a projection
-  misalignment at high image eccentricity, not a classification failure. This is
-  the highest-value outstanding fix, because it is geometric and therefore
-  solvable exactly, unlike the threshold work.
+- **Coverage under obstacles** (section 7.5): 21 of 97 waypoints on the obstacle
+  world are skipped, and the binding constraint is the 12 m standoff rather than
+  the detour arc — a waypoint closer than that to a structure cannot be reached
+  at all. Recovering it means capturing at the closest *legal* approach and
+  flagging the frame, which changes what such a frame means to the scorer, so it
+  is a design decision rather than a tuning change.
 - **Shadows are the real hardening lever, and are deliberately still off.**
   `castShadows FALSE` on the sun is not an aesthetic choice: shadow mapping over
   a 1.2 km ground plane painted streak artifacts across the nadir frames. Turning
@@ -919,12 +1072,12 @@ the unchanged layers above it.
   and use the straight-line PCA fallback (fine for straight streets only).
 - **Angled bays**: "Косо" spaces are drawn at a fixed 45° to the street; the
   actual angle direction (left/right of the street) is not in the data.
-- **Obstacle avoidance stops at detection** (section 7.5). The drone brakes to a
-  stable standoff but cannot get past the obstacle, so a patrol that meets one
-  does not complete. Steering around it — a yaw bias on the navigator's existing
-  channel, preferred over climbing so the classifier's 30 m calibration is never
-  broken — is the next stage. The concave `trap` in the test world is expected to
-  defeat a purely reactive version and is the argument for keeping some route
-  memory.
+- **Obstacle avoidance is reactive and has no map** (section 7.5). It completes
+  the test course, concave `trap` included, but it plans from what the ray fan
+  can currently see plus a remembered disc per threat; it does not build a
+  persistent obstacle map, and it has never been flown on the 1 km world or with
+  proxy-geometry cars. The thin `mast` remains the standing argument for a Lidar:
+  at close range the gaps between adjacent rays exceed the clearance being
+  flown.
 - **Shadows remain off** and are the single largest untested hardening lever;
   see the note above on sequencing that as its own experiment.

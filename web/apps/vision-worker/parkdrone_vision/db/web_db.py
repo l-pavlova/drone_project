@@ -394,14 +394,18 @@ def insert_frame(conn, frame_id, drone_id, mission_id, survey_area, pose, image_
     with conn.cursor() as cur:
         cur.execute(
             """INSERT INTO frame
-                 (frame_id, drone_id, mission_id, survey_area, frame_idx, x, y, alt, yaw, roll, pitch, image_uri)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                 (frame_id, drone_id, mission_id, survey_area, frame_idx, x, y, alt, yaw, roll, pitch,
+                  cam_pitch, cam_roll, image_uri)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                ON CONFLICT (drone_id, survey_area, frame_idx) DO NOTHING
                RETURNING frame_id""",
             (
                 frame_id, drone_id, mission_id, survey_area, pose["frame_idx"],
                 pose["x"], pose["y"], pose["alt"], pose["yaw"],
-                pose.get("roll"), pose.get("pitch"), image_uri,
+                pose.get("roll"), pose.get("pitch"),
+                # the gimbal angles matter to project(): without them a recovered
+                # job would re-project this frame as if the camera were nadir
+                pose.get("cam_pitch"), pose.get("cam_roll"), image_uri,
             ),
         )
         row = cur.fetchone()
@@ -446,20 +450,31 @@ def unscored_frames(conn):
     with conn.cursor() as cur:
         cur.execute(
             """SELECT f.frame_id, f.survey_area, f.frame_idx, f.x, f.y, f.alt, f.yaw,
-                      f.roll, f.pitch, f.image_uri
+                      f.roll, f.pitch, f.cam_pitch, f.cam_roll, f.image_uri
                  FROM frame_job j JOIN frame f USING (frame_id)
                 WHERE j.status = 'queued' ORDER BY j.enqueued_at"""
         )
         rows = cur.fetchall()
     jobs = []
-    for frame_id, survey_area, frame_idx, x, y, alt, yaw, roll, pitch, image_uri in rows:
+    for (frame_id, survey_area, frame_idx, x, y, alt, yaw, roll, pitch,
+         cam_pitch, cam_roll, image_uri) in rows:
+        # The gimbal angles are part of the pose for projection purposes, so a
+        # recovered job must carry them or it would classify this frame
+        # differently from the live path. Absent (pre-0008 rows, or a drone that
+        # reports none) means "assume nadir", which is what project() falls back
+        # to -- so they are only set when actually known.
+        pose = {"frame_idx": frame_idx, "x": x, "y": y, "alt": alt,
+                "yaw": yaw, "roll": roll, "pitch": pitch}
+        if cam_pitch is not None:
+            pose["cam_pitch"] = cam_pitch
+        if cam_roll is not None:
+            pose["cam_roll"] = cam_roll
         jobs.append(
             {
                 "frame_id": frame_id,
                 "survey_area": survey_area,
                 "frame_idx": frame_idx,
-                "pose": {"frame_idx": frame_idx, "x": x, "y": y, "alt": alt,
-                         "yaw": yaw, "roll": roll, "pitch": pitch},
+                "pose": pose,
                 "image_uri": image_uri,
             }
         )
