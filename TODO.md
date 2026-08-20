@@ -250,8 +250,9 @@ The documentation contradiction is resolved: **`apps/web-admin` is fully built**
 and passed end-to-end on 2026-08-20 — see #2's verification note. The stale line
 was the status summary, not the body.
 
-**Uncommitted work sitting in the tree, from an earlier session and not logged
-anywhere until now:** a WebSocket **reconnect-cursor** feature across
+**Committed but never verified** (it went in with `2964746` "Fix steering", a
+catch-all commit — the 2026-08-20 note calling it uncommitted was wrong): a
+WebSocket **reconnect-cursor** feature across
 `api/hub.py` (an asyncio lock serialising connect+broadcast, plus a cursor on
 every delta), `useOccupancySocket.ts` (`?since=`, process-restart detection that
 drops a stale overlay), `App.tsx` (REST reconcile on `syncVersion`) and
