@@ -422,6 +422,8 @@ UIs (driver map :5173, ops dashboard :5174), plus a registered dev drone whose A
 ```bash
 cd web && npm i -g pnpm    # corepack isn't on PATH here
 pnpm quickstart            # --replay drives a survey through the live stack,
+                           # --clear <area> wipes it first so a re-flight ingests
+                           #   (bare --clear takes the area from --fly/--uplink),
                            # --no-admin skips the ops UI, --no-web skips both UIs,
                            # --stop tears everything down
 ```
@@ -462,9 +464,9 @@ Verification harnesses (all Python, run from `apps/vision-worker`):
   frames that see it, against a 0.21 m core-crop clearance.
 - Full stack E2E: register a drone `python -m parkdrone_vision.register_drone drone-1`, then
   `API_KEY=<key> python -m parkdrone_vision.replay_ingest fmi_block` (expect 52 WS deltas + final
-  `/bays` matching the offline result, 42/42). To re-run, clear the survey area's `frame`,
-  `observation` **and `bay_state`** rows first: `frame` because idempotency skips duplicates, and
-  the other two because deltas only fire on a *change* — replay straight after the golden test
+  `/bays` matching the offline result, 42/42). To re-run, clear the survey area first
+  (`pnpm clear <area>`, which is exactly this): `frame` because idempotency skips duplicates, and
+  `observation`/`bay_state` because deltas only fire on a *change* — replay straight after the golden test
   leaves the state already correct and reports a green "0 deltas".
 - Frame retention: `python -m parkdrone_vision.cleanup` runs one sweep by hand (the server also
   runs it every `CLEANUP_INTERVAL_S`; set that to 0 to disable). Exits 1 if it found frames past
@@ -514,11 +516,35 @@ Note a folder with existing captures makes the controller **resume**, not re-fly
   `--poll S`, `--from N`, `--once`. `frames_expected` comes from `sim/worlds/<area>.route.json`, so
   the ops dashboard's mission progress bar is a real plan-vs-actual.
 - **Re-flying the same survey area does NOT reprocess** — ingest is idempotent on
-  `(drone, survey_area, frame_idx)`, so the uplink reports duplicates and warns once. Clear that
-  area's `frame` rows first if you mean to score a new flight.
+  `(drone, survey_area, frame_idx)`, so the uplink reports duplicates and warns once, and the map
+  never repaints while the drone flies. **`pnpm clear <area>` first** (below) if you mean to score
+  a new flight.
 - Its stdout is UTF-8 **and line-buffered**: it runs for the length of a patrol (>1 h on the 1 km
   route) with its output redirected, and Python block-buffers a redirected stream — same lesson as
   the Webots stdout gotcha above.
+
+### Clearing a survey area before a re-flight (`pnpm clear`)
+```bash
+cd web && pnpm clear                    # list stored areas, delete nothing
+pnpm clear fmi_block                    # DB rows + stored images + sim/output captures
+pnpm clear fmi_block --db-only          # keep the captures on disk
+pnpm clear fmi_block --yes              # no confirmation prompt
+```
+`scripts/clear.sh` -> `parkdrone_vision/clear_area.py`; `pnpm quickstart --clear --fly <world>`
+runs it as part of launching a flight (between the migrations and the server start, so startup
+recovery cannot re-enqueue jobs whose frames are about to go). It exists because "re-fly and watch the map
+update" silently does nothing otherwise: ingest is idempotent on `(drone, survey_area, frame_idx)`,
+so the second flight's frames return 200-duplicate — no classify job, no `bay_state` change, and
+deltas only fire on a *change*, so no WebSocket push. Four deletes have to happen together, which is
+why this is a command and not a snippet: `frame` (CASCADE takes `frame_job`) + its object-store
+images, `observation` (stale votes out-vote the new looks), `bay_state` (an already-correct state
+pushes no delta), and `mission` (stale progress on the ops dashboard). `bay_state` has no
+`survey_area` column, so the rows to drop are resolved from the observations **before** those are
+deleted. On disk it removes `frame_*.png`/`snap_*.png`/`poses.json`/`flight_log.csv` — the
+controller *resumes* from `poses.json`, so leaving it means continuing the old patrol instead of
+re-flying — and **refuses an output folder holding `occupancy_results.json`** (a scored golden
+fixture; `--force` opts in). A running `sim_uplink` re-posts by itself once `poses.json` restarts at
+a lower index; after `--db-only` it does not, so restart it.
 
 ### Dev/test occupancy toggle (drive the dashboard by hand)
 Manual override endpoints (mounted only when `ENABLE_DEV_ROUTES=true` — they have no auth, so the
@@ -544,6 +570,13 @@ The world now scores **100%** (was 95.2%, then 97.6% after the `CORE_W` change).
 +pi/2 pitch this survey flies it spins the image about the optical axis instead of levelling the
 camera, and the FULL body roll displaced every frame laterally. Kept here only as the pointer —
 the diagnosis, the numbers and the two committed diagnostics are in **Camera model** above.
+
+**A re-flight cannot ingest itself — `pnpm clear <area>` is a workaround (TODO #10).** Ingest is
+idempotent on `(drone, survey_area, frame_idx)` and `frame_idx` restarts at 0 every flight, so a
+second flight of the same area is silently ignored end-to-end: no job, no delta, a map that never
+moves, and no error. Wiping the history to record new state is backwards and no real deployment
+can do it. The fix is to key ingest per `mission_id` and to decide what the vote means when two
+flights fall inside one `OCCUPANCY_WINDOW_S`.
 
 **Longer-standing, unchanged:** capture scatter leaves ~3 bays uncovered on `fmi_block`; the 1 km
 flight is unfinished and unscored (its last attempt stopped at **87 of 1976** frames on 2026-08-17,

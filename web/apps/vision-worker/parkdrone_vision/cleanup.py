@@ -67,8 +67,13 @@ def _stuck_count(cur, retention_s):
     return cur.fetchone()[0]
 
 
-def _delete_objects(uris):
-    """Remove frame images; returns how many keys the store accepted."""
+def delete_objects(uris):
+    """Remove frame images; returns how many keys the store accepted.
+
+    Shared with clear_area.py, which drops a survey area's frames on demand —
+    same two-step rule (objects before rows), same tolerance for a replay-style
+    local path that was never in the bucket.
+    """
     keys = []
     for uri in uris:
         if not uri or not uri.startswith("s3://"):
@@ -97,7 +102,7 @@ def run_once(conn, retention_s=None):
             rows = _collectable(cur, retention_s, BATCH)
             if not rows:
                 break
-            objects += _delete_objects([uri for _, uri in rows])
+            objects += delete_objects([uri for _, uri in rows])
             cur.execute(
                 "DELETE FROM frame WHERE frame_id = ANY(%s)",  # CASCADE takes frame_job
                 ([fid for fid, _ in rows],),

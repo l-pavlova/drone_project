@@ -31,6 +31,25 @@ pnpm db:migrate        # create schema (enables PostGIS, GiST index on bay.geom)
 pnpm db:seed           # load data/block_bays.geojson into the bay table
 ```
 
+### Re-flying a survey area
+
+```bash
+pnpm clear                      # list what is stored, delete nothing
+pnpm clear fmi_block            # DB rows + stored images + sim/output captures
+pnpm clear fmi_block --db-only  # keep the captures on disk (--disk-only is the mirror)
+pnpm quickstart --clear --fly fmi_block_4st    # clear, then fly it, in one command
+```
+
+Ingest is idempotent on `(drone_id, survey_area, frame_idx)`, so flying an area the stack has
+already seen posts duplicates: no classify job, no `bay_state` change, and — since deltas fire
+only on a *change* — nothing on the map, for a whole patrol, with no error anywhere. Clearing the
+area first is what makes a re-flight count. It also removes `sim/output/<area>/poses.json`, which
+the controller would otherwise *resume* from instead of re-flying, and it refuses a folder holding
+`occupancy_results.json` (a scored golden fixture) unless you pass `--force`.
+
+Needing this at all is a known wart — see TODO #10: a re-flight should ingest itself, keyed per
+mission rather than per survey area.
+
 The persistence layer is **Postgres + PostGIS from the start** (no SQLite phase): a drone fleet
 writes concurrently, and PostGIS gives native spatial indexing so bbox / nearest-bay queries run
 in the database. All bay geometry stays in WGS84 (EPSG:4326); the shared ENU projection

@@ -267,6 +267,53 @@ and note that **single-replica is a correctness requirement, not a preference** 
 replicas would double-count the vote. Scaling out needs job claiming, a shared
 delta channel and a global cursor first.
 
+### 10. A re-flight should ingest itself — no manual clear
+**Today it does not, and it fails silently.** Fly a survey area the stack has
+already seen and every frame comes back `200` duplicate: ingest is idempotent on
+`(drone_id, survey_area, frame_idx)`, so there is no classify job, no
+`bay_state` change and no WebSocket delta. The drone flies a full patrol and the
+map does not move. Nothing errors — the uplink warns once and goes quiet — which
+is exactly why this cost an evening on 2026-08-20. `pnpm clear <area>`
+(`scripts/clear.sh` → `parkdrone_vision/clear_area.py`, added the same day) is
+the workaround, not the answer: **wiping the history to record new state is
+backwards**, and no real deployment can do it — the whole point of the
+`observation` table is that it is the analytics record.
+
+**What it should do instead:** keep everything, and let a new flight simply add
+to it. Re-flying an area 2 h later (past `OCCUPANCY_WINDOW_S`) should re-record
+every bay from scratch, because by then the old votes are stale by definition
+and nothing is being contradicted.
+
+Three layers have to agree, and only the first is really a design decision:
+
+- **The idempotency key is wrong.** `frame_idx` restarts at 0 on every flight, so
+  `(drone, survey_area, frame_idx)` says "frame 7 of this area" when it means
+  "frame 7 of *this flight*". A `mission_id` already exists and already scopes a
+  flight — keying on `(drone_id, mission_id, frame_idx)` makes a re-flight ingest
+  naturally while still absorbing the retry-a-frame case the constraint was
+  written for. `frame` rows would then accumulate per flight; retention
+  (`FRAME_RETENTION_S`, 4 h) already bounds that.
+- **Then decide what the vote means across flights.** The occupancy vote is
+  currently "every observation inside the window", so two flights inside 2 h
+  would mix an old look with a new one for the same bay. Past the window that is
+  moot (the point of this task), but inside it the honest rule is probably
+  *latest mission wins per bay*, with earlier ones kept as history. That is a
+  product decision about what "current" means, not a refactor.
+- **The two disk-side resume behaviours are separate and stay:** the controller
+  resumes from `poses.json` (so a genuine re-fly still needs that folder cleared
+  — the flight's own semantics, nothing to do with the DB), and `sim_uplink`
+  re-posts from frame 0 when it sees `poses.json` restart. Neither should be
+  changed by this task; the point is that the *database* stops being the thing
+  that blocks a re-flight.
+
+Worth noting what is NOT a bug: a delta only fires on a *change*, so re-recording
+an unchanged bay pushes nothing and the map correctly does not repaint. If a
+demo needs to see liveness regardless, that is a separate "still fresh"
+heartbeat (refresh `updated_at`, push a no-op), not a change to the vote.
+
+Until this lands, `pnpm clear <area>` — or `pnpm quickstart --clear --fly
+<world>` — is the documented way to re-fly and be scored.
+
 ---
 
 ## Not tasks

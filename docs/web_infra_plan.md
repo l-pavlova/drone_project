@@ -170,8 +170,21 @@ into a wall. Instead:
 - Both the uplink and `replay_ingest` post through **`ingest_client.py`**: one implementation of the
   multipart body, because that body is the wire format the real drone will have to reproduce.
 - Re-flying an area does **not** reprocess it — ingest is idempotent on `(drone, survey_area,
-  frame_idx)`, so the uplink reports duplicates and warns once. Clearing that area's `frame` rows
-  first is the opt-in.
+  frame_idx)`, so the uplink reports duplicates and warns once, and the map never repaints while
+  the drone flies. The opt-in is **`pnpm clear <area>`** (`web/scripts/clear.sh` ->
+  `parkdrone_vision/clear_area.py`, added 2026-08-20), or `pnpm quickstart --clear --fly <world>`
+  to do it as part of launching the flight. It drops that area's `frame` rows (CASCADE takes
+  `frame_job`) and their stored images, its `observation` rows, the `bay_state` rows those
+  observations name — resolved *before* the observations go, since `bay_state` has no
+  `survey_area` — its `mission` rows, and the `sim/output/<area>/` captures (the controller
+  *resumes* from `poses.json`, so leaving it continues the old patrol instead of re-flying). It
+  refuses an output folder holding `occupancy_results.json`, which is a scored golden fixture,
+  unless `--force`.
+  **This is a workaround, not the design.** Wiping the history to record new state is backwards,
+  and a real deployment cannot do it — `observation` is the analytics record. The fix is to key
+  ingest on `(drone_id, mission_id, frame_idx)` so a re-flight is simply a new mission, and to
+  decide what the occupancy vote means when two flights fall inside one `OCCUPANCY_WINDOW_S`
+  (probably: latest mission wins per bay, earlier ones kept as history). Tracked as **TODO #10**.
 
 When firmware posts directly, this sidecar is what its uplink loop should be modelled on — with the
 addition that a real drone must buffer to local storage while the link is down, which is precisely

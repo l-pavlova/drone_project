@@ -9,7 +9,13 @@
 #                                        # post its frames as they hit disk
 #   pnpm quickstart --fly fmi_block_4st  # ...and START that flight headless too:
 #                                        # one command for sim -> API -> map
+#   pnpm quickstart --clear --fly fmi_block_4st   # wipe that area first, so the
+#                                        # re-flight actually ingests and repaints
 #   pnpm quickstart --stop       # stop the app processes AND the docker infra
+#
+# Re-flying an area already in the database ingests nothing (idempotent on
+# frame_idx) — '--clear' wipes it first (bare '--clear' takes the area from
+# --fly/--uplink). Standalone: 'pnpm clear <area>'. See scripts/clear.sh.
 #
 # What it starts, in dependency order:
 #   1. docker compose: PostGIS (:5432) + MinIO (:9000/:9001)
@@ -40,6 +46,7 @@ REPLAY_AREA="${REPLAY_AREA:-fmi_block}"
 COMPOSE=(docker compose --env-file "$ROOT/.env" -f "$ROOT/infra/docker-compose.yml")
 
 WITH_WEB=1; WITH_ADMIN=1; WITH_SEED=1; DO_REPLAY=0; DO_STOP=0; UPLINK_AREA=""; FLY_WORLD=""
+CLEAR_AREA=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-web)   WITH_WEB=0; WITH_ADMIN=0 ;;
@@ -50,8 +57,12 @@ while [ $# -gt 0 ]; do
                 [ -n "$UPLINK_AREA" ] || { echo "--uplink needs a survey area" >&2; exit 2; } ;;
     --fly)      shift; FLY_WORLD="${1:-}"
                 [ -n "$FLY_WORLD" ] || { echo "--fly needs a world name" >&2; exit 2; } ;;
+    # The area is optional: bare --clear means "whatever I am about to fly or
+    # watch", which is the case you actually want it in.
+    --clear)    if [ $# -gt 1 ] && [ "${2#-}" = "$2" ]; then shift; CLEAR_AREA="$1"
+                else CLEAR_AREA="@implied"; fi ;;
     --stop)     DO_STOP=1 ;;
-    -h|--help)  sed -n '2,24p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help)  sed -n '2,31p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown flag: $1 (try --help)" >&2; exit 2 ;;
   esac
   shift
@@ -59,6 +70,10 @@ done
 # The controller keys its output folder off the route file, so a world's survey
 # area IS its name — flying implies watching that area unless told otherwise.
 [ -n "$FLY_WORLD" ] && [ -z "$UPLINK_AREA" ] && UPLINK_AREA="$FLY_WORLD"
+if [ "$CLEAR_AREA" = "@implied" ] && [ "$DO_STOP" = 0 ]; then
+  CLEAR_AREA="${UPLINK_AREA:-}"
+  [ -n "$CLEAR_AREA" ] || { echo "--clear needs an area (or use it with --fly/--uplink)" >&2; exit 2; }
+fi
 
 say()  { printf '\033[36m==>\033[0m %s\n' "$*"; }
 ok()   { printf '\033[32m  ok\033[0m %s\n' "$*"; }
@@ -153,9 +168,11 @@ if [ -n "$FLY_WORLD" ] && [ "$DO_STOP" = 0 ]; then
   fi
   # The flight RESUMES from poses.json if the folder already has captures — that
   # is the controller's own behaviour, not something this script overrides.
-  if [ -f "$SIM_DIR/output/$FLY_WORLD/poses.json" ]; then
+  # (--clear on this same area deletes them, so it re-flies from wp0 instead.)
+  if [ -f "$SIM_DIR/output/$FLY_WORLD/poses.json" ] && [ "$CLEAR_AREA" != "$FLY_WORLD" ]; then
     echo "  note: sim/output/$FLY_WORLD/ already has captures — the controller will"
-    echo "        resume the patrol from there (delete the folder to re-fly from wp0)"
+    echo "        resume the patrol from there. To re-fly (and re-score) from wp0:"
+    echo "            pnpm clear $FLY_WORLD"
   fi
 fi
 
@@ -222,6 +239,19 @@ say "applying migrations"
 if [ "$WITH_SEED" = 1 ]; then
   say "seeding bays"
   (cd "$ROOT" && $PNPM db:seed)
+fi
+
+# ---- 4b. optional clear ----------------------------------------------------
+# Ingest is idempotent on (drone, survey_area, frame_idx), so re-flying an area
+# that is already stored posts duplicates: no classify job, no bay_state change,
+# no delta, and a map that never repaints. This is the opt-in that makes a
+# re-flight count. It runs AFTER the migrations (the tables must exist) and
+# BEFORE the server starts, so startup recovery cannot re-enqueue jobs whose
+# frames are about to be deleted.
+if [ -n "$CLEAR_AREA" ]; then
+  say "clearing survey area '$CLEAR_AREA'"
+  (cd "$ROOT/apps/vision-worker" && "$PY" -m parkdrone_vision.clear_area "$CLEAR_AREA" --yes) ||
+    die "clear failed (a scored golden fixture needs --force: 'pnpm clear $CLEAR_AREA --force')"
 fi
 
 # ---- 5. server -------------------------------------------------------------
@@ -298,7 +328,7 @@ fi
 if [ "$DO_REPLAY" = 1 ]; then
   say "replaying survey '$REPLAY_AREA' through the live stack"
   (cd "$ROOT/apps/vision-worker" && API_KEY="$API_KEY" "$PY" -m parkdrone_vision.replay_ingest "$REPLAY_AREA") || true
-  echo "  (0 deltas just means the state was already correct — clear frame/observation/bay_state to re-run)"
+  echo "  (0 deltas just means the state was already correct — 'pnpm clear $REPLAY_AREA' to re-run)"
 fi
 
 cat <<EOF
@@ -315,6 +345,9 @@ $([ "$WITH_ADMIN" = 1 ] && echo "    ops         http://localhost:5174")
   Drive it by hand:
     curl -X POST http://localhost:4000/api/v1/dev/occupy   # needs ENABLE_DEV_ROUTES=true
     curl -X POST http://localhost:4000/api/v1/dev/free
+
+  Re-fly a survey area (ingest is idempotent — clear it or nothing happens):
+    pnpm clear <survey_area>            # or: pnpm quickstart --clear --fly <world>
 
   Replay a survey (ingest -> classify -> WS push):
     cd apps/vision-worker && API_KEY=\$(cat ../../.quickstart/$DRONE_ID.key) \\

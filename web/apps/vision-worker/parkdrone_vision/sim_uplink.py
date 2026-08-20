@@ -184,8 +184,9 @@ def main() -> None:
                         # Ingest is idempotent on (drone, survey_area, frame_idx),
                         # so a re-flight of the same area is NOT reprocessed.
                         print(f"! frame {idx} already ingested — this survey area has been flown "
-                              f"before.\n  To score the new flight, clear its `frame` rows first "
-                              f"(see CLAUDE.md), otherwise these frames are ignored.")
+                              f"before, so these frames are IGNORED: no classify job, no "
+                              f"delta, nothing new on the map.\n"
+                              f"  Clear it and re-fly:  cd web && pnpm clear {survey_area}")
                 else:
                     errors += 1
                     print(f"! frame {idx}: HTTP {status}")
