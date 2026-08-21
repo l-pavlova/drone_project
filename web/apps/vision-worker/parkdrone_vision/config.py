@@ -73,6 +73,16 @@ SIM_WORLDS_ROOT = os.environ.get(
 # observations are recorded with gt = NULL and accuracy is reported as unknown.
 GROUND_TRUTH_ROOT = os.environ.get("GROUND_TRUTH_ROOT", SIM_WORLDS_ROOT)
 
+# UAS geographical zones published by the Bulgarian CAA (ED-269 JSON). Static
+# reference data read straight off disk by nofly.py — no DB table, since there
+# is nothing to join it against and it changes only when the CAA republishes.
+# The filename carries the edition date, so point this at the new file rather
+# than overwriting the old one. Absent file = an empty zone layer, not an error.
+NOFLY_FILE = os.environ.get(
+    "NOFLY_FILE",
+    os.path.join(REPO_ROOT, "data", "bgr_zones_30072026", "bgr_zones_30072026.json"),
+)
+
 # ---- FastAPI server --------------------------------------------------------
 # Kept on :4000 so the web-user vite proxy target is unchanged.
 API_PORT = int(os.environ.get("API_PORT", "4000"))

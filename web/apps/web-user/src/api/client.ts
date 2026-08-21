@@ -1,4 +1,4 @@
-import type { BayFC, RouteResult, ZoneSummary } from "../lib/types";
+import type { BayFC, NoFlyFC, RouteResult, ZoneSummary } from "../lib/types";
 
 export async function fetchBays(bbox?: string, zona?: string): Promise<BayFC> {
   const q = new URLSearchParams();
@@ -28,5 +28,15 @@ export async function fetchRoute(
   });
   const res = await fetch(`/api/v1/route?${q.toString()}`, { signal });
   if (!res.ok) throw new Error(`GET /route -> ${res.status}`);
+  return res.json();
+}
+
+/** Published UAS no-fly / restricted zones for a viewport.
+ *  Reference data — fetched once, never pushed over the socket. */
+export async function fetchNoFly(bbox?: string): Promise<NoFlyFC> {
+  const q = new URLSearchParams();
+  if (bbox) q.set("bbox", bbox);
+  const res = await fetch(`/api/v1/nofly?${q.toString()}`);
+  if (!res.ok) throw new Error(`GET /nofly -> ${res.status}`);
   return res.json();
 }

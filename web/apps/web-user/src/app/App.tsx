@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fetchBays, fetchSummary } from "../api/client";
+import { fetchBays, fetchNoFly, fetchSummary } from "../api/client";
 import { BayMap } from "../components/BayMap";
 import { CarIcon, LocateIcon, NavigateIcon, Spinner } from "../components/Icons";
 import { SurveyReadout } from "../components/SurveyReadout";
@@ -8,6 +8,8 @@ import {
   type BayFC,
   type BayFeature,
   type BayProps,
+  type NoFlyFC,
+  type Restriction,
   type ZoneSummary,
 } from "../lib/types";
 import {
@@ -27,9 +29,27 @@ import styles from "./App.module.css";
 
 const FLASH_MS = 5000;
 
+// Airspace is fetched once for a box around the block rather than per viewport:
+// it is static reference data (the CAA republishes it, the drone does not), so
+// re-fetching on pan would only re-download the same polygons. ~6 km covers the
+// whole surveyable area and anywhere a driver would realistically pan to.
+const AIRSPACE_BBOX = "23.262,42.625,23.398,42.725";
+
+// Shown by default: PROHIBITED is the only class that actually stops the survey.
+// The lighter classes come down the same request and are styled to sit back, so
+// the switch is one control rather than three.
+const ZONES_SHOWN = new Set<Restriction>([
+  "PROHIBITED",
+  "REQ_AUTHORISATION",
+  "CONDITIONAL",
+]);
+const ZONES_HIDDEN = new Set<Restriction>();
+
 export default function App() {
   const [fc, setFc] = useState<BayFC | null>(null);
   const [zones, setZones] = useState<ZoneSummary[]>([]);
+  const [nofly, setNofly] = useState<NoFlyFC | null>(null);
+  const [zonesOn, setZonesOn] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { live, connected, syncVersion } = useOccupancySocket();
 
@@ -46,6 +66,9 @@ export default function App() {
   useEffect(() => {
     fetchBays().then(setFc).catch((e) => setError(String(e)));
     fetchSummary().then((s) => setZones(s.zones)).catch(() => {});
+    // Reference data, so a failure here is not worth a toast — the map is still
+    // fully usable without the airspace overlay, and the switch stays hidden.
+    fetchNoFly(AIRSPACE_BBOX).then(setNofly).catch(() => {});
   }, []);
 
   // The initial REST snapshot and opening the socket are separate requests.
@@ -86,6 +109,13 @@ export default function App() {
     return c;
   }, [fc, statusOf]);
   const surveyTotal = counts.free + counts.occupied + counts.unknown;
+
+  const airspaceCounts = useMemo(() => {
+    if (!nofly) return null;
+    let noFly = 0;
+    for (const f of nofly.features) if (f.properties.restriction === "PROHIBITED") noFly++;
+    return { noFly, restricted: nofly.features.length - noFly };
+  }, [nofly]);
 
   const featureById = useMemo(() => {
     const m = new Map<string, BayFeature>();
@@ -171,12 +201,24 @@ export default function App() {
           focusKey={focusKey}
           target={target}
           route={route}
+          nofly={nofly}
+          showZones={zonesOn ? ZONES_SHOWN : ZONES_HIDDEN}
         />
       ) : (
         <div className={styles.loading}>Loading map…</div>
       )}
 
-      <SurveyReadout connected={connected} zones={zones} counts={counts} surveyTotal={surveyTotal} />
+      <SurveyReadout
+        connected={connected}
+        zones={zones}
+        counts={counts}
+        surveyTotal={surveyTotal}
+        airspace={
+          airspaceCounts
+            ? { ...airspaceCounts, on: zonesOn, toggle: () => setZonesOn((v) => !v) }
+            : null
+        }
+      />
 
       {/* toasts, bottom-centre: transient status stacks above the route bar */}
       <div className={styles.toastStack}>

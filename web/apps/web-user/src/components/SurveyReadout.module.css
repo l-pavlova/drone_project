@@ -88,3 +88,45 @@
 @media (prefers-reduced-motion: reduce) {
   .status.live .beacon { animation: none; }
 }
+
+/* Airspace overlay switch. Reads as an instrument row rather than a form
+   control — same monospace register as the coverage line above it. */
+.airspace {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: color 120ms, border-color 120ms, background 120ms;
+}
+.airspace:hover { border-color: rgba(255, 255, 255, 0.3); }
+.airspaceOn {
+  color: var(--paint);
+  border-color: rgba(215, 38, 61, 0.55);
+  background: rgba(215, 38, 61, 0.1);
+}
+.airspace b { color: var(--paint); }
+
+.swatch {
+  flex: none;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 2px;
+  opacity: 0.45;
+}
+.airspaceOn .swatch { opacity: 1; }
+.noFly {
+  border: 1px dashed #d7263d;
+  background: rgba(215, 38, 61, 0.22);
+}
+
+.airspaceState { margin-left: auto; opacity: 0.75; }

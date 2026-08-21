@@ -12,11 +12,15 @@ export function SurveyReadout({
   zones,
   counts,
   surveyTotal,
+  airspace,
 }: {
   connected: boolean;
   zones: ZoneSummary[];
   counts: { free: number; occupied: number; unknown: number };
   surveyTotal: number;
+  /** Published UAS airspace overlay: how many zones are in view, and the
+   *  on/off switch. Absent while the zone file is still loading. */
+  airspace: { noFly: number; restricted: number; on: boolean; toggle: () => void } | null;
 }) {
   const [open, setOpen] = useState(true);
 
@@ -67,6 +71,22 @@ export function SurveyReadout({
         <div className={styles.coverage}>
           COVERAGE <b>{counts.free + counts.occupied}</b> / {surveyTotal} BAYS
         </div>
+
+        {airspace && (
+          <button
+            className={`${styles.airspace} ${airspace.on ? styles.airspaceOn : ""}`}
+            aria-pressed={airspace.on}
+            onClick={airspace.toggle}
+            title="Published UAS geographical zones (Bulgarian CAA)"
+          >
+            <i className={`${styles.swatch} ${styles.noFly}`} />
+            <span>
+              AIRSPACE <b>{airspace.noFly}</b> NO-FLY
+              {airspace.restricted > 0 && <> · {airspace.restricted} RESTRICTED</>}
+            </span>
+            <span className={styles.airspaceState}>{airspace.on ? "ON" : "OFF"}</span>
+          </button>
+        )}
       </div>
     </section>
   );

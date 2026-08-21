@@ -30,7 +30,7 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from .. import cleanup, routing, s3
+from .. import cleanup, nofly, routing, s3
 from ..config import (
     ADMIN_API_KEY,
     API_PORT,
@@ -200,20 +200,24 @@ def ingest_frame(
 
 # ---- reads (public) --------------------------------------------------------
 
+def _bbox(raw: str | None) -> dict | None:
+    """`minLon,minLat,maxLon,maxLat` -> the dict shape the readers take."""
+    if not raw:
+        return None
+    parts = raw.split(",")
+    if len(parts) != 4:
+        raise HTTPException(status_code=400, detail="bbox must be minLon,minLat,maxLon,maxLat")
+    try:
+        nums = [float(p) for p in parts]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="bbox must be finite numbers")
+    return {"minLon": nums[0], "minLat": nums[1], "maxLon": nums[2], "maxLat": nums[3]}
+
+
 @app.get("/api/v1/bays")
 def get_bays(bbox: str | None = None, zona: str | None = None):
-    b = None
-    if bbox:
-        parts = bbox.split(",")
-        if len(parts) != 4:
-            raise HTTPException(status_code=400, detail="bbox must be minLon,minLat,maxLon,maxLat")
-        try:
-            nums = [float(p) for p in parts]
-        except ValueError:
-            raise HTTPException(status_code=400, detail="bbox must be finite numbers")
-        b = {"minLon": nums[0], "minLat": nums[1], "maxLon": nums[2], "maxLat": nums[3]}
     with borrow() as conn:
-        return web_db.feature_collection(conn, b, zona)
+        return web_db.feature_collection(conn, _bbox(bbox), zona)
 
 
 @app.get("/api/v1/summary")
@@ -229,6 +233,27 @@ def get_bay(bay_id: str):
     if d is None:
         raise HTTPException(status_code=404, detail="bay not found")
     return d
+
+
+# ---- UAS no-fly zones (public) ---------------------------------------------
+
+_RESTRICTIONS = {"PROHIBITED", "REQ_AUTHORISATION", "CONDITIONAL"}
+
+
+@app.get("/api/v1/nofly")
+def get_nofly(bbox: str | None = None, restriction: str | None = None):
+    """Published UAS geographical zones as GeoJSON (see nofly.py).
+
+    Static reference data, so no DB round trip — it is parsed once and served
+    from memory. Pass `bbox` to get only what the viewport needs; the full
+    national set is 881 zones and no client wants all of it.
+    """
+    if restriction is not None and restriction not in _RESTRICTIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"restriction must be one of {sorted(_RESTRICTIONS)}",
+        )
+    return nofly.feature_collection(_bbox(bbox), restriction)
 
 
 # ---- driving directions (public) -------------------------------------------

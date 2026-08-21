@@ -28,21 +28,40 @@ python generate_world.py [half_m] [occ_frac]   # default 75 0.5 -> worlds/fmi_bl
 ```
 This reads `../data/block_bays.geojson` (plus `block_roads.geojson` and `block_areas.geojson` if present), projects to local metres, and emits the world (ground, OSM streets as Webots `Road` protos, painted bays, real car models — 7 vehicle Simple protos — on a known-occupancy subset, scenery, follow-drone viewpoint) plus `ground_truth.json` (bay_id -> occupied). Car/model randoms come from a separate `random.Random(7)` stream and scenery cosmetics from a third (`random.Random(11)`) so `ground_truth.json` stays stable — after any change here, regenerate all three worlds and check `ground_truth.json`/`route.json` are byte-identical.
 
-**`--shadows` / `--sun AZ,EL` — the scene-hardening experiment (built 2026-08-21, not yet flown).**
+**`--shadows` / `--sun AZ,EL` — the scene-hardening experiment (built and FLOWN 2026-08-21).**
 Opt-in like every other world flag, so the three survey worlds regenerate byte-identical and every
 accuracy number on record stays valid. `--shadows` sets `castShadows TRUE` on the `DirectionalLight`
 **and shrinks the ground plane** from `2*WINDOW+200` to `2*WINDOW+40`: a directional light spreads
 one shadow map over the whole scene extent, and the ground plane *is* the extent, so the 1 km world
 was handing one map a 1.2 km square — which is exactly what painted the streak artifacts that made
-`castShadows FALSE` necessary. `--sun AZ,EL` takes a compass azimuth (where the sun *is*, clockwise
-from north) and an elevation, and emits the direction the light travels; without it the direction is
-the literal `0.4 0.5 -1` every world on record used, so nothing shifts. Shadow LENGTH is the point of
-varying it: a low sun throws a car's shadow across the *next* bay, which is the case that should
-break `classify()`'s absolute brightness envelope (`T_BRIGHT_LO/HI` 82-102).
-`fmi_block_4st_sh` (`130 0.5 fmi_block_4st_sh --chase --shadows --sun 135,25`) exists as the
-controlled A/B: **identical `ground_truth.json` and `route.json` to `fmi_block_4st`**, so only the
-light differs. **Inspect captured frames for artifacts BEFORE measuring accuracy** — otherwise the
-experiment hardens the classifier against a rendering defect rather than against shade.
+`castShadows FALSE` necessary. **The shrink works:** flown frames show car, building and light-pole
+shadows cleanly with no streaks, checked by eye before any number was computed. `--sun AZ,EL` takes a
+compass azimuth (where the sun *is*, clockwise from north) and an elevation, and emits the direction
+the light travels; without it the direction is the literal `0.4 0.5 -1` every world on record used
+(~60 deg elevation), so nothing shifts.
+
+**Measure the two flags SEPARATELY — they are not one experiment.** `--sun` changes *global
+irradiance* as well as shadow length, and on a horizontal ground plane that term dominates. The 2x2,
+all four worlds sharing `fmi_block_4st`'s byte-identical `ground_truth.json`/`route.json` and all
+flying 97/97:
+
+| | shadows OFF | shadows ON |
+|---|---|---|
+| default sun | **100.0%** `fmi_block_4st` | **89.2%** `fmi_block_4st_shd` (FP=12) |
+| `--sun 135,25` | **44.1%** `fmi_block_4st_sun` (FP=62) | **44.1%** `fmi_block_4st_sh` (FP=62) |
+
+Recall is **100% in every cell** — no car is ever missed; every loss is a false positive on a free
+bay. A 25 deg sun cuts Lambert irradiance to ~0.48 of the default, dropping *every* free bay
+(sunlit ones included) from `core_brightness` 85 to 72, under `T_BRIGHT_LO` 82 — so the low sun alone
+accounts for the whole collapse and the shadow flag adds nothing on top of it. Shadows' own distinct
+contribution is the 12-bay cell: a *lower tail* (`bright` 53, `dark_frac` 1.00) on genuinely shaded
+bays, which is the physically real, harder case.
+**The free-bay distribution merely TRANSLATED — median 85→72, spread as tight as before, and best
+single-threshold separability 87.4% → 86.5%.** The scene is not harder; `classify()`'s absolute tone
+envelope is the failure. Any fix must normalise the bay core against surrounding asphalt *in the same
+frame*, inside `classify()` with all five features intact — re-thresholding brightness alone against
+a flight-wide reference only reaches 77.5-90.1%, because the other four features are what carry the
+golden worlds to 100%.
 
 **Scenery** (from `block_areas.geojson`): OSM green areas triangulated by ear clipping and painted at **z = 0.005** — above the ground, *below* the roads (0.01+), so they can never cover a bay pad (0.04–0.06); OSM building footprints as `SimpleBuilding` protos at real heights (`building:levels`, else `height`, else 4 floors), kept/dropped **whole** by centroid (clipping a footprint can break the proto's roof triangulation) while greens are Sutherland-Hodgman **clipped**; `StreetLight` poles walked along the centerlines at adaptive spacing, `on FALSE` (the proto ships a 1000 m-radius SpotLight that would shift the daylight the classifier is calibrated against) and never placed on a bay. Buildings and light poles get **no bounding object** unless you pass `--collide` — the controller flies a fixed 30 m with zero obstacle logic, so collision geometry would crash it; Webots range sensors only see nodes that have one, so that flag is the obstacle-avoidance stage's entry point. Either way the generator warns about structures reaching 30 m within 10 m of the route and writes them to `worlds/<name>.hazards.json`. `--chase` swaps the GUI viewpoint from the trailing "Tracking Shot" to a ride-along "Mounted Shot" (viewing only — it never touches the drone's own camera or any captured frame); it is a flag rather than a hand edit because hand edits to a `.wbt` are silently lost on the next regeneration. `DirectionalLight` has `castShadows FALSE` — shadow mapping paints streak artifacts on the road/ground in the nadir frames. Then run the world (see "Running Webots" below). The route (`worlds/route.json`) is an open-path rural-postman walk of the OSM street centerlines of every street that has bays: disconnected coverage components are joined by shortest road transits (MST), odd-degree nodes are evened out with a minimum-weight matching (exact blossom if `networkx` is installed, stdlib fallback otherwise; two virtual endpoints make it an open path whose start is the endpoint nearest the origin), then a Hierholzer Euler walk flies every coverage edge once with deadheads only along the matched repeats — waypoints every 10 m because the camera footprint at 30 m is only ~25×15 m. The controller `controllers/parkdrone/parkdrone.py` takes off to 30 m, flies that route (square-lawnmower fallback if route.json is missing), and writes `output/<survey_area>/frame_###.png` + `output/<survey_area>/poses.json` at each waypoint (plus timed diagnostic `snap_###.png`). Worlds are per-scale file sets: `generate_world.py [half_m] [occ_frac] [name]` writes `<name>.wbt` + `<name>.route.json` + `<name>.ground_truth.json` (default name `fmi_block` keeps legacy `route.json`/`ground_truth.json`); the `.wbt` passes its route file to the controller via `controllerArgs`, which also keys the output subfolder. E.g. the 1 km world: `python generate_world.py 500 0.5 fmi_block_1km`. The local-metre frame is pinned by `ORIGIN` in `generate_world.py` — do NOT let it drift when re-cutting data at other sizes.
 
@@ -449,6 +468,17 @@ reproducing both). Phase 7 (prod hardening) remains.** See project memory `proje
   (`jobs.py`'s in-process queue + classify threads, `pipeline.py`'s per-frame `process_frame`),
   `db/` (`pool.py`'s connection pool, `vision_db.py` for bay geometry/observations/bay_state,
   `web_db.py` for reads/ingest/mission/auth SQL), and `vision/scoring.py` (the classifier bridge).
+  Also serves **`GET /api/v1/nofly`** (`nofly.py`): the Bulgarian CAA's published UAS geographical
+  zones (ED-269 JSON in `data/bgr_zones_<ddmmyyyy>/`, 881 zones in the 30-07-2026 edition) as
+  GeoJSON, filtered by `bbox`/`restriction`. **Deliberately not in Postgres** — it is static national
+  reference data that changes when the CAA republishes, there is nothing to join it against and
+  nothing to update transactionally, so it is parsed once and cached in memory, the same posture as
+  `vision/ground_truth.py`. It lives on the server rather than in the frontend because the file sits
+  in `data/` next to the sim and the browser cannot reach it. ED-269 geometry is a `Circle`
+  (centre + radius in metres) or a `Polygon` and GeoJSON has no circle, so circles are emitted as
+  48-gons (worst radial error <0.2% of the radius) with `circle_radius_m` kept in the properties;
+  one zone with several altitude volumes becomes several Features, because drawing them as one
+  shape would report the wrong ceiling. A missing file yields an empty layer, not a 500.
   `config.py`, `s3.py`, and the CLI entry points (`server.py`, `replay.py`, `replay_ingest.py`,
   `register_drone.py`) stay at the package root. Reuses `vision/score_occupancy.py`'s
   `project`/`bay_features`/`classify` **verbatim** (via `vision/scoring.py`/`processing/pipeline.py`),
@@ -457,6 +487,15 @@ reproducing both). Phase 7 (prod hardening) remains.** See project memory `proje
   Ingest → in-process `queue.Queue` → classify threads → `bay_state` + direct WebSocket push.
   Entry point `parkdrone_vision.server` (uvicorn on :4000, serving `parkdrone_vision.api.app:app`).
 - `apps/web-user` (React + react-leaflet) — the parking map (drone "survey-readout" UI identity).
+  It also draws the **published UAS airspace** over the block (`NoFlyLayer.tsx`, fed by
+  `GET /api/v1/nofly`), toggled from a row in `SurveyReadout`. **Zones render BEFORE the bays, and
+  that is load-bearing:** with `preferCanvas` every vector shares one canvas and Leaflet's
+  `Canvas._onClick` keeps the *last* interactive layer under the cursor, so a zone drawn after the
+  bays would swallow every bay click inside it — the same trap the 25 m accuracy circle fell into.
+  Drawing them first also puts the hazard shading under the data, which is the right visual order.
+  The overlay is fetched **once** for a ~6 km box around the block rather than per viewport: it is
+  reference data, so re-fetching on pan would re-download identical polygons. A failed fetch is
+  swallowed deliberately — the map is fully usable without it and the switch simply stays hidden.
   Styling convention: **CSS Modules, one `Component.module.css` per component** (no shared
   per-component classes in `styles/global.css` — that file is trimmed to CSS variables/reset/base
   sizing only). Use `:global(...)` only for classes owned by a third party we don't render
@@ -709,6 +748,17 @@ moves, and no error. Wiping the history to record new state is backwards and no 
 can do it. The fix is to key ingest per `mission_id` and to decide what the vote means when two
 flights fall inside one `OCCUPANCY_WINDOW_S`.
 
-**Longer-standing, unchanged:** capture scatter leaves ~3 bays uncovered on `fmi_block`; the 1 km
-flight is unfinished and unscored (its last attempt stopped at **87 of 1976** frames on 2026-08-17,
-stopped by hand rather than by any fault); the learned classifier v2 is not started.
+**The 1 km survey is FLOWN AND SCORED (2026-08-21): 1976/1976 waypoints, 98.4%** — TP=692 TN=799
+FP=25 **FN=0**, 1516 of 1593 bays classified, 77 uncovered. All 25 errors are false positives and
+all are explained by the *data*, not the classifier: **14** are bays whose centroid falls inside an
+OSM building footprint (the camera sees the roof — `bright` 165-198, `std` 4-12, and 14 of those 20
+bays are wrong, a 70% error rate), **7** sit within 3 m of a building whose wall leans into the crop
+by parallax at 30 m, and **4** are bays whose rectangle *overlaps* a neighbour holding a car, where
+the ground truth itself is ambiguous. Ordinary street bays: **11 wrong of 1463 (0.75%)**; excluding
+the building-covered bays the world scores **99.7%**. Two data facts fall out: **20 bays sit under
+buildings** and are unscoreable by construction, and **222 bay pairs overlap** across the 1698-bay
+dataset. The predicted bays-on-grass effect **did not occur** — all **33** bays on green polygons
+classified correctly, because the bay pad (z=0.04-0.06) paints over the green (z=0.005).
+
+**Longer-standing, unchanged:** capture scatter leaves ~3 bays uncovered on `fmi_block`; the learned
+classifier v2 is not started.

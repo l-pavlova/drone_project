@@ -12,10 +12,19 @@ import {
   useMap,
 } from "react-leaflet";
 import { latLngBounds, type LatLngExpression } from "leaflet";
-import type { BayFC, BayFeature, BayProps, BayStatus, RouteResult } from "../lib/types";
+import type {
+  BayFC,
+  BayFeature,
+  BayProps,
+  BayStatus,
+  NoFlyFC,
+  Restriction,
+  RouteResult,
+} from "../lib/types";
 import { bayStatus } from "../lib/types";
 import { bayCentroid, directionsUrl, type NearestTarget, type UserPos } from "../lib/geo";
 import type { LiveState } from "../hooks/useOccupancySocket";
+import { NoFlyLayer } from "./NoFlyLayer";
 import styles from "./BayMap.module.css";
 
 const ORIGIN: LatLngExpression = [42.6747105, 23.3298956];
@@ -90,6 +99,8 @@ export function BayMap({
   focusKey,
   target,
   route,
+  nofly,
+  showZones,
 }: {
   fc: BayFC;
   live: Map<string, LiveState>;
@@ -97,6 +108,8 @@ export function BayMap({
   focusKey: number;
   target: NearestTarget | null;
   route: RouteResult | null;
+  nofly: NoFlyFC | null;
+  showZones: Set<Restriction>;
 }) {
   // Ring conversion is stable; recompute only when the feature set changes.
   const rings = useMemo(
@@ -128,6 +141,11 @@ export function BayMap({
         subdomains="abcd"
         maxZoom={20}
       />
+      {/* Airspace first: under the bays visually, and — because preferCanvas
+          resolves clicks by draw order — behind them for hit-testing too.
+          See the note in NoFlyLayer. */}
+      <NoFlyLayer fc={nofly} show={showZones} />
+
       {rings.map((r, i) => {
         const props = mergeLive(fc.features[i]!.properties, live.get(r.id));
         const status = bayStatus(props);

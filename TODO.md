@@ -1,6 +1,6 @@
 # PARKDRONE — open work
 
-Last revised 2026-08-20. Five tracks. Detail that only matters while a task is
+Last revised 2026-08-21. Five tracks. Detail that only matters while a task is
 being worked lives in the task itself; the *why* lives here so a task can be
 picked up cold.
 
@@ -181,27 +181,60 @@ voting and scoring stay unchanged. Labelled crops are already on disk.
 **Sequence this *with* scene hardening, not before it.** On the current
 uniform-lighting scene a learned model has nothing to beat.
 
-### 6. Shadows — generator side BUILT 2026-08-21, flight pending
-`castShadows FALSE` is not an aesthetic choice: shadow mapping over a 1.2 km
-ground plane paints streak artifacts across the nadir frames. Turning it on as-is
-would harden the classifier against a *rendering defect* rather than real
-shading. Fix shadow quality first (window-sized ground plane, or a tighter
-frustum), verify the artifacts are gone, then measure the accuracy effect **on
-its own** so the result is attributable.
-
-The single largest untested hardening lever.
-
-**Built (not yet flown):** `--shadows` and `--sun AZ,EL` in `generate_world.py`, opt-in so the three
-survey worlds regenerate byte-identical (verified). The quality fix is in the same flag: the ground
+### 6. Shadows — FLOWN AND MEASURED 2026-08-21. **The classifier is not scale-invariant, and that is the finding.**
+`castShadows FALSE` was never an aesthetic choice: shadow mapping over a 1.2 km ground plane paints
+streak artifacts across the nadir frames, so turning it on as-is would have hardened the classifier
+against a *rendering defect*. The quality fix rides in the same flag — with `--shadows` the ground
 plane shrinks from `2*WINDOW+200` to `2*WINDOW+40`, because a directional light spreads one shadow
-map over the scene extent and the plane is the extent. `fmi_block_4st_sh` is generated and is a
-clean A/B — same `ground_truth.json` and `route.json` as `fmi_block_4st`, only the light differs.
+map over the scene extent and the plane *is* the extent. **Verified by looking before measuring:**
+the frames show car shadows, building shadows and a light-pole shadow, cleanly, with **no streaks**.
 
-**Next, in order:** fly it (Webots is busy with the 1 km survey until ~09:00), LOOK at the frames
-for artifacts, and only then score. Prediction on record: `T_BRIGHT_LO/HI` (82-102) is an absolute
-asphalt tone envelope, so shaded free bays fall below 82 and read as occupied — false positives on
-the shaded side of the street. Then give the heuristic its fair form (normalise the bay core against
-surrounding asphalt in the same frame) before any model is compared against it.
+**The experiment had to be run as a 2x2, because `fmi_block_4st_sh` moves two variables at once**
+(`--shadows` *and* `--sun 135,25`). Two more worlds were generated to separate them —
+`fmi_block_4st_sun` (low sun, no shadows) and `fmi_block_4st_shd` (shadows, default sun) — both with
+`ground_truth.json` and `route.json` **byte-identical to `fmi_block_4st`**, so only the light differs
+in any cell. All four flew 97/97:
+
+| | shadows OFF | shadows ON |
+|---|---|---|
+| **default sun (dir `0.4 0.5 -1`, ~60 deg elevation)** | **100.0%** `fmi_block_4st` | **89.2%** `fmi_block_4st_shd` (FP=12) |
+| **low sun (`--sun 135,25`)** | **44.1%** `fmi_block_4st_sun` (FP=62) | **44.1%** `fmi_block_4st_sh` (FP=62) |
+
+**Recall is 100% in every cell — not one car is ever missed.** Every point lost is a false positive
+on a *free* bay, so the failure mode is "the drone thinks the street is full", never "the drone
+misses a car".
+
+**The prediction on record was right about the mechanism and wrong about the cause.** It expected
+shaded free bays to fall below `T_BRIGHT_LO` (82). They do — the shadows-only cell loses 12 bays,
+every one of them shaded (`bright` 53-83, `dark_frac` up to 1.00). But the *dominant* effect is not
+shading at all: **the low sun alone, with shadows off, produces the entire collapse to 44.1%** with
+the identical confusion matrix. A 25 deg sun on a horizontal plane cuts Lambert irradiance to
+cos(25)/cos(60) ~ 0.48 of the default, and every free bay drops from `bright` 85 to 72 — *uniformly,
+including bays in full sun*. Below 82, so all 62 read as occupied. The shadow cell then adds nothing
+further because everything is already outside the envelope; the two lower cells are the same number
+for the same reason.
+
+**What the free-bay distribution says is the whole point:**
+
+| world | free-bay `core_brightness` | best single-threshold separability |
+|---|---|---|
+| `fmi_block_4st` | median 85, range 85-87 | 87.4% |
+| `fmi_block_4st_sun` | median 72, range 72-75 | — |
+| `fmi_block_4st_sh` | median 72, range **53**-75 | 86.5% |
+
+The distribution **translated down 13 grey levels and kept its tight spread**; separability barely
+moved. So the scene is not harder and the signal is not destroyed — `classify()` fails purely
+because `T_BRIGHT_LO/HI` is an **absolute** tone envelope. Shadows' only distinct contribution is
+widening the *lower tail* (53 vs 72) for the genuinely shaded bays, which is the real, physical,
+harder case; the global shift is the trivially-fixable one.
+
+**Next: give the heuristic its fair form before any model is compared against it** — normalise the
+bay core against the surrounding asphalt *in the same frame*, so the envelope is relative. Note a
+naive check does **not** shortcut this: re-thresholding `core_brightness` against a flight-wide
+median reference scores only 77.5% / 90.1%, because brightness is one of five features and the other
+four (`paint_frac`, `dark_frac`, `chroma`, `std`) are what carry the classifier to 100%. The fix has
+to go **inside** `classify()` with all five intact, and it must be re-verified against both golden
+worlds, which are at 100% and must stay there.
 
 ### 7. Reduce capture scatter (~3 uncovered bays)
 Timeout arrivals capture up to ~15 m off the waypoint, so ~1% of bays fall
@@ -272,34 +305,54 @@ caught the `Косо` bug (drawn rectangle vs geojson ring, 2 mm tolerance).
 
 ## Data / scale
 
-### 1. Score the 1 km survey — **FLYING as of 2026-08-20 23:xx**
-Relaunched 2026-08-20; it resumed from frame 87 and is running headless
-(`worlds/fmi_block_1km.wbt`, log `sim/output/fmi_block_1km.run.log`). At ~6
-captures/min the remaining ~1840 waypoints are roughly 5 h of wall clock. It was
-paused once mid-session to free Webots for the standoff-capture flights and
-resumed from disk, which is the documented behaviour and cost only the pause.
-When it lands, score it and archive the result as the world's first clean
-fixture.
+### 1. Score the 1 km survey — **DONE 2026-08-21. 98.4%, and every error is explained.**
+The relaunched flight **completed: 1976 of 1976 waypoints, 1976 frames**, landed at (507.3,-230.9).
+It had resumed from frame 87 on disk after being stopped by hand on 2026-08-17, which is the
+documented resume behaviour working as intended over a ~19 km, 5 h patrol.
 
-*(Original note, kept because it is the reason there was nothing to debug:)*
+**The project's first neighbourhood-scale accuracy number:**
 
-**The flight was DEAD, not pending**
-`sim/output/fmi_block_1km/poses.json` stopped at **87 of 1976 frames** on
-2026-08-17 15:29 — stopped by hand (confirmed with the author 2026-08-20), not
-by a crash or by the obstacle track's `taskkill`. So there is nothing to
-diagnose: this task starts by simply *relaunching* it. A folder with existing
-captures makes the controller resume, so a long flight can be picked up rather
-than restarted.
+    1593 bays, 1516 classified, 77 uncovered
+    TP=692  TN=799  FP=25  FN=0
+    accuracy 98.4%   precision 96.5%   recall 100.0%
 
-Flight parameters on the angled-bay-corrected world: 1593 bays, 728 cars, 1976
-waypoints, 19.0 km. When it lands, score it and archive the result as the
-world's first clean fixture.
+**FN=0 — not one of the 692 parked cars was missed.** All 25 errors are false positives on free
+bays, and all 25 have a cause. None is a classifier-threshold failure:
 
-This is the project's first neighbourhood-scale accuracy number, and the first
-score of a world containing angled bays **and** 31 bays sitting on green
-polygons — neither exists in the two small worlds, so the bays-on-grass effect
-should show up here for the first time.
+| cause | bays | error rate |
+|---|---|---|
+| bay centroid lies **inside** an OSM building footprint (the camera photographs the roof: `bright` 165-198, `std` 4-12, a flat bright surface) | 14 of the 20 such bays | **70%** |
+| bay within 3 m of a building — at 30 m the wall leans into the crop by parallax, and these bays are all off-centre (`off` 33-141 px) | 7 | — |
+| bay rectangle **geometrically overlaps** a neighbour that holds a car, so the car is physically inside the free bay's core | 4 | — |
+| ordinary street bays | **11 of 1463** | **0.75%** |
 
+Excluding the 20 building-covered bays entirely: **99.7%** (1496 classified, 4 errors).
+
+**The bays-on-grass prediction did not happen, and that is a real answer.** All **33** bays whose
+centroid falls on a green polygon classified **correctly**. The reason is already in the design: the
+bay pad is painted at z=0.04-0.06 and greens at z=0.005, so the pad covers the grass and the bay
+looks like tarmac from above. Green areas are not a hazard to the classifier; **buildings are**.
+
+**Two findings worth carrying, both about the DATA and not the vision:**
+- **A bay inside a building footprint is unscoreable by construction.** 20 of them exist in the 1 km
+  cut. Either the Sofiaplan point sits wrong, or the OSM footprint covers a courtyard/passage the
+  bay legitimately occupies. Whichever it is, the generator currently paints a bay pad *and* raises a
+  `SimpleBuilding` on the same ground, and the drone can only ever see the roof. Candidate fixes: drop
+  such bays from the world and from `ground_truth.json`, or flag them so the scorer excludes them —
+  the second is more honest, since a real deployment would still fly over them.
+- **222 overlapping bay pairs among 1698 bays.** Where two bay rectangles overlap, a car in one is
+  inside the other's core and the ground truth itself is ambiguous — no classifier can be right. The
+  same abbreviation/orientation data quality thread as #9.
+
+Also of note: the 1 km world's scene reference tone (median `core_brightness`, 84.7) is identical to
+`fmi_block_4st`'s, so the 98.4% is not lighting-shifted relative to the small worlds and the numbers
+are directly comparable.
+
+`sim/output/fmi_block_1km/` now holds the world's first clean fixture (frames, `poses.json`,
+`occupancy_results.json`), in the same canonical place as the two small worlds — so
+`tools/check_consistency.py` picks it up (32 checks pass, up from 25 with the three new light worlds).
+**Note for #9:** geometry-based street matching would change this route, so re-cut and re-fly only
+against this now-scored baseline.
 
 ### 9. Street-name matching — DIAGNOSED 2026-08-21, half fixed
 4 of 49 streets in the 1 km cut have no OSM name match and fall back to a

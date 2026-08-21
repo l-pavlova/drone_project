@@ -49,3 +49,46 @@ export function bayStatus(p: BayProps, now = Date.now()): BayStatus {
   if (now - new Date(p.updated_at).getTime() > FRESHNESS_MS) return "unknown";
   return p.occupied ? "occupied" : "free";
 }
+
+/** GET /api/v1/nofly — published UAS geographical zones (ED-269, Bulgarian CAA).
+ *  Reference data, not live state: it changes when the CAA republishes. */
+export type Restriction = "PROHIBITED" | "REQ_AUTHORISATION" | "CONDITIONAL";
+
+export interface NoFlyProps {
+  zone_id: string;
+  identifier: string | null;
+  name: string | null;
+  restriction: Restriction;
+  reason: string[];
+  message: string | null;
+  lower_limit: number | null;
+  upper_limit: number | null;
+  vertical_reference: string | null;
+  permanent: boolean;
+  /** Set when the source geometry was a circle; the polygon is its 48-gon. */
+  circle_radius_m: number | null;
+  authority: {
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    interval_before: string | null;
+  } | null;
+}
+
+export interface NoFlyFeature {
+  type: "Feature";
+  geometry: { type: "Polygon"; coordinates: number[][][] };
+  properties: NoFlyProps;
+}
+
+export interface NoFlyFC {
+  type: "FeatureCollection";
+  /** Filename of the CAA edition this came from, e.g. bgr_zones_30072026.json. */
+  source: string;
+  features: NoFlyFeature[];
+}
+
+/** The drone cannot fly here at all; everything else is paperwork, not a wall. */
+export function blocksSurvey(p: NoFlyProps): boolean {
+  return p.restriction === "PROHIBITED";
+}
