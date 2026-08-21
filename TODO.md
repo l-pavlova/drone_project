@@ -43,13 +43,31 @@ Result: still 97/97, in **6 detours instead of 18, none a circle**, 79 frames,
 closest approach 6.55 m.
 
 **Still open on this track:**
-- **21 of 97 waypoints are still skipped.** The floor is not the arc radius but
-  stage D's 12 m standoff: a waypoint closer than that to a structure cannot be
-  flown to at all, so it can never be captured. Getting that coverage back needs
-  a different mechanism — capture at closest *legal* approach and flag the
-  frame, rather than skipping the waypoint. That changes what the frame means to
-  the scorer, so it is a decision, not a tweak. **This is the next task on the
-  track.**
+- **Skipped waypoints — MOSTLY RECOVERED 2026-08-20 (standoff capture).** The
+  floor is stage D's 12 m standoff: a waypoint closer than that to a structure
+  cannot be flown to, so it can never be *arrived at*. But its ground can still
+  be photographed, so the controller now keeps each skipped waypoint as a
+  standing target and shoots it at closest approach, flagged `standoff` +
+  `standoff_m`. It never steers for a frame and the real waypoint always wins
+  the camera. Measured on `fmi_block_obst`: of 18 unreachable waypoints, **9
+  recovered**, bays classified **100 → 104 of 111**, uncovered **11 → 7**,
+  accuracy **100%** throughout.
+  The gate turned out to be the whole task: the footprint is 400×240 px with up
+  = heading, so it reaches 12.4 m across the nose and 7.5 m along it. Testing
+  the inscribed circle instead (7.4 m — the right answer only if yaw is unknown,
+  which it is not at capture time) recovered **4**, less than half, because a
+  detour passes its obstacle *abeam*.
+  **The remaining 9 are a DECLARED GAP, decided 2026-08-20 — not a task.** Five
+  of them are consecutive (49–53): a structure the route runs straight *through*
+  rather than past, so a frame there would need a deliberate detour flown for
+  coverage, which is a far more invasive thing than an opportunistic shot and
+  buys ground the survey can honestly say it did not see. So the drone says it:
+  the controller writes `sim/output/<area>/coverage.json` (waypoints, captured,
+  unreachable, standoff, uncovered), rewritten on every change like poses.json
+  so an interrupted flight still leaves an honest account, and
+  `score_occupancy.py` prints the declaration next to the accuracy number. That
+  matters because an uncovered bay has two very different causes — a bad pass
+  (#7, fixable) or an obstacle (legitimate) — and only the flight knows which.
 - The tower the route re-enters three times still costs one 238° swing and one
   `STEER_ORBIT` bail-out; `trap` is passed only via the escalation ladder (two
   150 s timeouts).
@@ -118,7 +136,36 @@ whole point of `0008`. That check can fail: stripping the two columns from a
 pose moves bay 17685's projected outline by **0.35–1.55 m** on the frames that
 see it, against a 0.21 m core-crop clearance.
 
-### 5. Learned classifier v2 — *blocked by #6*
+### 5. Learned detector — groundwork BUILT 2026-08-21, zero-shot baseline measured
+**Decided with the author (2026-08-21):** a learned model is a thesis deliverable in its own right
+(master plan stage 9), it runs **server-side** in `vision-worker` (no Coral constraints), and it is a
+**whole-frame detector** rather than a per-bay crop classifier. Real Sofia drone video (DJI, SRT
+telemetry, over a Sofiaplan-mapped block) is coming from the author; sim and real results are to be
+reported **separately**, never averaged. Framework is open — any modern detector — which points at
+`transformers` RT-DETR/D-FINE (Apache-2.0) over Ultralytics (AGPL-3.0), though the supervisor's own
+MIT repo uses Ultralytics, so precedent exists either way. Full plan:
+`.claude/plans/tranquil-shimmying-candle.md`.
+
+**Built:** `unproject()` + a 49,188-corner round-trip self-test, `<name>.cars.json` from the
+generator (worlds byte-identical), `vision/dataset.py` (exact boxes, free), `detect_baseline.py`
+(detection *and* occupancy scoring), `tools/dji_srt.py`. See CLAUDE.md §2b.
+
+**Measured, and it settles the first question:** COCO-pretrained **YOLOv8m detects 0 of 52 cars**
+across both survey worlds. Not a threshold problem (nothing at conf 0.01), not resolution (2-4x
+upscaling changes nothing) — at floor confidence it calls a nadir car a *tie* and a van a *traffic
+light*. Occupancy lands exactly on the base rate. **So fine-tuning is mandatory rather than an
+improvement**, and the sim's free exact labels are what makes it cheap.
+
+Worth noting the tension this creates with the prior art: the supervisor's pipeline runs this same
+model zero-shot *successfully* on real footage. Either real texture carries it, or that footage is
+more oblique than our strict nadir. Running `detect_baseline.py` against the real video when it
+arrives answers it directly, and the answer shapes how much sim data is worth generating.
+
+**Next:** dataset volume is bounded by flight length (~0.9 cars/frame), so more data means more
+flights; fine-tune from aerial-pretrained weights if the HF download blocker is cleared (CLAUDE.md
+§2b), else from the Ultralytics path that already works.
+
+### 5b. The old framing — learned *classifier* v2 — *blocked by #6*
 `classify()` is five hand-tuned thresholds calibrated on `fmi_block_4st`. The
 case for replacing it is now **weaker on the numbers and unchanged in
 principle**: the chroma-12.99 false positive that used to be the headline
@@ -134,7 +181,7 @@ voting and scoring stay unchanged. Labelled crops are already on disk.
 **Sequence this *with* scene hardening, not before it.** On the current
 uniform-lighting scene a learned model has nothing to beat.
 
-### 6. Shadows, as its own controlled experiment
+### 6. Shadows — generator side BUILT 2026-08-21, flight pending
 `castShadows FALSE` is not an aesthetic choice: shadow mapping over a 1.2 km
 ground plane paints streak artifacts across the nadir frames. Turning it on as-is
 would harden the classifier against a *rendering defect* rather than real
@@ -143,6 +190,18 @@ frustum), verify the artifacts are gone, then measure the accuracy effect **on
 its own** so the result is attributable.
 
 The single largest untested hardening lever.
+
+**Built (not yet flown):** `--shadows` and `--sun AZ,EL` in `generate_world.py`, opt-in so the three
+survey worlds regenerate byte-identical (verified). The quality fix is in the same flag: the ground
+plane shrinks from `2*WINDOW+200` to `2*WINDOW+40`, because a directional light spreads one shadow
+map over the scene extent and the plane is the extent. `fmi_block_4st_sh` is generated and is a
+clean A/B — same `ground_truth.json` and `route.json` as `fmi_block_4st`, only the light differs.
+
+**Next, in order:** fly it (Webots is busy with the 1 km survey until ~09:00), LOOK at the frames
+for artifacts, and only then score. Prediction on record: `T_BRIGHT_LO/HI` (82-102) is an absolute
+asphalt tone envelope, so shaded free bays fall below 82 and read as occupied — false positives on
+the shaded side of the street. Then give the heuristic its fair form (normalise the bay core against
+surrounding asphalt in the same frame) before any model is compared against it.
 
 ### 7. Reduce capture scatter (~3 uncovered bays)
 Timeout arrivals capture up to ~15 m off the waypoint, so ~1% of bays fall
@@ -213,7 +272,18 @@ caught the `Косо` bug (drawn rectangle vs geojson ring, 2 mm tolerance).
 
 ## Data / scale
 
-### 1. Score the 1 km survey — **the flight is DEAD, not pending**
+### 1. Score the 1 km survey — **FLYING as of 2026-08-20 23:xx**
+Relaunched 2026-08-20; it resumed from frame 87 and is running headless
+(`worlds/fmi_block_1km.wbt`, log `sim/output/fmi_block_1km.run.log`). At ~6
+captures/min the remaining ~1840 waypoints are roughly 5 h of wall clock. It was
+paused once mid-session to free Webots for the standoff-capture flights and
+resumed from disk, which is the documented behaviour and cost only the pause.
+When it lands, score it and archive the result as the world's first clean
+fixture.
+
+*(Original note, kept because it is the reason there was nothing to debug:)*
+
+**The flight was DEAD, not pending**
 `sim/output/fmi_block_1km/poses.json` stopped at **87 of 1976 frames** on
 2026-08-17 15:29 — stopped by hand (confirmed with the author 2026-08-20), not
 by a crash or by the obstacle track's `taskkill`. So there is nothing to
@@ -231,14 +301,47 @@ polygons — neither exists in the two small worlds, so the bays-on-grass effect
 should show up here for the first time.
 
 
-### 9. Street-name matching for the 4 PCA-fallback streets
+### 9. Street-name matching — DIAGNOSED 2026-08-21, half fixed
 4 of 49 streets in the 1 km cut have no OSM name match and fall back to a
 straight-line PCA bearing: жк Лозенец, Арх. Йордан Миланов, Кръстю Сарафов,
 Св. Седмочисленици. The fallback is only correct for *straight* streets.
 
-**Check whether any of the four actually curve before investing** — if they are
-all straight this is a non-issue and should be closed as such. Likely cause is
-abbreviation/transliteration (Арх. / Архитект, Св. / Свети), not missing OSM data.
+**Measured, and the answer is "it depends which street":**
+
+| street | bays | why it failed | does it curve? |
+|---|---|---|---|
+| ул. Арх. Йордан Миланов | 38 | abbreviation — OSM has `Архитект Йордан Миланов` | rows bend 3.5 / 5.7 m |
+| ул. Св. Седмочисленици | 10 | abbreviation — OSM has `Свети Седмочисленици` | no, 0.03 m |
+| ул. Кръстю Сарафов | 29 | **no OSM way carries this name at all** | **yes — 8 m per row** |
+| жк Лозенец | 10 | it is a housing estate, not a street | no, 0.01 m |
+
+The first measurement was misleading and worth recording: the raw deviation of a
+street's bays from a straight line reached 18 m, which looks like heavy
+curvature and is actually **bays on both sides of the road** (the two rows sit
+7.8-14.3 m apart — that is the street width). Splitting each street into its two
+rows first is what makes the curvature question answerable. And two-sided rows
+are not even a problem for the fallback: a PCA line through both rows is roughly
+the centreline, which is what a route wants.
+
+**Fixed:** `norm_street()` in `generate_world.py` strips the class prefix
+(ул./бул./жк) and expands the known abbreviations before matching, which
+recovers two of the four. It is deliberately conservative — no transliteration,
+no fuzzy distance — because a loose match pairs a bay row with the WRONG road,
+and flying a real street that is not the one the bays are on is worse than the
+straight-line fallback.
+
+**Still open:** `ул. Кръстю Сарафов` has 29 bays, no OSM name to match, and rows
+that genuinely deviate ~8 m from straight — the one street where the fallback is
+really wrong. The fix is to match by GEOMETRY (nearest road polyline to the bay
+row) rather than by name, which would subsume the name matcher entirely.
+`жк Лозенец` should stay on the fallback: straight, and an estate rather than a
+street.
+
+**Blast radius, checked before changing anything:** all four streets lie outside
+the 75 m and 130 m windows, so both golden worlds regenerate **byte-identical**
+(verified). Only `fmi_block_1km` is affected — and it is mid-flight on the
+current route, so regenerate and re-fly it only after the running survey has
+been scored.
 
 ---
 
@@ -261,14 +364,22 @@ was never deliberately reviewed or tested against an actual reconnect. **Do that
 before it gets committed** — a mid-flight drop with a stale cursor is exactly the
 case it exists for and exactly the case nothing has exercised.
 
-Then P7 hardening, whose items are already known: put `/api/v1/metrics` and
-`/metrics` behind admin auth (currently unauthenticated like every read route);
+**2026-08-21 — two of P7's items are done.** `/api/v1/metrics` and `/metrics` now require
+`x-admin-key` whenever `ADMIN_API_KEY` is set (401 without, 403 wrong, 200 right — verified),
+open with a loud startup warning when it is not, and the ops dashboard's vite proxy injects the
+header so the secret never enters the browser bundle. And the **reconnect cursor is finally
+exercised**: a client that drops at cursor N and reconnects with `?since=N` gets exactly the
+deltas it missed, in order, with nothing it had already applied and no backlog for a fresh
+client; across a server restart the cursor resets below the client's, which is the signal
+`useOccupancySocket.ts` uses to discard a stale overlay and reconcile from REST.
+
+Still open in P7:
 and note that **single-replica is a correctness requirement, not a preference** —
 `jobs.recover()` re-enqueues every queued row with no ownership filter, so two
 replicas would double-count the vote. Scaling out needs job claiming, a shared
 delta channel and a global cursor first.
 
-### 10. A re-flight should ingest itself — no manual clear
+### 10. A re-flight should ingest itself — **DONE 2026-08-21**
 **Today it does not, and it fails silently.** Fly a survey area the stack has
 already seen and every frame comes back `200` duplicate: ingest is idempotent on
 `(drone_id, survey_area, frame_idx)`, so there is no classify job, no
@@ -312,8 +423,21 @@ an unchanged bay pushes nothing and the map correctly does not repaint. If a
 demo needs to see liveness regardless, that is a separate "still fresh"
 heartbeat (refresh `updated_at`, push a no-op), not a change to the vote.
 
-Until this lands, `pnpm clear <area>` — or `pnpm quickstart --clear --fly
-<world>` — is the documented way to re-fly and be scored.
+**Done, migration `0009`.** The key is now
+`(drone_id, COALESCE(mission_id, 'area:'||survey_area), frame_idx)`; the COALESCE sentinel keeps
+the old behaviour for mission-less clients instead of silently dropping their deduplication. The
+vote resolves the newest mission per bay and counts only that flight, so two flights inside one
+window cannot average a stale look with a fresh one. The stored image key carries the mission too —
+otherwise a re-flight overwrites the earlier flight's image while its `frame` row still points at
+it.
+
+Verified: five missions of `fmi_block` coexist (34 frames each, 87 observations each, no duplicate
+views); a re-flight ingests with nothing cleared and `/bays` matches `occupancy_results.json`
+**42/42**; restart recovery re-enqueued the 34 staged frames and reproduced the same 42/42; and the
+vote rule was tested with teeth — 20 contrary views from an older mission change nothing, the same
+20 re-labelled to the newest mission flip the bay.
+
+`pnpm clear` stays, for what its name says: wiping an area deliberately.
 
 ---
 

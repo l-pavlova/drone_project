@@ -80,6 +80,20 @@ API_PORT = int(os.environ.get("API_PORT", "4000"))
 # /api/v1/dev/occupy|free endpoints have NO auth, so anyone who can reach the
 # port could flip any bay's state. Local dev sets ENABLE_DEV_ROUTES=true in .env.
 ENABLE_DEV_ROUTES = os.environ.get("ENABLE_DEV_ROUTES", "false").lower() == "true"
+# ---- admin auth (metrics) --------------------------------------------------
+# `/api/v1/metrics` and `/metrics` expose fleet state, ingest rates, queue depth
+# and model accuracy. They were unauthenticated like every read route, which is
+# fine for a bay's occupancy and not fine for operational internals - it is a
+# free map of what the system is doing and where it is stalling.
+#
+# Set ADMIN_API_KEY and both endpoints require `x-admin-key`. Left UNSET they
+# stay open and the server says so at startup, loudly, once: this is a dev
+# convenience and the warning is what stops it quietly becoming the production
+# posture. It is not the finished answer either - a real admin LOGIN (sessions,
+# users, audit) is still P7 work; a shared key is the smallest thing that closes
+# the open door.
+ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "")
+
 # Dedicated classify threads draining the in-process job queue (numpy releases
 # the GIL during array ops, so these parallelise real CV work off the event loop).
 CLASSIFY_THREADS = int(os.environ.get("CLASSIFY_THREADS", "4"))

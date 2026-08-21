@@ -183,10 +183,11 @@ def main() -> None:
                         warned_duplicate = True
                         # Ingest is idempotent on (drone, survey_area, frame_idx),
                         # so a re-flight of the same area is NOT reprocessed.
-                        print(f"! frame {idx} already ingested — this survey area has been flown "
-                              f"before, so these frames are IGNORED: no classify job, no "
-                              f"delta, nothing new on the map.\n"
-                              f"  Clear it and re-fly:  cd web && pnpm clear {survey_area}")
+                        print(f"! frame {idx} was already ingested IN THIS MISSION, so it is "
+                              f"skipped — that is the retry case working.\n"
+                              f"  Since migration 0009 a re-FLIGHT is a new mission and ingests "
+                              f"on its own, so seeing this across a whole flight means the "
+                              f"mission id was reused — check that mission/start was called.")
                 else:
                     errors += 1
                     print(f"! frame {idx}: HTTP {status}")

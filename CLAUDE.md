@@ -28,6 +28,22 @@ python generate_world.py [half_m] [occ_frac]   # default 75 0.5 -> worlds/fmi_bl
 ```
 This reads `../data/block_bays.geojson` (plus `block_roads.geojson` and `block_areas.geojson` if present), projects to local metres, and emits the world (ground, OSM streets as Webots `Road` protos, painted bays, real car models — 7 vehicle Simple protos — on a known-occupancy subset, scenery, follow-drone viewpoint) plus `ground_truth.json` (bay_id -> occupied). Car/model randoms come from a separate `random.Random(7)` stream and scenery cosmetics from a third (`random.Random(11)`) so `ground_truth.json` stays stable — after any change here, regenerate all three worlds and check `ground_truth.json`/`route.json` are byte-identical.
 
+**`--shadows` / `--sun AZ,EL` — the scene-hardening experiment (built 2026-08-21, not yet flown).**
+Opt-in like every other world flag, so the three survey worlds regenerate byte-identical and every
+accuracy number on record stays valid. `--shadows` sets `castShadows TRUE` on the `DirectionalLight`
+**and shrinks the ground plane** from `2*WINDOW+200` to `2*WINDOW+40`: a directional light spreads
+one shadow map over the whole scene extent, and the ground plane *is* the extent, so the 1 km world
+was handing one map a 1.2 km square — which is exactly what painted the streak artifacts that made
+`castShadows FALSE` necessary. `--sun AZ,EL` takes a compass azimuth (where the sun *is*, clockwise
+from north) and an elevation, and emits the direction the light travels; without it the direction is
+the literal `0.4 0.5 -1` every world on record used, so nothing shifts. Shadow LENGTH is the point of
+varying it: a low sun throws a car's shadow across the *next* bay, which is the case that should
+break `classify()`'s absolute brightness envelope (`T_BRIGHT_LO/HI` 82-102).
+`fmi_block_4st_sh` (`130 0.5 fmi_block_4st_sh --chase --shadows --sun 135,25`) exists as the
+controlled A/B: **identical `ground_truth.json` and `route.json` to `fmi_block_4st`**, so only the
+light differs. **Inspect captured frames for artifacts BEFORE measuring accuracy** — otherwise the
+experiment hardens the classifier against a rendering defect rather than against shade.
+
 **Scenery** (from `block_areas.geojson`): OSM green areas triangulated by ear clipping and painted at **z = 0.005** — above the ground, *below* the roads (0.01+), so they can never cover a bay pad (0.04–0.06); OSM building footprints as `SimpleBuilding` protos at real heights (`building:levels`, else `height`, else 4 floors), kept/dropped **whole** by centroid (clipping a footprint can break the proto's roof triangulation) while greens are Sutherland-Hodgman **clipped**; `StreetLight` poles walked along the centerlines at adaptive spacing, `on FALSE` (the proto ships a 1000 m-radius SpotLight that would shift the daylight the classifier is calibrated against) and never placed on a bay. Buildings and light poles get **no bounding object** unless you pass `--collide` — the controller flies a fixed 30 m with zero obstacle logic, so collision geometry would crash it; Webots range sensors only see nodes that have one, so that flag is the obstacle-avoidance stage's entry point. Either way the generator warns about structures reaching 30 m within 10 m of the route and writes them to `worlds/<name>.hazards.json`. `--chase` swaps the GUI viewpoint from the trailing "Tracking Shot" to a ride-along "Mounted Shot" (viewing only — it never touches the drone's own camera or any captured frame); it is a flag rather than a hand edit because hand edits to a `.wbt` are silently lost on the next regeneration. `DirectionalLight` has `castShadows FALSE` — shadow mapping paints streak artifacts on the road/ground in the nadir frames. Then run the world (see "Running Webots" below). The route (`worlds/route.json`) is an open-path rural-postman walk of the OSM street centerlines of every street that has bays: disconnected coverage components are joined by shortest road transits (MST), odd-degree nodes are evened out with a minimum-weight matching (exact blossom if `networkx` is installed, stdlib fallback otherwise; two virtual endpoints make it an open path whose start is the endpoint nearest the origin), then a Hierholzer Euler walk flies every coverage edge once with deadheads only along the matched repeats — waypoints every 10 m because the camera footprint at 30 m is only ~25×15 m. The controller `controllers/parkdrone/parkdrone.py` takes off to 30 m, flies that route (square-lawnmower fallback if route.json is missing), and writes `output/<survey_area>/frame_###.png` + `output/<survey_area>/poses.json` at each waypoint (plus timed diagnostic `snap_###.png`). Worlds are per-scale file sets: `generate_world.py [half_m] [occ_frac] [name]` writes `<name>.wbt` + `<name>.route.json` + `<name>.ground_truth.json` (default name `fmi_block` keeps legacy `route.json`/`ground_truth.json`); the `.wbt` passes its route file to the controller via `controllerArgs`, which also keys the output subfolder. E.g. the 1 km world: `python generate_world.py 500 0.5 fmi_block_1km`. The local-metre frame is pinned by `ORIGIN` in `generate_world.py` — do NOT let it drift when re-cutting data at other sizes.
 
 **Bay paint is MERGED geometry, not per-bay nodes** (2026-08-11). Each bay used to emit 5 `Solid`s
@@ -229,8 +245,101 @@ with all four structures passed, in 6 detours instead of 18, none of them a circ
 238°, and that one is the tower the route re-enters three times), **79 frames** (76 before) in
 **1599 s**, closest approach **6.55 m**.
 
+**Stage B, standoff capture — an unreachable waypoint is not unseen ground (2026-08-20).**
+A waypoint inside an obstacle's disc is skipped, and it used to mean **no frame there at all** —
+18 of 97 on `fmi_block_obst`, the layer's single biggest coverage cost. But unreachable is a fact
+about the *waypoint*, not about the ground under it: the detour passes at `CLEAR_R` from the
+obstacle's surface, and a street centerline crosses a structure's shadow rather than aiming at its
+middle, so most skipped waypoints pass within a footprint of the arc. The controller now remembers
+each one and takes the shot at **closest approach on the path it already flies** — it never steers
+for a frame, and the real waypoint always wins the camera (the scheduler is gated on `not
+arrived`). The frame keeps the waypoint's own index and `wp`, so numbering stays 1:1 with the
+route, and carries `"standoff": true` + `"standoff_m"` (measured **at capture**, not at the
+trigger, because that is the frame that exists). `analyze_stage_b.py` reports recovered vs still
+uncovered.
+
+**The gate is the footprint, and the footprint is not a circle.** The image is 400×240 px over a
+45° horizontal FOV with **up = the drone's heading**, so at 30 m it reaches 12.4 m *across* the
+nose and only 7.5 m *along* it. A waypoint passed abeam at 10 m is fully in shot; the same 10 m
+dead ahead is not. The first version tested the inscribed circle (7.4 m, the safe radius when yaw
+is unknown) — but yaw **is** known when the shot fires, and since a detour passes its obstacle
+abeam, the circle throws away most of what is recoverable. Measured on `fmi_block_obst`, same 18
+unreachable waypoints, **all three variants scoring 100%**:
+
+| gate | recovered | bays classified | uncovered |
+|---|---|---|---|
+| none (skip, as before) | — | 100 | 11 |
+| circle, 7.4 m | 4 | 102 | 9 |
+| **footprint, ±10.6/±6.3 m** | **9** | **104** | **7** |
+
+**What is still unreachable is DECLARED, not hidden.** Nine waypoints get no frame at all on
+`fmi_block_obst`, five of them consecutive — a structure the route runs straight *through*. That is
+a legitimate survey result, but only if the drone says so, so the controller writes
+`sim/output/<area>/coverage.json` (`waypoints`, `captured`, `unreachable`, `standoff`,
+`uncovered`), rewritten on every change like `poses.json` so an interrupted flight still leaves an
+honest account. `score_occupancy.py` prints it beside the accuracy number, because an uncovered bay
+has two very different causes — a bad pass (fixable, capture scatter) or an obstacle — and the bare
+count cannot tell them apart.
+
+Two things to keep right: a standoff capture **must not advance `idx`** or touch `wp_min`/
+`wp_steps` — the drone is still flying to its current waypoint, and eating that state would eat the
+capture the route asked for. And note a standoff capture *in flight* can delay a waypoint capture
+by up to `CAM_WARMUP` steps, which is why the obstacle world's ordinary frames are not
+bit-identical between the two gates; on a survey world `pending` is never populated (no ray fan, no
+detour) so the whole layer is dead code and the survey path is untouched. `CAM_FOV`/`CAM_ASPECT`
+are a **third copy** of the camera intrinsics (proto, `score_occupancy.py`, here) — the same
+standing duplication as `ORIGIN` and `DS_*`.
+
 **Remaining:** the tower the route doubles back through still costs one 238° swing and one
 `STEER_ORBIT` bail-out; `trap` is passed but only via the escalation ladder (two 150 s timeouts).
+
+### 2b. Vision datasets & detector tooling (built 2026-08-21, `vision/`)
+```bash
+python vision/diag/projection_selftest.py            # project/unproject round-trip
+python vision/dataset.py fmi_block --overlay 6 --yolo --crops
+python vision/detect_baseline.py fmi_block --conf 0.10 [--scale N] [--model M]
+python tools/dji_srt.py flight.SRT --json poses.json # real DJI telemetry -> poses
+```
+- **`unproject(u, v, pose)`** in `score_occupancy.py` is the exact inverse of `project()`: the pixel
+  names a ray, the answer is where it meets z=0. A whole-frame detector needs it (a detection is a
+  box in pixels and has to land on the ground to become a bay verdict); the per-bay classifier never
+  did. `projection_selftest.py` round-trips **every bay corner of both fixtures** — 49,188 of them,
+  worst error 0.000000 mm. Note what it does *not* prove: both functions share `camera_axes()`, so an
+  error in the axes cancels — `paint_align.py` is what tests the axes against the world.
+- **`<name>.cars.json`** — the generator now writes every parked car (bay, model, body centre,
+  angle, L, W) beside `ground_truth.json`. Sidecar only: the `.wbt`, `ground_truth.json` and
+  `route.json` regenerate **byte-identical** (verified on both survey worlds).
+- **`vision/dataset.py`** turns a flown area into a labelled detection set: project each car's
+  footprint *and roof* through `project()` to a pixel box, clip, drop boxes less than 55% visible.
+  Exact labels, no hand annotation, and they cannot drift from the world because both come from the
+  same placement loop. The roof matters — a car 12 m off nadir has its roof displaced ~0.5 m (9 px)
+  outward, so a footprint-only box is systematically tight on exactly the cars furthest from the
+  image centre. `--overlay N` draws the boxes on frames, which is how you check them.
+  **Volume is bounded by flight length, not world size**: ~0.9 cars per frame (30 boxes on
+  `fmi_block`, 87 on `fmi_block_4st`), so a bigger training set means more/longer flights.
+- **`detect_baseline.py`** scores an off-the-shelf detector two ways: detection (IoU≥0.5 vs the
+  exact boxes) and **occupancy** (unproject each box, assign to a bay within 3 m, vote across frames
+  exactly as the scorer does). The second is the only one comparable with `classify()`.
+  **Result: COCO-pretrained YOLOv8m detects 0 of 52 cars** across both worlds — 0% recall, no false
+  positives either, and occupancy lands on the base rate (58.8% / 45.8% = "everything is free").
+  It is **not** resolution: 2×/3×/4× upscaling changes nothing, and at conf 0.01 the model calls a
+  nadir car a *tie* (0.19) and a van a *traffic light* (0.64). It is the domain — COCO cars are
+  photographed from the side. So fine-tuning is mandatory, not an improvement, and the sim's free
+  exact labels are what makes that cheap. (The supervisor's `ground-vehicles-localization` runs this
+  same model zero-shot successfully on *real* footage, which makes "does it work on real nadir
+  video" a specific, worthwhile experiment rather than an assumption.)
+- **`tools/dji_srt.py`** parses the DJI SRT sidecar (both the modern `[latitude: ...]` layout and
+  the legacy `GPS(lon,lat,alt)` one) into `project()`-compatible poses, preferring `BAROMETER` over
+  the GPS triple's altitude. It deliberately does not trust the GPS (1–3 m against a 2.2 m bay — the
+  pose is the *starting point* for registration) and does not assume nadir (it carries gimbal angles
+  through when present and leaves them absent when not, so the fallback is the caller's choice).
+- **Known blocker: `huggingface.co` downloads fail on this machine.** Something intercepts TLS and
+  its CA is non-compliant ("Basic Constraints of CA cert not marked critical"), which **Python 3.13+
+  rejects by default** now that strict X.509 is on. certifi does not help, nor does adding the 230
+  Windows store roots, nor clearing `VERIFY_X509_STRICT` on urllib3's context. `ultralytics` gets
+  its weights only because it falls back to `curl`. So HF-hosted models (OWLv2 for label
+  bootstrapping, RT-DETR) need their files fetched with `curl --ssl-no-revoke` into the HF cache —
+  the same workaround `data/README.md` already uses for the Sofiaplan API.
 
 ### 3. Flight-log analysis (real-flight debugging, separate from sim)
 ```bash
@@ -387,14 +496,30 @@ reproducing both). Phase 7 (prod hardening) remains.** See project memory `proje
   same frame processed live. Nullable: pre-0008 rows and any drone that reports no gimbal fall back
   to nadir, exactly as they did before.
 - **Bay ids: int in `block_bays.geojson`, string everywhere in the web tier**.
-- Frame ingest is idempotent on `UNIQUE(drone_id, survey_area, frame_idx)` — a re-send does NOT
-  re-enqueue; to reprocess a survey area *within the retention window*, clear the `frame` table
-  first. Past `FRAME_RETENTION_S` the rows are gone anyway, so a re-send is ingested as new.
-- **Occupancy is a vote over a freshness window, not over all history** (`OCCUPANCY_WINDOW_S`,
-  default 2 h). Only observations inside the window count, and a `bay_state` row older than it is
-  reported as `occupied: null` (unknown) by every read path — derived at read time, not swept. The
-  window **must exceed the survey period**, or a long patrol expires its own early bays before it
-  lands (the 1 km route is >60 min).
+- **Frame ingest is idempotent per MISSION, not per survey area** (migration `0009`, 2026-08-21):
+  the unique key is `(drone_id, COALESCE(mission_id, 'area:'||survey_area), frame_idx)`. It used to
+  be `(drone_id, survey_area, frame_idx)`, and `frame_idx` restarts at 0 every flight — so a
+  re-flight of an area posted frames that came back 200-duplicate and did *nothing*: no job, no
+  `bay_state` change, no delta, a map that never moved for a whole patrol, and no error anywhere.
+  The only fix was to DELETE the history first, which is backwards and impossible in production
+  where `observation` IS the record. A re-send **inside** one flight is still a duplicate (the
+  retry case the constraint exists for); a new flight is new data. The `COALESCE` sentinel matters:
+  `mission_id` is nullable and NULLs are distinct in a unique index, so without it a mission-less
+  frame would lose deduplication entirely — instead it falls back to exactly the old behaviour.
+  **The stored-image key carries the mission too**, or a re-flight would overwrite the earlier
+  flight's image while that flight's `frame` row still pointed at it.
+- **Occupancy is a vote over a freshness window, and inside it the NEWEST MISSION WINS the bay**
+  (`OCCUPANCY_WINDOW_S`, default 2 h). Only observations inside the window count, and a `bay_state`
+  row older than it is reported as `occupied: null` (unknown) by every read path — derived at read
+  time, not swept. The window **must exceed the survey period**, or a long patrol expires its own
+  early bays before it lands (the 1 km route is >60 min). Since re-flights ingest (above), two
+  flights can fall inside one window, so the vote first resolves which mission saw each bay last
+  and counts only that flight's views — otherwise a bay that emptied between flights would keep
+  voting "occupied" on the strength of history. Earlier observations stay as history, which is what
+  they are for. Legacy rows with a NULL mission group together (`IS NOT DISTINCT FROM`), so
+  pre-`0009` data votes exactly as it did before.
+  *Verified with teeth:* 20 contrary views from an older mission leave the state untouched; the
+  same 20 rows re-labelled to the newest mission flip it.
 - **Frames are transient.** `cleanup.py` deletes `frame` rows and their stored images past
   `FRAME_RETENTION_S` (4 h); `observation` and `mission` are kept as the analytics history. It
   refuses to collect a frame whose job is still `queued` — that is unclassified work, and dropping
@@ -481,8 +606,14 @@ classified/failed/recovered/deltas and mean classify time (they reset per proces
 signal), ingest rates, enqueue→finish latency avg/p50/p95 + failure rate, fleet/active-mission
 progress, bay coverage, and **model accuracy** (`state_accuracy` = voted bay verdicts vs `gt`, the
 product-level number; `view_accuracy` = single looks before voting; both `null` where there is no
-ground truth, never 0). Both endpoints are unauthenticated like every other read route; they go
-behind admin auth in P7. To see a stall by hand: run the server with `CLASSIFY_THREADS=0`, ingest,
+ground truth, never 0). **Both endpoints require `x-admin-key` when `ADMIN_API_KEY` is set** (P7, 2026-08-21). They expose
+queue depth, ingest rates, fleet state and model accuracy — an operational map of the system, which
+is a different thing from a bay's occupancy being public. With the variable unset they stay open
+and the server prints a loud one-line warning at startup, so "unset" cannot quietly pass for
+"secured"; `.env.example` ships it empty, i.e. local dev is unchanged. The ops dashboard's vite
+proxy reads `web/.env` and injects the header server-side, so the key never reaches the browser
+bundle and :5174 works either way. A shared key is the smallest thing that closes the door — a real
+admin login (sessions, users, audit) is still open P7 work. To see a stall by hand: run the server with `CLASSIFY_THREADS=0`, ingest,
 and watch `jobs.queued` / `oldest_queued_age_s` climb; restarting normally then shows
 `recovered_on_start` and drains it.
 
@@ -515,10 +646,10 @@ Note a folder with existing captures makes the controller **resume**, not re-fly
 - Flags: `--idle-exit S` (close the mission and exit after S seconds with no new frame),
   `--poll S`, `--from N`, `--once`. `frames_expected` comes from `sim/worlds/<area>.route.json`, so
   the ops dashboard's mission progress bar is a real plan-vs-actual.
-- **Re-flying the same survey area does NOT reprocess** — ingest is idempotent on
-  `(drone, survey_area, frame_idx)`, so the uplink reports duplicates and warns once, and the map
-  never repaints while the drone flies. **`pnpm clear <area>` first** (below) if you mean to score
-  a new flight.
+- **Re-flying the same survey area DOES reprocess** since migration `0009` — each run starts a new
+  mission and ingest is keyed per mission, so a second flight ingests, classifies and repaints
+  without anything being cleared first. Duplicates now mean what they say: the same frame re-sent
+  inside one flight.
 - Its stdout is UTF-8 **and line-buffered**: it runs for the length of a patrol (>1 h on the 1 km
   route) with its output redirected, and Python block-buffers a redirected stream — same lesson as
   the Webots stdout gotcha above.
@@ -532,11 +663,11 @@ pnpm clear fmi_block --yes              # no confirmation prompt
 ```
 `scripts/clear.sh` -> `parkdrone_vision/clear_area.py`; `pnpm quickstart --clear --fly <world>`
 runs it as part of launching a flight (between the migrations and the server start, so startup
-recovery cannot re-enqueue jobs whose frames are about to go). It exists because "re-fly and watch the map
-update" silently does nothing otherwise: ingest is idempotent on `(drone, survey_area, frame_idx)`,
-so the second flight's frames return 200-duplicate — no classify job, no `bay_state` change, and
-deltas only fire on a *change*, so no WebSocket push. Four deletes have to happen together, which is
-why this is a command and not a snippet: `frame` (CASCADE takes `frame_job`) + its object-store
+recovery cannot re-enqueue jobs whose frames are about to go).
+**Since migration `0009` you no longer need this to re-fly** — a re-flight is a new mission and
+ingests on its own. It is now for what its name says: wiping an area, e.g. to re-run a scored
+comparison from a clean slate or to drop a bad flight. Four deletes have to happen together, which
+is why it is a command and not a snippet: `frame` (CASCADE takes `frame_job`) + its object-store
 images, `observation` (stale votes out-vote the new looks), `bay_state` (an already-correct state
 pushes no delta), and `mission` (stale progress on the ops dashboard). `bay_state` has no
 `survey_area` column, so the rows to drop are resolved from the observations **before** those are

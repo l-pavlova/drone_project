@@ -270,6 +270,39 @@ elif os.path.isdir(OUTPUT):
 else:
     skips.append("camera intrinsics: sim/output missing")
 
+# --- 6. camera FOV: score_occupancy.py vs the controller ----------------------
+# The controller grew its own copy of the intrinsics on 2026-08-20, when the
+# standoff capture started asking "is this waypoint in the picture" - a question
+# that cannot be answered without the FOV and the aspect ratio. Check 5 compares
+# the RESOLUTION against real frames; nothing compared the FOV against anything,
+# and a drifted FOV here does not crash and does not look wrong - it silently
+# shifts which skipped waypoints are judged recoverable, which is exactly the
+# class of bug this script exists for.
+print("\ncamera FOV (score_occupancy.py vs parkdrone.py)")
+fov_s = re.search(r"^FOV = ([\d.]+)", read(SCORE), re.M)
+fov_c = re.search(r"^CAM_FOV = ([\d.]+)", read(CTRL), re.M)
+asp_c = re.search(r"^CAM_ASPECT = ([\d.]+) / ([\d.]+)", read(CTRL), re.M)
+checks += 1
+if not (fov_s and fov_c):
+    failures.append("camera FOV: could not parse FOV from score_occupancy.py "
+                    "or CAM_FOV from parkdrone.py")
+elif abs(float(fov_s.group(1)) - float(fov_c.group(1))) > 1e-9:
+    failures.append(f"camera FOV: score_occupancy.py has {fov_s.group(1)} but "
+                    f"parkdrone.py has {fov_c.group(1)}")
+else:
+    print(f"  ok  FOV {fov_s.group(1)} rad in both")
+checks += 1
+if not (iw and asp_c):
+    failures.append("camera FOV: could not parse CAM_ASPECT from parkdrone.py")
+elif (asp_c.group(1), asp_c.group(2)) != (f"{iw.group(2)}.0", f"{iw.group(1)}.0"):
+    # Spelled height/width so it reads as the image, not as a magic 0.6.
+    failures.append(f"camera FOV: CAM_ASPECT is {asp_c.group(1)}/{asp_c.group(2)} "
+                    f"but the image is {iw.group(1)}x{iw.group(2)} "
+                    f"(expected {iw.group(2)}.0 / {iw.group(1)}.0)")
+else:
+    print(f"  ok  CAM_ASPECT {asp_c.group(1)}/{asp_c.group(2)} matches "
+          f"{iw.group(1)}x{iw.group(2)}")
+
 # --- report -------------------------------------------------------------------
 print()
 for s in skips:

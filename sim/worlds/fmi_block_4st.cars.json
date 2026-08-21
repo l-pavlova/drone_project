@@ -1,0 +1,443 @@
+[
+{
+"bay_id": 17549,
+"model": "BmwX5Simple",
+"x": -119.221,
+"y": 86.949,
+"ang": 0.3927,
+"L": 4.89,
+"W": 1.94
+},
+{
+"bay_id": 17550,
+"model": "MercedesBenzSprinterSimple",
+"x": -105.667,
+"y": 91.954,
+"ang": -2.7506,
+"L": 5.93,
+"W": 1.99
+},
+{
+"bay_id": 17551,
+"model": "LincolnMKZSimple",
+"x": -100.07,
+"y": 94.021,
+"ang": -2.7506,
+"L": 4.93,
+"W": 1.86
+},
+{
+"bay_id": 17555,
+"model": "TeslaModel3Simple",
+"x": -69.482,
+"y": 105.318,
+"ang": -2.7506,
+"L": 4.69,
+"W": 1.85
+},
+{
+"bay_id": 17556,
+"model": "LincolnMKZSimple",
+"x": -64.231,
+"y": 107.258,
+"ang": 0.391,
+"L": 4.93,
+"W": 1.86
+},
+{
+"bay_id": 17557,
+"model": "LincolnMKZSimple",
+"x": -59.17,
+"y": 109.127,
+"ang": 0.391,
+"L": 4.93,
+"W": 1.86
+},
+{
+"bay_id": 17558,
+"model": "BmwX5Simple",
+"x": -54.062,
+"y": 111.013,
+"ang": 0.391,
+"L": 4.89,
+"W": 1.94
+},
+{
+"bay_id": 17560,
+"model": "ToyotaPriusSimple",
+"x": -44.017,
+"y": 114.723,
+"ang": 0.391,
+"L": 4.54,
+"W": 1.76
+},
+{
+"bay_id": 17561,
+"model": "LincolnMKZSimple",
+"x": -38.635,
+"y": 116.711,
+"ang": -2.7506,
+"L": 4.93,
+"W": 1.86
+},
+{
+"bay_id": 17564,
+"model": "RangeRoverSportSVRSimple",
+"x": -19.826,
+"y": 105.62,
+"ang": -1.2671,
+"L": 4.85,
+"W": 1.98
+},
+{
+"bay_id": 17567,
+"model": "TeslaModel3Simple",
+"x": -14.597,
+"y": 88.075,
+"ang": -1.2671,
+"L": 4.69,
+"W": 1.85
+},
+{
+"bay_id": 17570,
+"model": "RangeRoverSportSVRSimple",
+"x": -7.805,
+"y": 70.6,
+"ang": -1.1484,
+"L": 4.85,
+"W": 1.98
+},
+{
+"bay_id": 17571,
+"model": "LincolnMKZSimple",
+"x": 4.156,
+"y": 45.143,
+"ang": -1.1484,
+"L": 4.93,
+"W": 1.86
+},
+{
+"bay_id": 17573,
+"model": "BmwX5Simple",
+"x": -2.439,
+"y": 57.683,
+"ang": 1.9932,
+"L": 4.89,
+"W": 1.94
+},
+{
+"bay_id": 17574,
+"model": "MercedesBenzSprinterSimple",
+"x": -120.236,
+"y": -28.354,
+"ang": 3.564,
+"L": 5.93,
+"W": 1.99
+},
+{
+"bay_id": 17575,
+"model": "CitroenCZeroSimple",
+"x": -115.261,
+"y": -25.998,
+"ang": 0.459,
+"L": 3.48,
+"W": 1.48
+},
+{
+"bay_id": 17582,
+"model": "TeslaModel3Simple",
+"x": -36.667,
+"y": 12.195,
+"ang": 0.459,
+"L": 4.69,
+"W": 1.85
+},
+{
+"bay_id": 17589,
+"model": "BmwX5Simple",
+"x": -0.58,
+"y": 29.68,
+"ang": 0.459,
+"L": 4.89,
+"W": 1.94
+},
+{
+"bay_id": 17590,
+"model": "TeslaModel3Simple",
+"x": -119.169,
+"y": -41.442,
+"ang": 3.564,
+"L": 4.69,
+"W": 1.85
+},
+{
+"bay_id": 17591,
+"model": "CitroenCZeroSimple",
+"x": -114.194,
+"y": -39.085,
+"ang": 3.564,
+"L": 3.48,
+"W": 1.48
+},
+{
+"bay_id": 17592,
+"model": "LincolnMKZSimple",
+"x": -108.805,
+"y": -36.439,
+"ang": 0.459,
+"L": 4.93,
+"W": 1.86
+},
+{
+"bay_id": 17593,
+"model": "CitroenCZeroSimple",
+"x": -103.702,
+"y": -33.962,
+"ang": 0.459,
+"L": 3.48,
+"W": 1.48
+},
+{
+"bay_id": 17594,
+"model": "TeslaModel3Simple",
+"x": 3.752,
+"y": 18.761,
+"ang": 3.6006,
+"L": 4.69,
+"W": 1.85
+},
+{
+"bay_id": 17595,
+"model": "RangeRoverSportSVRSimple",
+"x": -1.116,
+"y": 16.361,
+"ang": 0.459,
+"L": 4.85,
+"W": 1.98
+},
+{
+"bay_id": 17597,
+"model": "RangeRoverSportSVRSimple",
+"x": -10.874,
+"y": 11.551,
+"ang": 0.459,
+"L": 4.85,
+"W": 1.98
+},
+{
+"bay_id": 17598,
+"model": "BmwX5Simple",
+"x": -16.052,
+"y": 8.999,
+"ang": 0.459,
+"L": 4.89,
+"W": 1.94
+},
+{
+"bay_id": 17599,
+"model": "MercedesBenzSprinterSimple",
+"x": -21.234,
+"y": 6.444,
+"ang": 0.459,
+"L": 5.93,
+"W": 1.99
+},
+{
+"bay_id": 17600,
+"model": "CitroenCZeroSimple",
+"x": -25.994,
+"y": 4.097,
+"ang": 0.459,
+"L": 3.48,
+"W": 1.48
+},
+{
+"bay_id": 17604,
+"model": "LincolnMKZSimple",
+"x": -44.426,
+"y": -4.849,
+"ang": 3.6006,
+"L": 4.93,
+"W": 1.86
+},
+{
+"bay_id": 17606,
+"model": "LincolnMKZSimple",
+"x": -54.576,
+"y": -9.844,
+"ang": 3.6006,
+"L": 4.93,
+"W": 1.86
+},
+{
+"bay_id": 17607,
+"model": "RangeRoverSportSVRSimple",
+"x": -60.261,
+"y": -12.642,
+"ang": 3.6006,
+"L": 4.85,
+"W": 1.98
+},
+{
+"bay_id": 17676,
+"model": "BmwX5Simple",
+"x": 73.945,
+"y": 53.42,
+"ang": 0.459,
+"L": 4.89,
+"W": 1.94
+},
+{
+"bay_id": 17677,
+"model": "ToyotaPriusSimple",
+"x": 68.818,
+"y": 50.902,
+"ang": 0.459,
+"L": 4.54,
+"W": 1.76
+},
+{
+"bay_id": 17678,
+"model": "BmwX5Simple",
+"x": 63.54,
+"y": 48.31,
+"ang": 3.6006,
+"L": 4.89,
+"W": 1.94
+},
+{
+"bay_id": 17679,
+"model": "CitroenCZeroSimple",
+"x": 58.852,
+"y": 46.008,
+"ang": 3.6006,
+"L": 3.48,
+"W": 1.48
+},
+{
+"bay_id": 17680,
+"model": "LincolnMKZSimple",
+"x": 54.367,
+"y": 43.805,
+"ang": 3.6006,
+"L": 4.93,
+"W": 1.86
+},
+{
+"bay_id": 17683,
+"model": "MercedesBenzSprinterSimple",
+"x": 40.41,
+"y": 36.951,
+"ang": 3.6006,
+"L": 5.93,
+"W": 1.99
+},
+{
+"bay_id": 17685,
+"model": "ToyotaPriusSimple",
+"x": 30.283,
+"y": 31.977,
+"ang": 0.459,
+"L": 4.54,
+"W": 1.76
+},
+{
+"bay_id": 17687,
+"model": "TeslaModel3Simple",
+"x": 111.158,
+"y": 71.678,
+"ang": 0.459,
+"L": 4.69,
+"W": 1.85
+},
+{
+"bay_id": 17688,
+"model": "CitroenCZeroSimple",
+"x": 106.939,
+"y": 69.62,
+"ang": 0.459,
+"L": 3.48,
+"W": 1.48
+},
+{
+"bay_id": 17689,
+"model": "MercedesBenzSprinterSimple",
+"x": 102.07,
+"y": 67.22,
+"ang": 3.6006,
+"L": 5.93,
+"W": 1.99
+},
+{
+"bay_id": 17696,
+"model": "CitroenCZeroSimple",
+"x": 125.559,
+"y": 78.729,
+"ang": 0.459,
+"L": 3.48,
+"W": 1.48
+},
+{
+"bay_id": 17726,
+"model": "LincolnMKZSimple",
+"x": 120.268,
+"y": 89.513,
+"ang": 0.459,
+"L": 4.93,
+"W": 1.86
+},
+{
+"bay_id": 17727,
+"model": "CitroenCZeroSimple",
+"x": 115.341,
+"y": 87.097,
+"ang": 0.459,
+"L": 3.48,
+"W": 1.48
+},
+{
+"bay_id": 17730,
+"model": "ToyotaPriusSimple",
+"x": 99.94,
+"y": 79.487,
+"ang": 0.459,
+"L": 4.54,
+"W": 1.76
+},
+{
+"bay_id": 17732,
+"model": "ToyotaPriusSimple",
+"x": 87.929,
+"y": 73.584,
+"ang": 0.459,
+"L": 4.54,
+"W": 1.76
+},
+{
+"bay_id": 22456,
+"model": "MercedesBenzSprinterSimple",
+"x": -128.421,
+"y": -66.62,
+"ang": -1.2252,
+"L": 5.93,
+"W": 1.99
+},
+{
+"bay_id": 22457,
+"model": "CitroenCZeroSimple",
+"x": -126.608,
+"y": -71.894,
+"ang": -1.2252,
+"L": 3.48,
+"W": 1.48
+},
+{
+"bay_id": 22458,
+"model": "TeslaModel3Simple",
+"x": -122.844,
+"y": -82.845,
+"ang": 1.9164,
+"L": 4.69,
+"W": 1.85
+}
+]

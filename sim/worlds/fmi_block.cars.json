@@ -1,0 +1,155 @@
+[
+{
+"bay_id": 17571,
+"model": "BmwX5Simple",
+"x": 4.156,
+"y": 45.143,
+"ang": 1.9932,
+"L": 4.89,
+"W": 1.94
+},
+{
+"bay_id": 17572,
+"model": "MercedesBenzSprinterSimple",
+"x": 1.026,
+"y": 51.202,
+"ang": -1.1484,
+"L": 5.93,
+"W": 1.99
+},
+{
+"bay_id": 17573,
+"model": "LincolnMKZSimple",
+"x": -2.439,
+"y": 57.683,
+"ang": -1.1484,
+"L": 4.93,
+"W": 1.86
+},
+{
+"bay_id": 17585,
+"model": "TeslaModel3Simple",
+"x": -21.2,
+"y": 19.675,
+"ang": 0.459,
+"L": 4.69,
+"W": 1.85
+},
+{
+"bay_id": 17586,
+"model": "LincolnMKZSimple",
+"x": -16.07,
+"y": 22.165,
+"ang": 3.6006,
+"L": 4.93,
+"W": 1.86
+},
+{
+"bay_id": 17587,
+"model": "LincolnMKZSimple",
+"x": -10.814,
+"y": 24.712,
+"ang": 3.6006,
+"L": 4.93,
+"W": 1.86
+},
+{
+"bay_id": 17588,
+"model": "BmwX5Simple",
+"x": -5.71,
+"y": 27.19,
+"ang": 3.6006,
+"L": 4.89,
+"W": 1.94
+},
+{
+"bay_id": 17594,
+"model": "ToyotaPriusSimple",
+"x": 3.752,
+"y": 18.761,
+"ang": 3.6006,
+"L": 4.54,
+"W": 1.76
+},
+{
+"bay_id": 17595,
+"model": "LincolnMKZSimple",
+"x": -1.116,
+"y": 16.361,
+"ang": 0.459,
+"L": 4.93,
+"W": 1.86
+},
+{
+"bay_id": 17598,
+"model": "RangeRoverSportSVRSimple",
+"x": -16.052,
+"y": 8.999,
+"ang": 0.459,
+"L": 4.85,
+"W": 1.98
+},
+{
+"bay_id": 17601,
+"model": "TeslaModel3Simple",
+"x": -30.276,
+"y": 1.987,
+"ang": 0.459,
+"L": 4.69,
+"W": 1.85
+},
+{
+"bay_id": 17604,
+"model": "RangeRoverSportSVRSimple",
+"x": -44.426,
+"y": -4.849,
+"ang": 0.459,
+"L": 4.85,
+"W": 1.98
+},
+{
+"bay_id": 17605,
+"model": "LincolnMKZSimple",
+"x": -49.386,
+"y": -7.29,
+"ang": 0.459,
+"L": 4.93,
+"W": 1.86
+},
+{
+"bay_id": 17607,
+"model": "BmwX5Simple",
+"x": -60.261,
+"y": -12.642,
+"ang": 3.6006,
+"L": 4.89,
+"W": 1.94
+},
+{
+"bay_id": 17676,
+"model": "MercedesBenzSprinterSimple",
+"x": 73.945,
+"y": 53.42,
+"ang": 3.6006,
+"L": 5.93,
+"W": 1.99
+},
+{
+"bay_id": 17677,
+"model": "CitroenCZeroSimple",
+"x": 68.818,
+"y": 50.902,
+"ang": 0.459,
+"L": 3.48,
+"W": 1.48
+},
+{
+"bay_id": 17684,
+"model": "TeslaModel3Simple",
+"x": 35.414,
+"y": 34.497,
+"ang": 0.459,
+"L": 4.69,
+"W": 1.85
+}
+]

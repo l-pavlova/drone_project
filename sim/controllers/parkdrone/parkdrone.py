@@ -109,6 +109,10 @@ camera = robot.getDevice("camera")
 # basic time step (~4 cm at 5 m/s) — same as with continuous sampling.
 CAM_WARMUP = 2             # steps between camera.enable() and saveImage()
 cam_warm = -1              # >=0 while a capture is scheduled (counts down)
+cam_job = None             # what the scheduled capture is FOR: None = the
+#   current waypoint (the only case on a survey world), or
+#   ("standoff", idx, wp, metres) for a skipped waypoint being shot in passing.
+#   One scheduler, so the two kinds can never fight over the camera.
 SNAP_DIAG = False          # timed snap_###.png diagnostics need a continuously
 #   enabled camera; turn back on only when debugging capture itself.
 if SNAP_DIAG:
@@ -367,6 +371,51 @@ STEER_HORIZON = 70.0       # m of route walked ahead when asking whether a
 # to, and the detour would orbit waiting for a condition that cannot happen.
 PASS_F = 0.8
 SKIP_F = 0.9
+# ---- standoff capture of skipped waypoints ---------------------------------
+# A skipped waypoint used to mean NO FRAME THERE at all, and that is the single
+# biggest coverage cost of the obstacle layer (21 of 97 on `fmi_block_obst`).
+# But the waypoint being unreachable does not make its GROUND still unseen: the
+# detour flies past at CLEAR_R from the obstacle's surface, and a waypoint near
+# the disc's edge - which is most of them, since a street centerline crosses a
+# structure's shadow rather than aiming at its middle - passes within a few
+# metres of that arc. So instead of dropping it, remember it and take the shot
+# at CLOSEST APPROACH on whatever path the drone actually flies. No steering
+# changes: this is opportunistic, never a reason to leave the detour.
+#
+# The gate is "is the waypoint IN THE PICTURE", and that is not a radius. The
+# frame is 400x240 px over a 45 deg horizontal FOV, and the image is oriented
+# with UP = the drone's heading (score_occupancy.project()), so at 30 m it
+# reaches 12.4 m ACROSS the nose and only 7.5 m ALONG it. A waypoint passed
+# abeam at 10 m is fully in shot; the same 10 m dead ahead is not. Testing a
+# circle of 7.4 m - the inscribed radius - is safe but throws away most of the
+# recoverable waypoints, precisely because a detour passes its obstacle abeam.
+# Yaw IS known at the moment the shot fires, so use the real footprint.
+#
+# Third copy of the camera intrinsics (proto, score_occupancy.py, here) - the
+# same standing duplication as ORIGIN and DS_*: keep them in step, and
+# tools/check_consistency.py is what notices when they drift.
+CAM_FOV = 0.7854           # rad, horizontal
+CAM_ASPECT = 240.0 / 400.0 # image height / width
+SUB_MARGIN = 0.85          # of the half-extent: the shot fires SUB_RECEDE past
+#   closest approach plus the camera warm-up, and on an arc the yaw keeps
+#   turning, so the waypoint must be comfortably inside the frame and not on
+#   its edge when the trigger is evaluated.
+SUB_RECEDE = 0.5           # m of receding that proves the closest pass is past.
+SUB_RESET = 15.0           # m: drifting this far past a missed approach re-arms
+#   the waypoint, so a postman route that comes back later gets another try.
+
+
+def in_footprint(wp, x, y, yaw, alt):
+    """Is `wp` inside the nadir camera's footprint from this pose (with margin)?
+
+    Body frame, because the image is: +fwd is up the picture (the short axis,
+    240 px), +lat is across it (the long axis, 400 px).
+    """
+    dx, dy = wp[0] - x, wp[1] - y
+    c, s = math.cos(yaw), math.sin(yaw)
+    fwd, lat = c * dx + s * dy, -s * dx + c * dy
+    half_lat = alt * math.tan(CAM_FOV / 2.0) * SUB_MARGIN
+    return abs(lat) <= half_lat and abs(fwd) <= half_lat * CAM_ASPECT
 STEER_MIN = 6.0            # s: minimum committed detour. A manoeuvre that can be
 #   abandoned in the same second it began is not a manoeuvre.
 STEER_MERGE = 12.0         # m: a return only joins the remembered obstacle if it
@@ -627,6 +676,34 @@ steer_cool = []           # (cx, cy, r, t_expire): discs a detour was just
 last_side = None          # ((x,y), side, goal_idx) of the last threat we
 #   committed against, so the same obstacle for the same goal keeps its side.
 skipped = []              # waypoints abandoned because a threat sits on them
+pending = {}              # idx -> {"wp", "best"}: skipped waypoints still
+#   waiting for a standoff shot. Populated ONLY by the stage B skip below, so on
+#   a survey world (no ray fan, no detour) it stays empty and every branch that
+#   reads it is dead code - the same containment the orbit fix relies on.
+standoff = []             # (idx, metres) actually captured off-waypoint
+
+
+def write_coverage():
+    """Declare the coverage gap to disk, next to poses.json.
+
+    A waypoint the obstacle layer could not reach and could not shoot in passing
+    is GROUND THIS SURVEY DID NOT SEE. That is a legitimate result - an
+    autonomous patrol around a real structure has to be allowed to say "not
+    covered" - but only if it SAYS it. Left as a console line it is lost with
+    Webots' stdout, and the survey then looks complete while quietly having a
+    hole in it; the scorer reports bays as uncovered without ever being able to
+    say whether that was an obstacle or a bad pass.
+
+    Rewritten on every change, like poses.json, so an interrupted flight still
+    leaves an honest account of what it had covered when it stopped.
+    """
+    json.dump({
+        "waypoints": len(wps),
+        "captured": sorted(p["frame_idx"] for p in poses),
+        "unreachable": sorted(skipped),
+        "standoff": [{"wp": j, "off_m": m} for j, m in standoff],
+        "uncovered": sorted(pending),
+    }, open(os.path.join(OUT, "coverage.json"), "w"), indent=1)
 obst_cap = float("inf")   # RATCHET: while one encounter is being tracked the
 #   speed limit may fall but never rise. Without it a momentary loss of the
 #   return (the ray slipping off an edge, or a nearer object stealing the
@@ -823,8 +900,14 @@ while robot.step(dt) != -1:
                    < detour["rho"] + detour["C_R"] * SKIP_F):
                 print(f"[parkdrone] STAGE B: wp{idx} "
                       f"({wps[idx][0]:.1f},{wps[idx][1]:.1f}) is inside the "
-                      f"obstacle - skipping it, no frame there")
+                      f"obstacle - skipping it, standoff shot if it lands "
+                      f"in frame on a later pass")
                 skipped.append(idx)
+                # The waypoint is unreachable; its GROUND may not be. Keep it as
+                # a standing capture target for the rest of the flight.
+                pending[idx] = {"wp": (wps[idx][0], wps[idx][1]),
+                                "best": float("inf")}
+                write_coverage()
                 idx += 1
                 wp_min = float("inf")
                 wp_steps = 0
@@ -851,16 +934,42 @@ while robot.step(dt) != -1:
             arrived = (dist < WP_CAPTURE) or \
                       (wp_min < float("inf") and
                        (dist > wp_min + 1.0 or wp_steps * dt_s > WP_TIMEOUT))
+
+            # ---- STANDOFF SHOT of a skipped waypoint --------------------
+            # Same closest-approach rule the waypoint capture itself uses, with
+            # a distance gate instead of an arrival basin: track the pass, fire
+            # once it is measurably past its minimum. Nothing here steers, and
+            # the real waypoint always wins the camera - a standoff frame is a
+            # bonus, never a reason to miss the shot the route asked for.
+            if pending and cam_warm < 0 and not arrived:
+                for j, st in sorted(pending.items()):
+                    d = math.hypot(st["wp"][0] - x, st["wp"][1] - y)
+                    if d < st["best"]:
+                        st["best"] = d
+                    elif (d > st["best"] + SUB_RECEDE and
+                          in_footprint(st["wp"], x, y, yaw, alt)):
+                        camera.enable(dt)
+                        cam_warm = CAM_WARMUP
+                        cam_job = ("standoff", j, st["wp"], st["best"])
+                        break
+                    elif d > st["best"] + SUB_RESET:
+                        st["best"] = d   # that approach missed; arm the next one
+
             if cam_warm >= 0:
                 # capture scheduled on a previous step: give the just-enabled
                 # camera CAM_WARMUP steps to render, then save frame + pose
                 # together (drone drifts ~4 cm/step meanwhile — negligible).
                 cam_warm -= 1
                 if cam_warm < 0:
-                    capture(os.path.join(OUT, f"frame_{idx:03d}.png"))
-                    pose = {"frame_idx": idx, "x": x, "y": y, "alt": alt,
+                    # Which waypoint this frame is FOR. `cam_job` is None on
+                    # every survey flight, so f_idx/f_wp are idx/(tx,ty) exactly
+                    # as before and the frame numbering stays 1:1 with the route.
+                    f_idx, f_wp = (idx, (tx, ty)) if cam_job is None else \
+                                  (cam_job[1], cam_job[2])
+                    capture(os.path.join(OUT, f"frame_{f_idx:03d}.png"))
+                    pose = {"frame_idx": f_idx, "x": x, "y": y, "alt": alt,
                             "yaw": yaw, "roll": roll, "pitch": pitch,
-                            "wp": [tx, ty]}
+                            "wp": [f_wp[0], f_wp[1]]}
                     if cam_pitch_pos is not None:
                         pose["cam_pitch"] = cam_pitch_pos.getValue()
                     if cam_roll_pos is not None:
@@ -881,24 +990,67 @@ while robot.step(dt) != -1:
                         pose["steering"] = True
                         if obst_d < float("inf"):
                             pose["obstacle_bearing"] = round(math.degrees(obst_a), 1)
+                    if cam_job is not None and cam_job[0] == "standoff":
+                        # Off-waypoint by construction, and by a KNOWN amount -
+                        # which is the difference between this and a missing
+                        # frame. The scorer can weigh it, exclude it, or treat
+                        # the offset as extra projection uncertainty; what it
+                        # must not do is mistake it for a nominal capture.
+                        pose["standoff"] = True
+                        # Measured AT CAPTURE, not at the trigger: the shot fires
+                        # SUB_RECEDE past the closest pass plus the camera
+                        # warm-up, so the trigger value would understate the
+                        # frame by ~0.5 m. This number has to describe the frame
+                        # that exists, because that is what the scorer weighs.
+                        pose["standoff_m"] = round(
+                            math.hypot(f_wp[0] - x, f_wp[1] - y), 2)
                     poses.append(pose)
                     # write poses.json after every waypoint so progress survives
                     # even if the run is cut short before the patrol completes
                     # (it is also what RESUME continues from after a crash).
                     json.dump(poses, open(POSES_FILE, "w"), indent=1)
-                    print(f"[parkdrone] reached wp{idx} at ({x:.1f},{y:.1f}) "
-                          f"-> frame_{idx:03d}.png")
                     if not SNAP_DIAG:
                         camera.disable()
-                    wp_min = float("inf")
-                    wp_steps = 0
-                    idx += 1
-                    if idx == len(wps):
-                        print("[parkdrone] patrol complete")
-                    elif (not steering and
-                          abs(wrap(math.atan2(wps[idx][1] - y, wps[idx][0] - x)
-                                   - yaw)) > HOLD_TURN):
-                        hold_stop = True   # big turn ahead: stop, spin, then go
+                    if cam_job is not None and cam_job[0] == "standoff":
+                        # The route index is NOT advanced: this frame was never a
+                        # waypoint arrival, the drone is still flying to `idx`,
+                        # and the closest-approach state of that flight (wp_min,
+                        # wp_steps) must survive untouched or the real capture
+                        # would be re-armed from wherever this happened to fire.
+                        # Falling through to the waypoint bookkeeping instead
+                        # would silently eat the waypoint the drone is still on.
+                        j, off_m = cam_job[1], pose["standoff_m"]
+                        standoff.append((j, off_m))
+                        pending.pop(j, None)
+                        cam_job = None
+                        print(f"[parkdrone] STANDOFF: skipped wp{j} shot from "
+                              f"{off_m:.1f} m off at ({x:.1f},{y:.1f}) "
+                              f"-> frame_{j:03d}.png")
+                        write_coverage()
+                    else:
+                        print(f"[parkdrone] reached wp{idx} at ({x:.1f},{y:.1f}) "
+                              f"-> frame_{idx:03d}.png")
+                        wp_min = float("inf")
+                        wp_steps = 0
+                        idx += 1
+                        if idx == len(wps):
+                            print("[parkdrone] patrol complete")
+                            write_coverage()
+                            if skipped:
+                                # The coverage line the survey is actually judged
+                                # on: how many of the unreachable waypoints were
+                                # still SEEN, and how far off. `pending` is what
+                                # is left genuinely uncovered.
+                                print(f"[parkdrone] coverage: {len(skipped)} "
+                                      f"waypoint(s) unreachable, "
+                                      f"{len(standoff)} recovered by standoff "
+                                      f"shot (max {max([m for _, m in standoff], default=0.0):.1f} m "
+                                      f"off), {len(pending)} never captured: "
+                                      f"{sorted(pending)}")
+                        elif (not steering and
+                              abs(wrap(math.atan2(wps[idx][1] - y, wps[idx][0] - x)
+                                       - yaw)) > HOLD_TURN):
+                            hold_stop = True   # big turn ahead: stop, spin, then go
                     # `not steering` is load-bearing. The stop-and-turn exists for
                     # ROUTE REVERSALS - the drone is pointing the wrong way along
                     # its own path and should pirouette rather than loop. Mid
@@ -914,6 +1066,7 @@ while robot.step(dt) != -1:
             elif arrived:
                 camera.enable(dt)
                 cam_warm = CAM_WARMUP
+                cam_job = None      # this shot is the waypoint's own
             else:
                 # aim point: the current waypoint, blending toward the next one
                 # as we close in, so the nose flows through waypoint hand-offs

@@ -62,7 +62,16 @@ print(f"\nRoute      : reached wp{reached} of {total}"
       f"  ({len(poses)} frames captured)")
 if missing:
     print(f"  skipped  : {len(missing)} waypoint(s) {missing} - inside an "
-          f"obstacle, deliberately not captured")
+          f"obstacle, unreachable")
+# A skipped waypoint is unreachable; its GROUND may still have been shot in
+# passing (`standoff`). Those frames are real coverage - they are scored from
+# their own pose like any other - so the honest gap is what is left after them.
+stand = [p for p in poses if p.get("standoff")]
+if stand:
+    off = [p["standoff_m"] for p in stand]
+    print(f"  standoff : {len(stand)} skipped waypoint(s) recovered by a "
+          f"closest-approach shot, {min(off):.1f}-{max(off):.1f} m off "
+          f"(cap 7.4 m = the footprint's inscribed radius)")
 print(f"  covered  : {len(poses)}/{reached + 1} of the waypoints flown, "
       f"{100.0 * len(poses) / (reached + 1):.0f}%")
 

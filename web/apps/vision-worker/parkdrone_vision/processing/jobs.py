@@ -89,6 +89,7 @@ def _worker_loop(bays, index, hub, loop) -> None:
                 bays,
                 frame_id=job.get("frame_id"),
                 index=index,
+                mission_id=job.get("mission_id"),
             )
             if job.get("frame_id"):
                 web_db.mark_frame_processed(conn, job["frame_id"])

@@ -58,6 +58,23 @@ LOWPOLY = "--lowpoly" in sys.argv          # proxy box cars instead of vehicle
                                            # protos. NEVER pass this for the
                                            # calibrated worlds - see the comment
                                            # above lowpoly_car().
+SHADOWS = "--shadows" in sys.argv          # cast real sun shadows. OPT-IN, and
+#   the vision track's scene-hardening experiment (TODO #6) rather than a
+#   prettier picture: every accuracy number this project has was measured under
+#   flat, shadowless light, so the classifier has never been asked to tell a
+#   shaded free bay from an occupied one. See SUN below for the quality caveat -
+#   turning this on naively hardens the classifier against a RENDERING DEFECT.
+SUN = None                                 # --sun AZ,EL in degrees (compass
+#   azimuth the light comes FROM, elevation above the horizon). Shadow LENGTH is
+#   the whole point of varying it: a low sun throws a car's shadow across the
+#   next bay, which is the case that breaks an absolute brightness threshold.
+if "--sun" in sys.argv:
+    _i = sys.argv.index("--sun")
+    if _i + 1 >= len(sys.argv):
+        sys.exit("--sun needs AZ,EL in degrees, e.g. --sun 135,25")
+    SUN = tuple(float(v) for v in sys.argv[_i + 1].split(","))
+    if len(SUN) != 2:
+        sys.exit("--sun takes exactly two numbers: AZ,EL")
 BAY_SOLIDS = "--bay-solids" in sys.argv    # one Solid per bay pad/line (the old
                                            # path). Off by default: bay paint is
                                            # merged into 2 IndexedFaceSets, which
@@ -329,6 +346,39 @@ def path_back(prev, v):
     return out[::-1]
 
 
+# Sofiaplan writes street names abbreviated ("ул. Арх. Йордан Миланов"); OSM
+# writes them out ("Архитект Йордан Миланов"). The raw substring test therefore
+# missed streets that are plainly the same one, and a missed street falls back to
+# a straight PCA line through its bay row - which is only correct if the street
+# IS straight. Measured on the 1 km cut (2026-08-21): 4 of 49 streets failed to
+# match, and expanding these abbreviations recovers two of them
+# (Арх. -> Архитект, Св. -> Свети). The other two have no OSM way with that name
+# at all, which no amount of string work fixes - see TODO #9.
+_ABBREV = {"арх.": "архитект", "св.": "свети", "проф.": "професор",
+           "ген.": "генерал", "инж.": "инженер", "д-р": "доктор"}
+
+
+def norm_street(name):
+    """Comparable form of a street name: no class prefix, no abbreviations.
+
+    Deliberately conservative - it expands known abbreviations and drops the
+    ул./бул./жк class word, and does NOT do transliteration or fuzzy distance.
+    A looser matcher risks pairing a bay row with the WRONG road, which is worse
+    than the straight-line fallback: the drone would fly a real street that is
+    simply not the one its bays are on.
+    """
+    if not name:
+        return ""
+    out = name.lower().strip()
+    for pref in ("ул.", "бул.", "жк", "кв.", "пл."):
+        if out.startswith(pref):
+            out = out[len(pref):].strip()
+            break
+    for abbr, full in _ABBREV.items():
+        out = out.replace(abbr, full)
+    return " ".join(out.split())
+
+
 def build_route(bays, road_runs):
     """Open postman walk of the bay-streets' centerline graph: every coverage
     edge flown once, minimum-matched deadheads along the roads.
@@ -343,8 +393,10 @@ def build_route(bays, road_runs):
         if len(pts) < MIN_BAYS_PER_STREET:
             continue
         cov = []
+        nname = norm_street(name)
         for rname, run in road_runs:
-            if rname and name and (rname in name or name in rname):
+            nrname = norm_street(rname)
+            if nrname and nname and (nrname in nname or nname in nrname):
                 cov.extend(clip_polyline(run, WINDOW + 5.0))
         if not cov:   # no OSM road matched this street name: PCA bay-row fit
             cov = [list(street_segment(pts))]
@@ -510,14 +562,34 @@ VIEWPOINT = ("""  orientation 0 1 0 0.4
 # to 0.4 m buys an order of magnitude and costs nothing - the chase camera sits
 # 0.5 m from the drone and nothing else is ever that close to the eye.
 NEAR = 0.4
+# Light direction: the vector the light TRAVELS along. The default is the one
+# every world on record was rendered with, kept verbatim so nothing shifts when
+# --sun is absent; --sun converts a compass azimuth (the direction the sun is
+# IN, measured clockwise from north) and an elevation above the horizon into the
+# same convention.
+if SUN is not None:
+    _az, _el = math.radians(SUN[0]), math.radians(SUN[1])
+    SUN_DIR = (f"{-math.sin(_az) * math.cos(_el):.4f} "
+               f"{-math.cos(_az) * math.cos(_el):.4f} "
+               f"{-math.sin(_el):.4f}")
+else:
+    SUN_DIR = "0.4 0.5 -1"
+SHADOW_ON = "TRUE" if SHADOWS else "FALSE"
 parts.append(f"""WorldInfo {{ basicTimeStep 8 }}
 Viewpoint {{
 {VIEWPOINT}
   near {NEAR}
 }}
 Background {{ skyColor [ 0.5 0.7 1 ] }}
-DirectionalLight {{ direction 0.4 0.5 -1 intensity 2.5 castShadows FALSE }}""")
-GROUND = 2 * WINDOW + 200      # ground plane comfortably past the window
+DirectionalLight {{ direction {SUN_DIR} intensity 2.5 castShadows {SHADOW_ON} }}""")
+# A directional light's shadow map is spread over the whole scene extent, and
+# the ground plane IS the extent here: at 2*WINDOW+200 the 1 km world hands one
+# map a 1.2 km square, which is what paints the streak artifacts across the
+# nadir frames that made `castShadows FALSE` necessary in the first place.
+# Shrinking the plane to just past the window concentrates the same texels on
+# the ground the drone actually photographs. It only applies with --shadows, so
+# the shadowless worlds keep the exact plane they always had.
+GROUND = 2 * WINDOW + (40 if SHADOWS else 200)
 # The ground sits BELOW z=0 so the surface stack above it has room to breathe.
 # Everything painted on the ground (grass, roads, bay pads, bay lines) is
 # stacked within ~10 cm, and at this scene scale (the plane is >1 km across)
@@ -1068,6 +1140,16 @@ def lowpoly_car(cx, cy, ang, L, W, col, name):
 pad_quads, line_quads = [], []   # accumulated when bays are merged (the default)
 
 placed = []   # body rectangles (with clearance) of cars already placed
+# Every car this world actually parks, written out as <name>.cars.json beside
+# ground_truth.json. ground_truth says WHICH BAYS hold a car; this says where
+# each car's body is and how big it is, which is what a detector needs: project
+# these four corners through the camera model and you have an exact bounding box
+# in pixels, for every frame, for free. No hand labelling, and no drift between
+# the labels and the world, because both come out of this one placement loop.
+#
+# It is a SIDECAR - nothing here changes the .wbt, ground_truth.json or the
+# route, and the three survey worlds must still regenerate byte-identical.
+cars = []
 for b in bays:
     if BAY_SOLIDS:
         parts.extend(bay_marking(b))
@@ -1100,6 +1182,13 @@ for b in bays:
             continue
         L, W, off = CAR_DIMS[model]
         placed.append(rect_corners(b["x"], b["y"], ang, L + CAR_GAP, W))
+        # (x, y) is the BODY centre in local metres - the proto is shifted back
+        # by its rear-axle offset precisely so the body ends up bay-centred, and
+        # the low-poly proxy is built about its body centre for the same reason,
+        # so this record describes both variants identically.
+        cars.append({"bay_id": b["id"], "model": model,
+                     "x": round(b["x"], 3), "y": round(b["y"], 3),
+                     "ang": round(ang, 4), "L": L, "W": W})
         if LOWPOLY:
             # The proxy is built about its own body centre, which is exactly what
             # the rear-axle offset below achieves for the proto - same footprint.
@@ -1566,6 +1655,7 @@ elif n_tall:
 wbt = os.path.join(WORLDS, f"{NAME}.wbt")
 open(wbt, "w", encoding="utf-8").write("\n".join(parts) + "\n")
 json.dump(gt, open(os.path.join(WORLDS, GT_FILE), "w"), indent=0)
+json.dump(cars, open(os.path.join(WORLDS, f"{NAME}.cars.json"), "w"), indent=0)
 json.dump([[round(x, 2), round(y, 2)] for x, y in route],
           open(os.path.join(WORLDS, ROUTE_FILE), "w"), indent=0)
 

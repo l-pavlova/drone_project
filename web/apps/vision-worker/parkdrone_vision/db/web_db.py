@@ -379,7 +379,17 @@ def bump_mission_done(conn, mission_id):
 
 
 def insert_frame(conn, frame_id, drone_id, mission_id, survey_area, pose, image_uri):
-    """Idempotent frame insert on (drone_id, survey_area, frame_idx).
+    """Idempotent frame insert on (drone_id, mission, frame_idx) - migration 0009.
+
+    Keyed on the MISSION, not the survey area, because `frame_idx` restarts at 0
+    every flight: on the old key a re-flight of an area was silently ignored end
+    to end (no job, no delta, a map that never moved, and no error). A re-send
+    inside one flight is still a duplicate - that is the retry case the
+    constraint exists for - while a new flight is new data.
+
+    Frames with no mission fall back to the old (drone, area, frame_idx)
+    behaviour via the index's COALESCE sentinel, so a client that never learned
+    about missions keeps the semantics it was written against.
 
     `pose` is expected normalized (canonical `frame_idx` key) — the ingest
     handler does that at the edge, so this layer stays stdlib-only.
@@ -397,7 +407,8 @@ def insert_frame(conn, frame_id, drone_id, mission_id, survey_area, pose, image_
                  (frame_id, drone_id, mission_id, survey_area, frame_idx, x, y, alt, yaw, roll, pitch,
                   cam_pitch, cam_roll, image_uri)
                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-               ON CONFLICT (drone_id, survey_area, frame_idx) DO NOTHING
+               ON CONFLICT (drone_id, COALESCE(mission_id, 'area:' || survey_area),
+                            frame_idx) DO NOTHING
                RETURNING frame_id""",
             (
                 frame_id, drone_id, mission_id, survey_area, pose["frame_idx"],
@@ -413,8 +424,11 @@ def insert_frame(conn, frame_id, drone_id, mission_id, survey_area, pose, image_
             cur.execute("INSERT INTO frame_job (frame_id) VALUES (%s)", (row[0],))
             return row[0], False
         cur.execute(
-            "SELECT frame_id FROM frame WHERE drone_id = %s AND survey_area = %s AND frame_idx = %s",
-            (drone_id, survey_area, pose["frame_idx"]),
+            """SELECT frame_id FROM frame
+                WHERE drone_id = %s
+                  AND COALESCE(mission_id, 'area:' || survey_area) = %s
+                  AND frame_idx = %s""",
+            (drone_id, mission_id or f"area:{survey_area}", pose["frame_idx"]),
         )
         return cur.fetchone()[0], True
 
@@ -450,14 +464,15 @@ def unscored_frames(conn):
     with conn.cursor() as cur:
         cur.execute(
             """SELECT f.frame_id, f.survey_area, f.frame_idx, f.x, f.y, f.alt, f.yaw,
-                      f.roll, f.pitch, f.cam_pitch, f.cam_roll, f.image_uri
+                      f.roll, f.pitch, f.cam_pitch, f.cam_roll, f.image_uri,
+                      f.mission_id
                  FROM frame_job j JOIN frame f USING (frame_id)
                 WHERE j.status = 'queued' ORDER BY j.enqueued_at"""
         )
         rows = cur.fetchall()
     jobs = []
     for (frame_id, survey_area, frame_idx, x, y, alt, yaw, roll, pitch,
-         cam_pitch, cam_roll, image_uri) in rows:
+         cam_pitch, cam_roll, image_uri, mission_id) in rows:
         # The gimbal angles are part of the pose for projection purposes, so a
         # recovered job must carry them or it would classify this frame
         # differently from the live path. Absent (pre-0008 rows, or a drone that
@@ -474,6 +489,12 @@ def unscored_frames(conn):
                 "frame_id": frame_id,
                 "survey_area": survey_area,
                 "frame_idx": frame_idx,
+                # Carried for the same reason as the gimbal angles: the vote is
+                # scoped per mission (0009), so a recovered job must record the
+                # flight it came from or its observations would join the wrong
+                # one -- and a recovered frame must score identically to the
+                # same frame processed live.
+                "mission_id": mission_id,
                 "pose": pose,
                 "image_uri": image_uri,
             }

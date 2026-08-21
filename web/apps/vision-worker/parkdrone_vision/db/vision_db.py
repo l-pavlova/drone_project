@@ -71,8 +71,14 @@ class BayIndex:
         return [bays[i] for i in np.nonzero(d2 <= lim * lim)[0]]
 
 
-def insert_observations(conn, survey_area, frame_idx, scores, gt=None):
-    """Append one observation row per scored bay (single view)."""
+def insert_observations(conn, survey_area, frame_idx, scores, gt=None,
+                        mission_id=None):
+    """Append one observation row per scored bay (single view).
+
+    `mission_id` is what lets the vote tell two flights apart (migration 0009).
+    It stays optional: a caller with no mission records NULL, and the vote groups
+    all mission-less observations of a bay together exactly as it did before.
+    """
     if not scores:
         return
     def fl(v):
@@ -98,6 +104,7 @@ def insert_observations(conn, survey_area, frame_idx, scores, gt=None):
                 fl(f.get("core_brightness")),
                 fl(f.get("core_std")),
                 None if gt is None else gt.get(s["bay_id"]),
+                mission_id,
             )
         )
     with conn.cursor() as cur:
@@ -106,7 +113,7 @@ def insert_observations(conn, survey_area, frame_idx, scores, gt=None):
             """INSERT INTO observation
                  (bay_id, occupied, frame_idx, survey_area, votes_occupied, views, vis,
                   center_off_px, core_paint_frac, core_dark_frac, core_chroma,
-                  core_brightness, core_std, gt)
+                  core_brightness, core_std, gt, mission_id)
                VALUES %s""",
             rows,
         )
@@ -124,15 +131,32 @@ def insert_observations(conn, survey_area, frame_idx, scores, gt=None):
 # The vote only counts observations inside OCCUPANCY_WINDOW_S, so cost is bounded
 # by the window rather than growing with the bay's accumulated history.
 _RECOMPUTE_SQL = """
-WITH agg AS (
-  SELECT bay_id,
-         count(*)                        AS n,
-         count(*) FILTER (WHERE occupied) AS occ
+WITH latest AS (
+  -- Which FLIGHT saw each bay most recently, inside the window. A survey area
+  -- can be re-flown at any time, and the window is hours wide, so without this
+  -- a fresh look would be averaged against a stale one from the previous
+  -- flight -- a bay that emptied between flights would keep voting "occupied"
+  -- on the strength of history. The newest mission wins the bay outright;
+  -- earlier observations stay as history, which is what they are for.
+  SELECT DISTINCT ON (bay_id) bay_id, mission_id
     FROM observation
    WHERE bay_id = ANY(%(bay_ids)s)
      AND survey_area = %(survey_area)s
      AND observed_at > now() - make_interval(secs => %(window_s)s)
-   GROUP BY bay_id
+   ORDER BY bay_id, observed_at DESC
+), agg AS (
+  SELECT o.bay_id,
+         count(*)                          AS n,
+         count(*) FILTER (WHERE o.occupied) AS occ
+    FROM observation o
+    JOIN latest l ON l.bay_id = o.bay_id
+                 -- IS NOT DISTINCT FROM, not =, so the pre-0009 rows (mission
+                 -- NULL) group together instead of matching nothing at all.
+                 AND o.mission_id IS NOT DISTINCT FROM l.mission_id
+   WHERE o.bay_id = ANY(%(bay_ids)s)
+     AND o.survey_area = %(survey_area)s
+     AND o.observed_at > now() - make_interval(secs => %(window_s)s)
+   GROUP BY o.bay_id
 ), calc AS (
   SELECT bay_id,
          (occ * 2 > n)                        AS occupied,   -- strict majority sees a car

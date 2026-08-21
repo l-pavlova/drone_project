@@ -11,7 +11,7 @@ from ..vision.scoring import score_frame
 
 
 def process_frame(conn, survey_area, frame_idx, img_arr, pose, bays, frame_id=None,
-                  gt=None, index=None):
+                  gt=None, index=None, mission_id=None):
     # Labels are a property of the survey area, not of the caller, so they are
     # resolved here — that way live ingest and the offline replay both record
     # them and accuracy is measured on the same path production runs. Passing
@@ -19,7 +19,8 @@ def process_frame(conn, survey_area, frame_idx, img_arr, pose, bays, frame_id=No
     if gt is None:
         gt = ground_truth.labels_for(survey_area)
     scores = score_frame(img_arr, bays, pose, index=index)
-    vision_db.insert_observations(conn, survey_area, frame_idx, scores, gt=gt)
+    vision_db.insert_observations(conn, survey_area, frame_idx, scores, gt=gt,
+                                  mission_id=mission_id)
     touched = [s["bay_id"] for s in scores]
     deltas = vision_db.recompute_states(conn, survey_area, touched, frame_idx)
     conn.commit()

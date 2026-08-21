@@ -162,6 +162,42 @@ def project(px, py, pose):
             IMG_H / 2.0 + f * (wx * b[0] + wy * b[1] + wz * b[2]) / z)
 
 
+def unproject(u, v, pose):
+    """Pixel (u, v) -> the ground ENU point it sees, the exact inverse of project().
+
+    Forward, project() takes a world offset, resolves it onto the camera axes
+    and divides by the depth. Backwards, the pixel names a RAY through the
+    camera - `d + ((u-cx)/f)*r + ((v-cy)/f)*b` in world ENU - and the answer is
+    where that ray meets the ground plane z = 0. The scale factor that project()
+    divided out is exactly what the plane intersection puts back.
+
+    A whole-frame detector needs this and the per-bay classifier never did: a
+    detection is a box in pixels, and to become a bay verdict it has to land on
+    the ground first. Same nadir fallback for a pose with no attitude, so a
+    legacy poses.json unprojects on the same terms it projects on.
+
+    Returns None for a ray that never reaches the ground (pointing at or above
+    the horizon) - a real possibility on a tilted frame, and silently returning
+    a point behind the camera would put a car on the wrong side of the street.
+    """
+    def ang(key, default=0.0):
+        val = pose.get(key)
+        return default if val is None else val
+
+    d, r, b = camera_axes(pose["yaw"], ang("roll"),
+                          ang("pitch") + ang("cam_pitch", math.pi / 2) - math.pi / 2,
+                          ang("cam_roll"))
+    f = IMG_W / (2.0 * math.tan(FOV / 2.0))
+    su, sv = (u - IMG_W / 2.0) / f, (v - IMG_H / 2.0) / f
+    ray = (d[0] + su * r[0] + sv * b[0],
+           d[1] + su * r[1] + sv * b[1],
+           d[2] + su * r[2] + sv * b[2])
+    if ray[2] > -1e-9:              # level or upward: never meets the ground
+        return None
+    t = pose["alt"] / -ray[2]       # camera at z = alt, ground at z = 0
+    return (pose["x"] + t * ray[0], pose["y"] + t * ray[1])
+
+
 def load_bays():
     """Bays that exist in this survey area's ground truth, as ENU polygons."""
     gt = json.load(open(GT_FILE, encoding="utf-8"))
@@ -341,6 +377,20 @@ def main():
     fn = sum(1 for r in results.values() if not r["pred"] and r["gt"])
     n = len(results)
     print(f"survey area {SURVEY_AREA}: {len(bays)} bays, {n} classified, {len(uncovered)} uncovered")
+    # An uncovered bay has two very different causes, and the flight is the only
+    # thing that knows which: a bad pass (fixable - TODO #7) or an obstacle the
+    # patrol could neither reach nor shoot past (a DECLARED gap, and a legitimate
+    # survey result). The controller writes coverage.json for exactly this, so
+    # say it here rather than leaving the reader to guess from a bare count.
+    try:
+        cov = json.load(open(os.path.join(OUT, "coverage.json"), encoding="utf-8"))
+    except (OSError, ValueError):
+        cov = None
+    if cov and (cov.get("unreachable") or cov.get("uncovered")):
+        print(f"  coverage: {len(cov['unreachable'])} waypoint(s) unreachable "
+              f"(inside an obstacle), {len(cov.get('standoff', []))} recovered by "
+              f"a standoff shot, {len(cov['uncovered'])} DECLARED UNCOVERED: "
+              f"{cov['uncovered']}")
     print(f"confusion: TP={tp} TN={tn} FP={fp} FN={fn}")
     if n:
         print(f"accuracy {100*(tp+tn)/n:.1f}%   "

@@ -15,3 +15,8 @@ pics/*
 # secrets) — CLAUDE.md's setup step copies it to web/.env, and docker-compose
 # now fails loud without those vars, so a fresh clone needs it. The real
 # web/.env stays ignored via web/.gitignore.
+
+# Generated detection datasets (vision/dataset.py). Derived from the world's
+# cars.json + a flight's frames, so they are reproducible in one command and
+# would otherwise add thousands of PNGs and label files to the tree.
+vision/datasets/

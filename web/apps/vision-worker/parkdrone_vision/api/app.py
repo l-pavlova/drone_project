@@ -32,6 +32,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 
 from .. import cleanup, routing, s3
 from ..config import (
+    ADMIN_API_KEY,
     API_PORT,
     CLASSIFY_THREADS,
     CLEANUP_INTERVAL_S,
@@ -42,7 +43,7 @@ from ..db.pool import borrow, close_pool, init_pool
 from ..processing import jobs
 from ..vision.scoring import pose_idx
 from . import metrics
-from .auth import require_drone
+from .auth import require_admin, require_drone
 from .hub import Hub
 
 # FMI block origin — matches the ENU ORIGIN used across the project.
@@ -94,6 +95,14 @@ async def lifespan(app: FastAPI):
         f"{CLASSIFY_THREADS} classify threads, recovered {recovered} queued frames, "
         f"frame cleanup {'every %ds' % CLEANUP_INTERVAL_S if sweeping else 'disabled'}"
     )
+    # Say it out loud rather than let an unset key look like a secured one. The
+    # metrics endpoints expose queue depth, ingest rates, fleet state and model
+    # accuracy - an operational map of the system, which is a different thing
+    # from a bay's occupancy being public.
+    print("admin metrics require x-admin-key (/api/v1/metrics, /metrics)"
+          if ADMIN_API_KEY else
+          "! admin metrics are UNAUTHENTICATED (/api/v1/metrics, /metrics) - "
+          "set ADMIN_API_KEY to require x-admin-key")
     yield
     close_pool()
 
@@ -154,7 +163,14 @@ def ingest_frame(
 
     # Store the bytes first, then the frame row, so a committed row always has
     # an image behind it for the classify threads to fetch.
-    key = f"{survey_area}/{drone_id}/frame_{pose['frame_idx']:03d}.png"
+    # The mission is part of the key, not decoration: since 0009 a re-flight of
+    # an area ingests instead of being dropped as a duplicate, so a key without
+    # it would overwrite the earlier flight's image while that flight's frame row
+    # still points at it -- the row would then serve a different flight's pixels
+    # to recovery and to cleanup. Mission-less frames keep the old key exactly.
+    key = (f"{survey_area}/{drone_id}/"
+           + (f"{mission_id}/" if mission_id else "")
+           + f"frame_{pose['frame_idx']:03d}.png")
     image_uri = s3.put_frame(key, frame.file.read())
 
     frame_id = str(uuid.uuid4())
@@ -174,6 +190,7 @@ def ingest_frame(
             "frame_id": frame_id,
             "survey_area": survey_area,
             "frame_idx": pose["frame_idx"],
+            "mission_id": mission_id,
             "pose": pose,
             "image_uri": image_uri,
         }
@@ -256,13 +273,15 @@ def get_route(origin: str = Query(..., alias="from"), to: str = Query(...)):
 def get_metrics(
     window_s: int = Query(metrics.DEFAULT_WINDOW_S, ge=1, le=86400),
     hub: Hub = Depends(get_hub),
+    _admin: None = Depends(require_admin),
 ):
     with borrow() as conn:
         return metrics.snapshot(conn, window_s, hub)
 
 
 @app.get("/metrics", response_class=PlainTextResponse)
-def get_metrics_prometheus(hub: Hub = Depends(get_hub)):
+def get_metrics_prometheus(hub: Hub = Depends(get_hub),
+                           _admin: None = Depends(require_admin)):
     """Same snapshot in Prometheus exposition format, on the conventional path."""
     with borrow() as conn:
         snap = metrics.snapshot(conn, metrics.DEFAULT_WINDOW_S, hub)
