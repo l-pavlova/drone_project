@@ -56,12 +56,23 @@ bay. A 25 deg sun cuts Lambert irradiance to ~0.48 of the default, dropping *eve
 accounts for the whole collapse and the shadow flag adds nothing on top of it. Shadows' own distinct
 contribution is the 12-bay cell: a *lower tail* (`bright` 53, `dark_frac` 1.00) on genuinely shaded
 bays, which is the physically real, harder case.
-**The free-bay distribution merely TRANSLATED — median 85→72, spread as tight as before, and best
-single-threshold separability 87.4% → 86.5%.** The scene is not harder; `classify()`'s absolute tone
-envelope is the failure. Any fix must normalise the bay core against surrounding asphalt *in the same
-frame*, inside `classify()` with all five features intact — re-thresholding brightness alone against
-a flight-wide reference only reaches 77.5-90.1%, because the other four features are what carry the
-golden worlds to 100%.
+**The mechanism is NOT the brightness envelope alone** — that was the first reading and
+`vision/diag/classifier_ablation.py` disproved it. On all 62 false positives `chroma` AND `bright`
+fire together (free-bay `core_chroma` 11.00 -> **14.00** against T=12.7; `core_brightness` 84.7 ->
+72.3 against a floor of 82), so dropping either alone still scores 44.1% with the same 62 FP. Chroma
+**rises** as the light dims, because a shallower sun means proportionally more of each surface's
+light comes from the tinted ambient sky — a change in the light's SPECTRUM, which no intensity
+normalisation can undo.
+**And `chroma` is the only load-bearing test** (dropping it costs `fmi_block_4st` 100% -> 89.2%;
+dropping `dark`/`paint`/`std` costs nothing), so every colour normalisation attacks the signal
+itself: grey-world correction takes the golden world to 93.7% with 7 missed cars. Measured across
+all six worlds, **nothing recovers the lighting worlds without breaking the calibrated ones** — best
+sun result 93.7% at the cost of `fmi_block_4st` 100 -> 92.8. Two structural reasons: the free-core
+margin to the floor is **3.5%** (85 vs 82), and the scene is three flat tones (ground 121 = 56% of
+pixels, road 50, pad 85) so a local ring reference is bimodal and a frame-wide one is
+composition-dependent. **Conclusion: there is no fair form of this heuristic that survives a lighting
+change** — see TODO #6. That is evidence FOR the learned detector, and it says what to train it on:
+varied illumination, which `--sun`/`--shadows` now generates cheaply with exact labels.
 
 **Scenery** (from `block_areas.geojson`): OSM green areas triangulated by ear clipping and painted at **z = 0.005** — above the ground, *below* the roads (0.01+), so they can never cover a bay pad (0.04–0.06); OSM building footprints as `SimpleBuilding` protos at real heights (`building:levels`, else `height`, else 4 floors), kept/dropped **whole** by centroid (clipping a footprint can break the proto's roof triangulation) while greens are Sutherland-Hodgman **clipped**; `StreetLight` poles walked along the centerlines at adaptive spacing, `on FALSE` (the proto ships a 1000 m-radius SpotLight that would shift the daylight the classifier is calibrated against) and never placed on a bay. Buildings and light poles get **no bounding object** unless you pass `--collide` — the controller flies a fixed 30 m with zero obstacle logic, so collision geometry would crash it; Webots range sensors only see nodes that have one, so that flag is the obstacle-avoidance stage's entry point. Either way the generator warns about structures reaching 30 m within 10 m of the route and writes them to `worlds/<name>.hazards.json`. `--chase` swaps the GUI viewpoint from the trailing "Tracking Shot" to a ride-along "Mounted Shot" (viewing only — it never touches the drone's own camera or any captured frame); it is a flag rather than a hand edit because hand edits to a `.wbt` are silently lost on the next regeneration. `DirectionalLight` has `castShadows FALSE` — shadow mapping paints streak artifacts on the road/ground in the nadir frames. Then run the world (see "Running Webots" below). The route (`worlds/route.json`) is an open-path rural-postman walk of the OSM street centerlines of every street that has bays: disconnected coverage components are joined by shortest road transits (MST), odd-degree nodes are evened out with a minimum-weight matching (exact blossom if `networkx` is installed, stdlib fallback otherwise; two virtual endpoints make it an open path whose start is the endpoint nearest the origin), then a Hierholzer Euler walk flies every coverage edge once with deadheads only along the matched repeats — waypoints every 10 m because the camera footprint at 30 m is only ~25×15 m. The controller `controllers/parkdrone/parkdrone.py` takes off to 30 m, flies that route (square-lawnmower fallback if route.json is missing), and writes `output/<survey_area>/frame_###.png` + `output/<survey_area>/poses.json` at each waypoint (plus timed diagnostic `snap_###.png`). Worlds are per-scale file sets: `generate_world.py [half_m] [occ_frac] [name]` writes `<name>.wbt` + `<name>.route.json` + `<name>.ground_truth.json` (default name `fmi_block` keeps legacy `route.json`/`ground_truth.json`); the `.wbt` passes its route file to the controller via `controllerArgs`, which also keys the output subfolder. E.g. the 1 km world: `python generate_world.py 500 0.5 fmi_block_1km`. The local-metre frame is pinned by `ORIGIN` in `generate_world.py` — do NOT let it drift when re-cutting data at other sizes.
 
@@ -318,6 +329,10 @@ python vision/diag/projection_selftest.py            # project/unproject round-t
 python vision/dataset.py fmi_block --overlay 6 --yolo --crops
 python vision/detect_baseline.py fmi_block --conf 0.10 [--scale N] [--model M]
 python tools/dji_srt.py flight.SRT --json poses.json # real DJI telemetry -> poses
+python tools/dji_stills.py flight.MP4 --hz 1         # video -> stills + poses.json
+python vision/detect_real.py <stills_dir> --labels <dir>  # zero-shot on REAL frames
+python vision/check_labels.py vision/data/dji_0035 --overlay 6
+python vision/train_detector.py --epochs 80 --imgsz 1024  # fine-tune probe
 ```
 - **`unproject(u, v, pose)`** in `score_occupancy.py` is the exact inverse of `project()`: the pixel
   names a ray, the answer is where it meets z=0. A whole-frame detector needs it (a detection is a
@@ -336,6 +351,13 @@ python tools/dji_srt.py flight.SRT --json poses.json # real DJI telemetry -> pos
   image centre. `--overlay N` draws the boxes on frames, which is how you check them.
   **Volume is bounded by flight length, not world size**: ~0.9 cars per frame (30 boxes on
   `fmi_block`, 87 on `fmi_block_4st`), so a bigger training set means more/longer flights.
+- **`vision/diag/classifier_ablation.py`** answers "which of `classify()`'s five tests earn their
+  place, and does normalising help?" It extracts every per-view feature once per world and caches it
+  (`--refresh` to rebuild), then evaluates a classifier variant in milliseconds against the exact
+  vote `score_occupancy.main()` uses. Its `current` row **must** reproduce each world's committed
+  accuracy — that is the harness's self-test, and it is how a broken harness gets caught before a
+  conclusion is drawn from it. Findings are in TODO #6; the short version is that `chroma` is the
+  only load-bearing test and every colour normalisation therefore damages the calibrated worlds.
 - **`detect_baseline.py`** scores an off-the-shelf detector two ways: detection (IoU≥0.5 vs the
   exact boxes) and **occupancy** (unproject each box, assign to a bay within 3 m, vote across frames
   exactly as the scorer does). The second is the only one comparable with `classify()`.
@@ -352,6 +374,77 @@ python tools/dji_srt.py flight.SRT --json poses.json # real DJI telemetry -> pos
   the GPS triple's altitude. It deliberately does not trust the GPS (1–3 m against a 2.2 m bay — the
   pose is the *starting point* for registration) and does not assume nadir (it carries gimbal angles
   through when present and leaves them absent when not, so the fallback is the caller's choice).
+- **Real footage is IN (2026-08-21 flight, scored 2026-08-22).** `pics/dji/` holds three DJI
+  clips over the FMI block at a constant 30.1 m — the sim's calibration altitude.
+  `tools/dji_stills.py` cuts a video to stills at a fixed rate and pairs each with its SRT pose **by
+  frame index, not timestamp** (the SRT has exactly one block per video frame, 1-based `FrameCnt`,
+  so there is no clock alignment to get wrong); it grabs sequentially and drops frames rather than
+  seeking per still, which on long-GOP H.265 is both far slower and can land off-target.
+  Real numbers that matter downstream: **GSD 11.7 mm/px**, footprint **45.0 x 25.1 m**, a 4.5 m car
+  is **~385 px**. That is a *fourth* copy of the camera intrinsics (proto, `score_occupancy.py`,
+  `parkdrone.py`, and now real-drone values that differ from all three — 73.7 deg H / 45.4 deg V
+  against the Mavic2Pro proto's 45 deg), so anything reusing `CAM_FOV`/`CAM_ASPECT` needs a
+  real-drone variant.
+- **`captured_at` — the file records the truth, the REPLAY does the shifting.** `dji_srt.py` now
+  parses the camera's wall clock (`2026-08-21 16:31:09.139`, its own line in each block — it had no
+  regex before and was silently dropped) into every pose, and `dji_stills.py` carries it into
+  `poses.json` beside the relative `t_s`. It is stored **naive** because DJI writes no timezone
+  offset; stamping a UTC marker on local aircraft time would be a lie that is hard to unpick later.
+  `dji_srt.rebase(poses, start=None)` (CLI `--as-now`) shifts every stamp so the first frame lands
+  at `start`, **keeping the flown intervals** (verified: 133.468 s preserved against 133.5 s as
+  flown). It is deliberately **not** applied when the file is written — `poses.json` records what
+  happened, rebasing is a consumer decision, and writing a fake "now" at extraction time would
+  destroy the only copy of the real time. Why it exists: occupancy votes over `OCCUPANCY_WINDOW_S`
+  (2 h), so replaying yesterday's flight with yesterday's stamps yields a map where every bay has
+  already expired to `occupied: null`.
+  **Decided 2026-08-22: `observation.observed_at` stays `DEFAULT now()`.** For the live uplink,
+  capture and ingest are seconds apart; for an `--as-now` replay the rebase has already made ingest
+  time the intended truth. So `now()` is *correct*, not merely tolerable, and it avoids a nullable
+  column plus a "which timestamp does the vote use" branch in every read path. `captured_at` is
+  still worth storing on the **`frame`** row as provenance whenever that table next changes — it is
+  the append-only ingest ledger, it stays out of the vote, and after the stills are separated from
+  the SRT it is the only copy of when the footage was shot.
+- **`vision/data/dji_0035/` — the first HAND-labelled dataset, 31 frames / 108 boxes.** Rules in
+  its `LABELING.md`, record in its `README.md`. YOLO format, single class `car`, axis-aligned,
+  **byte-identical in shape to `vision/dataset.py --yolo`** so sim and real frames pour into one
+  training run. Labels are **tracked**; the 87 MB of JPEGs are gitignored and regenerate from the
+  video. Two conventions to keep: an **empty `.txt` is not a missing one** (empty = a human checked
+  and there were no cars, missing = nobody looked, and ultralytics reads missing as "no objects" —
+  which would teach the model that a frame full of cars is empty), and the **train/val split is
+  SPATIAL, not random**. That last one is load-bearing: this flight goes out east, doubles back over
+  the same street, then heads northwest, and frames 55-85 sit within **3-6 m** of frames 5-30 — the
+  same parked cars. A random split puts one photo of a car in train and another in val and the model
+  scores brilliantly by memorising it. `check_labels.py` validates what a hand-made file can get
+  wrong and a generated one cannot (pixel coords instead of normalised, wrong class index,
+  zero-area boxes, boxes off the edge, boxes too big or small to be a car) and draws them back onto
+  the frames.
+- **Zero-shot on REAL nadir footage: ~30% recall, ~50% precision — the sim's 0% did NOT transfer.**
+  `detect_real.py` is the real-footage counterpart of `detect_baseline.py` (which needs exact boxes
+  and a `ground_truth.json`, neither of which real footage has); `--labels` scores it against the
+  hand labels at IoU >= 0.5. Over 31 labelled frames / 108 true cars, COCO YOLOv8m:
+
+  | | whole frame | 2x2 tiles |
+  |---|---|---|
+  | recall, class `car` | 28.7% (31/108) | 30.6% (33/108) |
+  | recall, any vehicle class | 34.3% | 31.5% |
+  | precision of `car` boxes | 56.4% (31/55) | 50.8% (33/65) |
+
+  **This splits a conclusion the sim could not.** On Webots frames the same model detects **0 of
+  52**; on real photographs of the same task it finds a third. So the renderer was a large part of
+  that 0%, and the residual gap is viewpoint, colour and canopy. **Tiling to native scale does not
+  rescue it** (28.7 -> 30.6%, precision *drops*), so resolution is not the binding constraint — a
+  car is ~385 px and the model still misses it. The dominant failure has a name: the tiled pass
+  emits **224 `cell phone` detections at median confidence 0.78**, because a dark car roof on pale
+  pavement is a glossy rounded rectangle with a lighter inset. Same failure the sim showed as "a
+  nadir car is a *tie* (0.19)", but at high confidence, because the pixels are real. Failures skew
+  hard by **body colour and tree canopy**, neither of which the sim generates.
+- **Fine-tuning augmentation is nadir-specific, and that is what makes 82 boxes worth training on.**
+  `vision/train_detector.py` sets `degrees=180` and `flipud=0.5`, both **0 by default** in
+  ultralytics. Straight down there is no canonical "up" — the drone's heading is arbitrary and a car
+  may point any way in the frame — so full rotation and vertical flips are *truthful* expansions of
+  a tiny dataset rather than distortions. (In side-on COCO imagery a vertical flip means an
+  upside-down car, which is why the defaults are off.) On CPU, imgsz 1024 costs ~64 s/epoch on 22
+  images; imgsz 1280 costs ~98 s.
 - **Known blocker: `huggingface.co` downloads fail on this machine.** Something intercepts TLS and
   its CA is non-compliant ("Basic Constraints of CA cert not marked critical"), which **Python 3.13+
   rejects by default** now that strict X.509 is on. certifi does not help, nor does adding the 230
@@ -458,6 +551,25 @@ Diagrams: `web/docs/architecture.drawio` (system level), `docs/server_modules.md
 `0008`, golden replay 42/42 at 100%, full-stack ingest 42/42, and the restart-recovery path
 reproducing both). Phase 7 (prod hardening) remains.** See project memory `project-web-infra.md` for the running log.
 
+### The no-fly map is a SEPARATE product, in its own repo
+`https://github.com/l-pavlova/nofly-map` (public, GPL-3.0) — a standalone static map of Bulgaria's
+published UAS geographical zones with an altitude-aware "can I fly here?" check. It was built here
+on 2026-08-21 out of `web-user`'s airspace layer and then **moved out entirely**; there is no copy
+in this monorepo, deliberately, because two copies of the same app is the duplication hazard this
+project already knows to avoid. Deployed from that repo to GitHub Pages.
+
+What is worth knowing from here:
+- It shares **no code** with PARKDRONE — no backend, no DB, no API; the zones are baked into a
+  committed `public/zones.json` by its own `scripts/build-zones.mjs`.
+- **ED-269 parsing now exists in two places**: that script, and
+  `vision-worker/parkdrone_vision/nofly.py` here. They emit different shapes on purpose (48-gon
+  circles for an API consumer vs native centre+radius for a downloaded asset), but the *rules* —
+  split a zone's several altitude volumes into several entries, prefer the AUTHORIZATION contact,
+  read `permanent` off `applicability` — are copied. Same risk class as the constants in TODO #3,
+  and `tools/check_consistency.py` does not cover it. If the CAA republishes, both need the new file.
+- The airspace layer that stayed here (`web-user/src/components/NoFlyLayer.tsx` + `/api/v1/nofly`)
+  is unaffected and is documented below.
+
 ### Layout
 - `packages/contracts` — shared TS types + zod schemas + the ENU projection (mirrors
   `generate_world.py`/`score_occupancy.py`; **must** stay in lockstep — same ORIGIN/MLAT/MLON).
@@ -557,6 +669,9 @@ reproducing both). Phase 7 (prod hardening) remains.** See project memory `proje
   voting "occupied" on the strength of history. Earlier observations stay as history, which is what
   they are for. Legacy rows with a NULL mission group together (`IS NOT DISTINCT FROM`), so
   pre-`0009` data votes exactly as it did before.
+  **`observed_at` stays `DEFAULT now()`** (decided 2026-08-22) — the vote windows on *ingest*
+  time, and uploaded footage is rebased to now before it is sent (`dji_srt --as-now`, §2b)
+  rather than carrying its own capture time into the vote.
   *Verified with teeth:* 20 contrary views from an older mission leave the state untouched; the
   same 20 rows re-labelled to the newest mission flip it.
 - **Frames are transient.** `cleanup.py` deletes `frame` rows and their stored images past
@@ -733,6 +848,13 @@ free it by PID (`netstat -ano | grep :4000` → `taskkill //F //PID <pid>`) rath
 queue (used to stage frames for the restart-recovery test).
 
 ## Known open issues
+
+**How the occupancy classifier works, with the feature units spelled out:
+`docs/occupancy_classifier.md`.** The five thresholds are bare numbers in an 8-bit
+colour space and nothing in the source says so — `core_chroma > 12.7` is a mean per-pixel
+(max channel - min channel), i.e. ~5% of full scale away from pure grey. That doc also
+carries the four-step mechanism, the calibration provenance, and why the low-sun collapse
+has no normalisable fix. The learned detector's own record is `docs/training.md`.
 
 **Off-nadir projection FPs on `fmi_block` — FIXED 2026-08-20, see "Camera model" above.**
 The world now scores **100%** (was 95.2%, then 97.6% after the `CORE_W` change). Root cause was

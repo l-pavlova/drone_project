@@ -20,3 +20,16 @@ pics/*
 # cars.json + a flight's frames, so they are reproducible in one command and
 # would otherwise add thousands of PNGs and label files to the tree.
 vision/datasets/
+
+# ablation harness feature cache (regenerate with --refresh)
+vision/diag/.ablation_cache/
+
+# Model weights: pretrained checkpoints are downloaded on demand by ultralytics,
+# and fine-tuned ones are reproducible from vision/train_detector.py + the
+# tracked labels. Either way they are tens of MB of binary that git handles badly.
+*.pt
+
+# Training runs (vision/train_detector.py): weights, plots and per-epoch CSVs.
+# The inputs are tracked (labels + the script + a fixed seed), so a run is
+# reproducible; the outputs are not worth versioning.
+vision/runs/

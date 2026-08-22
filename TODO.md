@@ -1,11 +1,14 @@
 # PARKDRONE — open work
 
-Last revised 2026-08-21. Five tracks. Detail that only matters while a task is
+Last revised 2026-08-22. Five tracks. Detail that only matters while a task is
 being worked lives in the task itself; the *why* lives here so a task can be
 picked up cold.
 
 Order agreed 2026-08-12: **#2 → #3 → obstacle track (#4)**. #2 and #3 are done;
 the vision track (#5, #6, #7) is handled separately.
+
+**Closed:** #1, #2, #3, #6, #5b, #10. **Open:** #5 (learned detector — the main line),
+#4 residue, #7, #8 (P7), #9, plus the two data defects #1 uncovered.
 
 ---
 
@@ -136,7 +139,7 @@ whole point of `0008`. That check can fail: stripping the two columns from a
 pose moves bay 17685's projected outline by **0.35–1.55 m** on the frames that
 see it, against a 0.21 m core-crop clearance.
 
-### 5. Learned detector — groundwork BUILT 2026-08-21, zero-shot baseline measured
+### 5. Learned detector — REAL DATA IN, first hand labels drawn, fine-tune probe running
 **Decided with the author (2026-08-21):** a learned model is a thesis deliverable in its own right
 (master plan stage 9), it runs **server-side** in `vision-worker` (no Coral constraints), and it is a
 **whole-frame detector** rather than a per-bay crop classifier. Real Sofia drone video (DJI, SRT
@@ -161,11 +164,40 @@ model zero-shot *successfully* on real footage. Either real texture carries it, 
 more oblique than our strict nadir. Running `detect_baseline.py` against the real video when it
 arrives answers it directly, and the answer shapes how much sim data is worth generating.
 
-**Next:** dataset volume is bounded by flight length (~0.9 cars/frame), so more data means more
-flights; fine-tune from aerial-pretrained weights if the HF download blocker is cleared (CLAUDE.md
-§2b), else from the Ultralytics path that already works.
+**2026-08-22 — real footage arrived, and it ANSWERS the tension above.** Three DJI clips over the
+FMI block at a constant 30.1 m (the sim's calibration altitude), true nadir, 4K.
+`tools/dji_stills.py` cuts them to stills paired with SRT poses. Zero-shot COCO YOLOv8m on real
+frames scores **28.7% recall / 56.4% precision** whole-frame, **30.6% / 50.8%** tiled — against
+**0 of 52** on Webots frames. So the supervisor's success and our 0% are both explicable: **the
+renderer was a large part of the sim's 0%**, and what remains is viewpoint, colour and canopy.
+Tiling to native scale does not rescue it (resolution is not the constraint — a car is ~385 px),
+and the dominant failure is **224 `cell phone` detections at median confidence 0.78**. Failures
+skew hard by **body colour and tree canopy**, neither of which the sim can generate — which is a
+concrete limit on how much sim data is worth making.
 
-### 5b. The old framing — learned *classifier* v2 — *blocked by #6*
+**First hand-labelled data exists:** `vision/data/dji_0035/`, **31 frames / 108 boxes**, drawn by
+the author, format-identical to `vision/dataset.py --yolo` so sim and real mix in one run. Its
+`LABELING.md` holds the drawing rules and `README.md` the record. `vision/check_labels.py`
+validates and draws them back. **The train/val split is SPATIAL and must stay so** — this flight
+doubles back over its own street (frames 55-85 within 3-6 m of frames 5-30), so a random split
+would score memorisation.
+
+**In flight:** a fine-tune **probe** (`vision/train_detector.py`, yolov8s, imgsz 1024, 80 epochs,
+CPU). It is a probe and not a result: 82 train boxes and **26 val boxes**, so one car is ±3.8% of
+recall and anything under ~10% of difference is noise. What it can settle is whether labelling
+several hundred more boxes is worth the hours. At epoch 26 it was already past the zero-shot
+baseline on both axes (**R 0.50, P 0.476, mAP50 0.407** vs 0.306/0.508), which is the direction that
+justifies more labelling. The compounding payoff is that a working fine-tune becomes the
+**pre-labelling tool** for the remaining 106 frames of this flight and for video 0034 — correcting
+boxes is 3-5x faster than drawing them, and it sidesteps the HF/OWLv2 download blocker entirely.
+
+**Next:** finish the probe and report it honestly against the 26-box val caveat; then either label
+more (if it moved) or diagnose structurally (if it did not). Dataset volume is bounded by flight
+length (~0.9 cars/frame in sim, ~3.5 boxes/frame on real stills), so more data means more flights;
+fine-tune from aerial-pretrained weights if the HF download blocker is cleared (CLAUDE.md §2b),
+else from the Ultralytics path that already works.
+
+### 5b. The old framing — learned *classifier* v2 — **CLOSED, folded into #5**
 `classify()` is five hand-tuned thresholds calibrated on `fmi_block_4st`. The
 case for replacing it is now **weaker on the numbers and unchanged in
 principle**: the chroma-12.99 false positive that used to be the headline
@@ -178,10 +210,16 @@ and the light-pole parallax case is a physically real occlusion.
 `classify()` is deliberately the only swap point — projection, view selection,
 voting and scoring stay unchanged. Labelled crops are already on disk.
 
-**Sequence this *with* scene hardening, not before it.** On the current
-uniform-lighting scene a learned model has nothing to beat.
+**Closed 2026-08-21 by #6's ablation.** The old note here said to sequence this *with* scene
+hardening because "on the current uniform-lighting scene a learned model has nothing to beat".
+Scene hardening has now happened, and it produced something to beat: under a low sun the heuristic
+scores **44.1%**, and no normalisation recovers it without breaking the calibrated worlds, because
+`chroma` — the only load-bearing test — is exactly what a colour correction destroys. So the case
+for a learned model is no longer "weaker on the numbers"; it is the robustness argument, made
+quantitatively. There is nothing separate left to plan here: the work is #5, and the lighting worlds
+are its benchmark.
 
-### 6. Shadows — FLOWN AND MEASURED 2026-08-21. **The classifier is not scale-invariant, and that is the finding.**
+### 6. Shadows — FLOWN AND MEASURED 2026-08-21. **CLOSED: the heuristic has no normalisable form.**
 `castShadows FALSE` was never an aesthetic choice: shadow mapping over a 1.2 km ground plane paints
 streak artifacts across the nadir frames, so turning it on as-is would have hardened the classifier
 against a *rendering defect*. The quality fix rides in the same flag — with `--shadows` the ground
@@ -228,13 +266,60 @@ because `T_BRIGHT_LO/HI` is an **absolute** tone envelope. Shadows' only distinc
 widening the *lower tail* (53 vs 72) for the genuinely shaded bays, which is the real, physical,
 harder case; the global shift is the trivially-fixable one.
 
-**Next: give the heuristic its fair form before any model is compared against it** — normalise the
-bay core against the surrounding asphalt *in the same frame*, so the envelope is relative. Note a
-naive check does **not** shortcut this: re-thresholding `core_brightness` against a flight-wide
-median reference scores only 77.5% / 90.1%, because brightness is one of five features and the other
-four (`paint_frac`, `dark_frac`, `chroma`, `std`) are what carry the classifier to 100%. The fix has
-to go **inside** `classify()` with all five intact, and it must be re-verified against both golden
-worlds, which are at 100% and must stay there.
+**ATTEMPTED AND MEASURED 2026-08-21 — "give the heuristic its fair form" does not have an answer.**
+`vision/diag/classifier_ablation.py` (committed; extracts every per-view feature once per world,
+caches it, then evaluates a classifier variant in milliseconds against the exact vote
+`score_occupancy.main()` uses; its `current` row reproduces every committed accuracy as a self-test).
+
+**First, the mechanism above was WRONG, and the harness is what caught it.** The collapse is not the
+brightness envelope. On all 62 false positives in `fmi_block_4st_sun`, **`chroma` and `bright` fire
+together**:
+
+| free-bay core | `fmi_block_4st` | `fmi_block_4st_sun` | threshold |
+|---|---|---|---|
+| `core_chroma` | 11.00 | **14.00** | > 12.7 |
+| `core_brightness` | 84.7 | **72.3** | outside 82–102 |
+
+So removing *either* test alone changes nothing — `drop bright` still scores 44.1% with the same 62
+FP. And note chroma **rises** as the light dims: a shallower sun means proportionally more of each
+surface's light comes from the tinted ambient sky, so the grey asphalt takes on a colour cast. That
+is a change in the light's **spectrum**, not its level, and no intensity normalisation can undo it —
+`rel/f_mode` scales `T_CHROMA` the *wrong way* and makes things worse.
+
+**Second, and this is the finding: `chroma` is the only load-bearing test, so every colour
+normalisation attacks the signal itself.** Dropping `chroma` costs `fmi_block_4st` 100% → 89.2%
+(12 cars missed); dropping `dark`, `paint` or `std` costs **nothing at all** on either golden world.
+Grey-world cast correction equalises the channel means — which also suppresses the very colour a red
+car is detected by, and the golden world falls to 93.7% with 7 missed cars. Measured:
+
+| variant | fb | fb_4st | fb_4st_lp | fb_4st_shd | fb_4st_sun | fb_4st_sh |
+|---|---|---|---|---|---|---|
+| current (absolute) | **100** | **100** | 99.1 | 89.2 | 44.1 | 44.1 |
+| rel/f_mode | 100 | 99.1 | 98.2 | 88.3 | 44.1 | 44.1 |
+| white-balanced (per-channel mode) | 95.2 | 93.7 | 98.2 | 84.7 | **89.2** | 82.0 |
+| grey-world | 95.2 | 93.7 | 99.1 | 85.6 | 42.3 | 43.2 |
+| grey-world + rel/f_mode | 95.2 | 92.8 | 98.2 | 84.7 | **93.7** | 78.4 |
+
+**Nothing recovers the lighting worlds without breaking the calibrated ones.** The best sun result
+(93.7%) costs `fmi_block_4st` 100 → 92.8.
+
+Two structural reasons, both measured, both worth keeping:
+- **The margin is 3.5%.** Free cores sit at brightness 85 against a floor of 82. Any absolute
+  intensity test needs the scene illumination estimated to ~1–2%, which will not happen on real
+  footage.
+- **There is no stable local reference in this scene.** It is three flat tones — ground 121 (56% of
+  pixels), road 50, bay pad 85 — so a ring around a bay reads either 121 or the *neighbouring pad's*
+  85 and is bimodal by construction (CV 0.115 on the calibration world). Frame-wide estimators are
+  composition-dependent instead: the per-channel mode jumps when road or grass becomes the plurality,
+  which is exactly why white-balancing costs the golden worlds.
+- Worth noting `bright` **is** load-bearing for the box cars: `drop bright` costs `fmi_block_4st_lp`
+  99.1% → 91.9% (9 missed). A uniform dark box has no chroma to find.
+
+**So the sequencing question in 5b is answered: there is no fair form of this heuristic that survives
+a lighting change.** Robustness is not a tuning problem here, and hardening `classify()` further is
+not worth more time. This is now positive evidence for the learned detector (#5) rather than a
+prerequisite for it — and it says what the model must be trained on: **varied illumination**, which
+`--sun`/`--shadows` can now generate cheaply and with exact labels.
 
 ### 7. Reduce capture scatter (~3 uncovered bays)
 Timeout arrivals capture up to ~15 m off the waypoint, so ~1% of bays fall

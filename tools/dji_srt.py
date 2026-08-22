@@ -56,6 +56,13 @@ PATTERNS = {
     # trustworthy in the GPS triple's third slot, so this wins where both exist.
     "baro": r"BAROMETER\s*:?\s*([-\d.]+)",
 }
+# The camera's own wall clock, on its own line inside each block:
+#     2026-08-21 16:31:09.139
+# LOCAL time as the aircraft had it, with no timezone marker -- DJI writes no
+# offset, so this is naive by construction and must not be pretended otherwise.
+WALLCLOCK = re.compile(r"(\d{4})-(\d{2})-(\d{2})[ T]"
+                       r"(\d{2}):(\d{2}):(\d{2})(?:[.,](\d{1,6}))?")
+
 # The older GPS(lon,lat,alt) triple, which some firmware writes instead.
 GPS_TRIPLE = re.compile(r"GPS\s*\(\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\)")
 FRAME_CNT = re.compile(r"FrameCnt\s*:?\s*(\d+)")
@@ -81,6 +88,14 @@ def parse(path):
         rec["frame"] = int(m.group(1)) if m else i
         m = TIMECODE.search(flat)
         rec["t"] = m.group(1) if m else None
+        # NOTE `t` above is the SUBTITLE timecode (00:00:05,004) -- time since
+        # the video started, not a date. The wall clock is a separate line.
+        m = WALLCLOCK.search(flat)
+        if m:
+            y, mo, d, hh, mm, ss, frac = m.groups()
+            us = int((frac or "0").ljust(6, "0")[:6])
+            rec["captured_at"] = (f"{y}-{mo}-{d}T{hh}:{mm}:{ss}"
+                                  + (f".{us:06d}"[:7] if us else ""))
         for key, pat in PATTERNS.items():
             m = re.search(pat, flat, re.I)
             if m:
@@ -115,6 +130,8 @@ def to_pose(rec, frame_idx=None):
             "x": round(x, 3), "y": round(y, 3),
             "alt": rec.get("baro", rec.get("alt", rec.get("abs_alt"))),
             "lat": rec["lat"], "lon": rec["lon"]}
+    if "captured_at" in rec:
+        pose["captured_at"] = rec["captured_at"]
     if "gb_yaw" in rec:
         pose["yaw"] = math.radians(90.0 - rec["gb_yaw"])
     if "gb_pitch" in rec:
@@ -124,11 +141,43 @@ def to_pose(rec, frame_idx=None):
     return pose
 
 
+def rebase(poses, start=None):
+    """Shift every `captured_at` so the first frame lands at `start` (default:
+    now), keeping the intervals between frames exactly as flown.
+
+    This is how footage from a past flight is replayed "as if taken now" --
+    needed because occupancy votes over a freshness window (OCCUPANCY_WINDOW_S,
+    2 h), so ingesting yesterday's flight with yesterday's timestamps produces a
+    map of bays that are all already expired.
+
+    It is deliberately NOT done when the file is written. `poses.json` records
+    what actually happened; rebasing is a REPLAY decision and belongs to the
+    consumer, which may legitimately want either. Overwriting the real capture
+    time in the file would throw away the only copy of it.
+
+    Returns new dicts -- the input is not modified.
+    """
+    from datetime import datetime
+    stamped = [p for p in poses if p.get("captured_at")]
+    if not stamped:
+        return [dict(p) for p in poses]
+    t0 = datetime.fromisoformat(stamped[0]["captured_at"])
+    delta = (start or datetime.now()) - t0
+    out = []
+    for p in poses:
+        q = dict(p)
+        if q.get("captured_at"):
+            q["captured_at"] = (datetime.fromisoformat(q["captured_at"])
+                                + delta).isoformat()
+        out.append(q)
+    return out
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
     if not args:
         raise SystemExit("usage: python tools/dji_srt.py <flight.SRT> "
-                         "[--every N] [--json out.json]")
+                         "[--every N] [--json out.json] [--as-now]")
     path = args[0]
     every = 1
     if "--every" in sys.argv:
@@ -138,7 +187,8 @@ def main():
     if not recs:
         raise SystemExit(f"no subtitle blocks found in {path} — is it an SRT?")
     have = {k: sum(1 for r in recs if k in r) for k in
-            ("lat", "lon", "alt", "baro", "gb_yaw", "gb_pitch", "gb_roll")}
+            ("lat", "lon", "alt", "baro", "captured_at",
+             "gb_yaw", "gb_pitch", "gb_roll")}
     print(f"{os.path.basename(path)}: {len(recs)} blocks")
     for k, n in have.items():
         state = "ok " if n == len(recs) else ("MISSING" if n == 0 else "partial")
@@ -164,6 +214,11 @@ def main():
             print(f"  ** {far / 1000:.1f} km from ORIGIN ** — this footage is "
                   f"not over the cut block. Run tools/cut_block.py for its "
                   f"coordinates first; do NOT move ORIGIN.")
+    if "--as-now" in sys.argv:
+        poses = rebase(poses)
+        print("  timestamps REBASED so the first frame is now "
+              "(intervals preserved) -- replay mode, not the real capture time")
+
     if "--json" in sys.argv:
         dest = sys.argv[sys.argv.index("--json") + 1]
         json.dump(poses, open(dest, "w"), indent=1)
