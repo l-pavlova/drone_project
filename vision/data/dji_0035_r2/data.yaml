@@ -1,0 +1,5 @@
+path: D:/drone_project/vision/data/dji_0035_r2
+train: images/train
+val: images/val
+names:
+  0: car

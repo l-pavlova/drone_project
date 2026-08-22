@@ -1,0 +1,25 @@
+# Frames are large and REPRODUCIBLE from the source video with tools/dji_stills.py
+# + vision/make_split.py. The LABELS beside them are hand-drawn and are not
+# reproducible by anything, so those stay tracked.
+#
+# One file here rather than one per dataset: a per-dataset .gitignore has to be
+# remembered every time a new set is made, and the first time it is forgotten a
+# few hundred MB of JPEGs land in the history where they cannot be removed
+# without a rewrite.
+images/
+*/images/
+*/review/
+*/preview/
+*/check/
+*/pending/
+*/excluded_oblique/
+*.jpg
+*.jpeg
+*.png
+*.cache
+
+# Merged sets are DERIVED: `merge_datasets.py` rebuilds them byte-identically
+# from the source sets (verified 2026-08-22). Tracking them would duplicate every
+# label file and create two places for the same truth to drift apart.
+dji_merged/
+*_merged/

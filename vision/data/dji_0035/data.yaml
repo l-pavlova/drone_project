@@ -1,0 +1,9 @@
+# Ultralytics dataset spec.
+# NOTE: `path` must be absolute (or relative to the ultralytics `datasets_dir`,
+# NOT to this file) -- a relative "." resolves against the cwd and breaks the
+# moment you train from anywhere but the dataset folder.
+path: D:/drone_project/vision/data/dji_0035
+train: images/train
+val: images/val
+names:
+  0: car
