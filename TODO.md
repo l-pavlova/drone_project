@@ -8,7 +8,8 @@ Order agreed 2026-08-12: **#2 → #3 → obstacle track (#4)**. #2 and #3 are do
 the vision track (#5, #6, #7) is handled separately.
 
 **Closed:** #1, #2, #3, #6, #5b, #10. **Open:** #5 (learned detector — the main line),
-#4 residue, #7, #8 (P7), #9, plus the two data defects #1 uncovered.
+#4 residue, #7, #8 (P7), #9, #11 (multi-replica — to discuss), **#12 (powertrain mismatch —
+do not fly as built)**, plus the two data defects #1 uncovered.
 
 ---
 
@@ -605,6 +606,83 @@ vote rule was tested with teeth — 20 contrary views from an older mission chan
 20 re-labelled to the newest mission flip the bay.
 
 `pnpm clear` stays, for what its name says: wiping an area deliberately.
+
+### 11. Multi-replica: job claiming + a shared delta channel — **TO DISCUSS, not started**
+
+Raised 2026-08-23 while reviewing the thesis draft. The draft claimed "any replica with a DB
+connection can pick up a job"; that is the opposite of today's truth (see the review finding §1.5 in
+`docs/final_doc_review.md`), and the *question underneath it* is a fair one: today job recovery and
+horizontal scaling are treated as if they trade off, and they do not have to.
+
+**Why single-replica is currently a correctness requirement, not a preference:**
+- `jobs.recover()` re-enqueues every `status='queued'` row with **no ownership filter**, so two
+  replicas both drain the same backlog. The same frame classifies twice, `observation` gets two rows
+  for one look, and the occupancy vote double-counts.
+- The WebSocket hub is per-process — a delta pushed by replica A never reaches a client held by
+  replica B, so half the map stops updating.
+- The hub's replay cursor is per-process too, so a reconnecting client resumes against whichever
+  replica it lands on.
+
+**What to discuss (the shape looks standard, so this is a design session, not research):**
+- **Claiming:** `SELECT ... FOR UPDATE SKIP LOCKED` over `frame_job`, or a `claimed_by`/`claimed_at`
+  lease with a heartbeat. Recovery then stops meaning "everything queued" and starts meaning
+  "queued, or leased by someone who stopped renewing" — which is exactly the cancelled-transaction
+  semantics wanted here, and it makes recovery *safe* under N replicas rather than merely possible.
+- **Shared deltas:** Postgres `LISTEN`/`NOTIFY` is the cheapest option since the DB is already
+  there and deltas are small; Redis pub/sub if it outgrows that.
+- **Global cursor:** the replay cursor has to move out of process memory alongside the hub.
+- **Decide whether it is worth building at all.** Throughput is not the reason to: ~103 frames/s per
+  classify thread against ~0.5 frames/s per drone, so one process serves a large fleet. The real
+  arguments are availability (a restart currently drops the whole edge) and rolling deploys.
+
+Whatever is decided, `docs/web_infra_plan.md` and the "single replica" invariant in `CLAUDE.md` are
+the two places that must change with it.
+
+---
+
+## Hardware
+
+### 12. Powertrain is mismatched — 2300KV motors on 7" props at 4S — **OPEN, do not fly as built**
+
+Found 2026-08-23 while reviewing the thesis hardware chapter. The parts list pairs **RS2205 2300KV**
+motors (their own spec line says `Propeller Suggested: HQ 5045`, i.e. 5 inch) with a **Mark4 7 inch**
+frame, **7 inch propellers**, **Emax BLHeli 30A** ESCs and a **1500 mAh 4S** pack. The user confirmed
+this is the build as it physically exists, not a typo in the list. The frame is fine; the motor/prop/
+cell-count combination is not.
+
+**Why it is wrong, in numbers:**
+- `2300 KV × 14.8 V ≈ 34 000 rpm` unloaded. Loaded it still wants 20 000+. A 7" prop at 25 000 rpm
+  has a tip speed of `0.089 m × 2617 rad/s ≈ 233 m/s ≈ 0.68 Mach` — far outside what such a prop is
+  designed for; efficiency collapses and the blade loading gets risky.
+- Prop power scales as `P ∝ n³D⁵`, so 5" → 7" at equal rpm is `(7/5)^5 ≈ 5.4×`. The motor's KV is
+  "geared" for 4S, so instead of spinning up it sits in a high-torque, high-current regime.
+- **The ESCs burn first.** RS2205 on 5045 at 4S already peaks near 25–30 A; on 7" props that is
+  40–50 A per motor against a 30 A ESC.
+- Then the motors — a 2205 stator is small and cannot shed that heat.
+- **Endurance is the other half.** 1500 mAh with 4 motors pulling ~30 A each is ~80C continuous and
+  gives roughly **1–2 minutes** of flight, against a 1 km sim route that is **>60 min**.
+
+**A measurement to redo:** the user measured ~17 cm between adjacent motors and ~29 cm across the
+diagonal. 17 cm is geometrically impossible with 177.8 mm (7") props — the discs would overlap; a
+symmetric X with a 29 cm diagonal gives 20.5 cm adjacent. Measure shaft-centre to shaft-centre.
+Mark4 is a stretched X, so the lateral and longitudinal pairs differ and 17 cm may be the lateral
+pair.
+
+**Options, in order of cost:**
+| option | change | outcome |
+|---|---|---|
+| zero-cost, immediate | 5" props on the existing motors | Safe, on-spec. Frame is oversized, payload margin stays thin. |
+| right for the task | ~1500KV motors (e.g. 2806.5) + 45–50 A ESCs | 7" on 4S behaves; more thrust at lower rpm. |
+| for real endurance | low KV + 6S Li-ion 3000–5000 mAh | The standard "7 inch long range" configuration — the only one where surveying a block is realistic. |
+
+A survey platform wants **big props at low rpm**, because that is the efficient regime in hover —
+the opposite of the racing logic 2205 2300KV was designed for.
+
+**Thesis consequence (also logged in `docs/final_doc_review.md` §1.17):** a flight time of minutes
+against a route of over an hour is a real gap between the simulation and the hardware that the draft
+does not acknowledge anywhere. One honest sentence in the hardware chapter or in future work is
+stronger than omitting it — a reviewer will do the same arithmetic. Also fix the contradiction at
+draft l. 100, which calls the frame "3д принтирана" while the parts list names a commercial Mark4.
 
 ---
 

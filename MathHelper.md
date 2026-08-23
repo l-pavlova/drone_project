@@ -37,6 +37,29 @@ The same relation runs backwards along the route to set the speed profile:
 `v_allowed² = v_next² + 2·a·d`, applied from the last waypoint upstream, gives the
 fastest speed at each waypoint that can still be braked down for the corner ahead.
 
+## Tangent angle to a circle (`arcsin(R/d)`)
+
+Half the angular size of an obstacle: from a point at distance `d` from the centre
+of a circle of radius `R`, the angle between the line to the **centre** and either
+tangent line is
+
+```
+θ = arcsin(R / d)
+```
+
+Because the radius meets the tangent at a right angle, centre / touch point /
+viewpoint form a right triangle with opposite `R` and hypotenuse `d`.
+
+- `d → R` (touching the circle): `θ → 90°` — turn almost side-on.
+- `d` large: `θ → 0` — barely deviate.
+- `d < R`: undefined. That is the "already inside the disc" case, where steering
+  is meaningless and braking is the only answer.
+
+Stage B's steering law is `heading = bearing(centre) ± (arcsin(R/d) + margin)`:
+turn away from the centre by just enough to graze the edge, plus a margin that
+turns "grazing" into "passing clear". Which sign depends on which side has more
+room in the ray fan.
+
 ## Camera footprint at altitude
 
 For a pinhole camera at altitude `h` with horizontal field of view `fov`, looking
