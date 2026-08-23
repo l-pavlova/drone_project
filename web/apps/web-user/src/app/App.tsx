@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fetchBays, fetchNoFly, fetchSummary } from "../api/client";
+import { fetchBays, fetchNoFly, fetchServerInfo, fetchSummary } from "../api/client";
 import { BayMap } from "../components/BayMap";
 import { CarIcon, LocateIcon, NavigateIcon, Spinner } from "../components/Icons";
 import { SurveyReadout } from "../components/SurveyReadout";
 import {
   bayStatus,
+  setFreshnessWindow,
   type BayFC,
   type BayFeature,
   type BayProps,
@@ -64,8 +65,16 @@ export default function App() {
   const navigating = target !== null;
 
   useEffect(() => {
-    fetchBays().then(setFc).catch((e) => setError(String(e)));
-    fetchSummary().then((s) => setZones(s.zones)).catch(() => {});
+    // Adopt the server's occupancy window BEFORE the bays land, so the first
+    // paint already uses the same staleness rule the vote does. A failure
+    // leaves the 2 h fallback, which is the server default.
+    fetchServerInfo()
+      .then((i) => setFreshnessWindow(i.occupancy_window_s))
+      .catch(() => {})
+      .finally(() => {
+        fetchBays().then(setFc).catch((e) => setError(String(e)));
+        fetchSummary().then((s) => setZones(s.zones)).catch(() => {});
+      });
     // Reference data, so a failure here is not worth a toast — the map is still
     // fully usable without the airspace overlay, and the switch stays hidden.
     fetchNoFly(AIRSPACE_BBOX).then(setNofly).catch(() => {});

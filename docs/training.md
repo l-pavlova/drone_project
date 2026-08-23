@@ -494,3 +494,39 @@ python vision/train_detector.py --data vision/data/<merged>/data.yaml \
 
 Runs are seeded (`seed=0`). Training outputs are gitignored — the inputs (labels,
 script, seed) are tracked, so a run is reproducible rather than archived.
+
+---
+
+## 2026-08-23 — the detector reaches the live map, and what the test run measured
+
+`vision/runs/merged1/weights/best.pt` (yolov8s, 130 real frames / 366 boxes, imgsz 1024,
+**mAP50 0.873 / P 0.945 / R 0.766**) is now the occupancy backend for real footage. Full
+mechanism in CLAUDE.md 2c-2e; the numbers a reader of this file wants:
+
+**On the 137 stills of flight 0035** (conf 0.25, imgsz 1024): 473 detections, **3.5 per frame**
+(median 3, max 10), confidence p10 0.33 / p50 0.68 / p90 0.83, and only 20 overlapping pairs at
+IoU > 0.3. The hand labels average 2.8 boxes/frame, so the model fires about 25% more often than a
+human labelled — and the busiest frame, inspected directly, is **10 boxes on 10 real cars**. The
+detector is not over-firing; it is finding cars in rows the labelling pass sampled at 1-in-4.
+
+**The bays are the limiting factor, not the model.** Distance from each detection to the nearest
+Sofiaplan bay centroid: **median 4.35 m** (p10 1.68, p90 11.16), with only **30% inside** the 3 m
+assignment radius. A grid search over +/-6 m finds the best possible global correction reaches
+median 3.47 m and 42 of 115 — at 4.5 m, about a car length, which is a fit to the structure of
+parked-car spacing rather than a GPS bias. A real bias would show as a tight cluster at a small
+offset; this is a broad spread. The overlays say the same thing visually: whole columns of mapped
+bays sit on the tram median and the pavement while the cars are parked in rows the dataset does not
+cover.
+
+**So the honest reading of the real-world occupancy result is: the detector works, the
+georeferencing works, and the BAY DATA is what limits how much of a real street this can score.**
+That is a different bottleneck from the sim (where every car is in a bay by construction) and it is
+the thing to say out loud when the sim's 98.4% and any real number are put side by side. It also
+re-prioritises the next task: hand-labelling the ~86 bays under this flight would measure the
+classifier, but the more informative measurement may be how many parked cars on this block are in
+a mapped bay at all.
+
+**Provenance is now recorded** (migration `0010`): 674 detector observations from this run, 102
+carrying a `det_score` (avg 0.641), zero heuristic colour statistics. Sim and real results can
+therefore never be silently averaged, which was the standing rule and is now enforced by the
+schema rather than by discipline.

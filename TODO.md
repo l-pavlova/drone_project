@@ -139,7 +139,7 @@ whole point of `0008`. That check can fail: stripping the two columns from a
 pose moves bay 17685's projected outline by **0.35–1.55 m** on the frames that
 see it, against a 0.21 m core-crop clearance.
 
-### 5. Learned detector — REAL DATA IN, first hand labels drawn, fine-tune probe running
+### 5. Learned detector — TRAINED, AND NOW DRIVING THE LIVE MAP FROM REAL FOOTAGE
 **Decided with the author (2026-08-21):** a learned model is a thesis deliverable in its own right
 (master plan stage 9), it runs **server-side** in `vision-worker` (no Coral constraints), and it is a
 **whole-frame detector** rather than a per-bay crop classifier. Real Sofia drone video (DJI, SRT
@@ -190,6 +190,35 @@ baseline on both axes (**R 0.50, P 0.476, mAP50 0.407** vs 0.306/0.508), which i
 justifies more labelling. The compounding payoff is that a working fine-tune becomes the
 **pre-labelling tool** for the remaining 106 frames of this flight and for video 0034 — correcting
 boxes is 3-5x faster than drawing them, and it sidesteps the HF/OWLv2 download blocker entirely.
+
+**2026-08-23 -- the detector now DRIVES THE LIVE MAP.** Three fine-tune runs finished
+(`vision/runs/probe1|probe2|merged1`); `merged1` (yolov8s, 130 real frames / 366 boxes across
+`dji_0035` + `dji_0035_r2`, imgsz 1024) reaches **mAP50 0.873, P 0.945, R 0.766** -- against COCO
+zero-shot's 28.7% recall / 56.4% precision on the same footage. That model is now wired end to end:
+**137 real DJI frames ingested through the live stack, 0 failed, 88 bays carrying a `detector`
+verdict on the map.** Full write-up in CLAUDE.md 2c. The three things it needed:
+
+- **Yaw, which the SRT does not record.** `tools/dji_yaw.py` recovers it from GPS displacement vs
+  image registration. Phase correlation fails outright on canopy-heavy nadir footage (responses
+  0.002-0.02, 6.5x off); normalised cross-correlation scores 0.66-0.84. Verified two ways: implied
+  GSD 12.50 vs 11.74 mm/px expected, and flow-vs-course agreeing to a **median 1.9 deg**.
+- **Camera intrinsics as a value** (`vision/cameras.py`), since real frames are 3840x2160 at
+  73.7 deg against the proto's 400x240 at 45. Defaults keep every sim number byte-identical.
+- **A second occupancy backend** (`OCCUPANCY_BACKEND`, migration `0010` for provenance), with the
+  heuristic still the default so `replay fmi_block` stays 42/42 at 100%.
+
+**Two findings worth carrying.** There is **no GPS bias worth correcting** -- the best global ENU
+shift moves the median detection-to-bay distance only 4.35 -> 3.47 m, at an implausible 4.5 m. The
+spread is instead a DATA fact: **most cars on this street are not in a Sofiaplan-mapped bay**,
+visible directly in the `real_align.py` overlays where a column of bays sits over a pavement strip
+while the cars are on the cobbles. And the map's freshness TTL was **wrong by 12x** (client 10 min
+vs server 2 h) -- fixed, the server now publishes the window.
+
+**Still open, and it is the obvious next task:** there is **no per-bay ground truth for flight
+0035**, so this is a pipeline and a demo, not a real accuracy number (`/api/v1/metrics` correctly
+reports `null`). ~86 bays fall under the flight's footprint; hand-labelling them occupied/free is
+what turns this into a reportable real-world result comparable-but-never-averaged with the sim's
+98.4%.
 
 **Next:** finish the probe and report it honestly against the 26-box val caveat; then either label
 more (if it moved) or diagnose structurally (if it did not). Dataset volume is bounded by flight

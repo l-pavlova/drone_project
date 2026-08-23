@@ -2,9 +2,19 @@
 
     API_KEY=<key> python -m parkdrone_vision.sim_uplink [survey_area] [api_base]
                         [--idle-exit S] [--poll S] [--from N] [--once]
+                        [--root DIR] [--pattern frame_%04d.jpg] [--rate FPS]
 
 Run this next to a Webots flight and the map updates while the drone is still
 in the air, instead of after the fact.
+
+**It also uplinks REAL footage**, with `--root <stills dir> --pattern
+frame_%04d.jpg`. That is a pair of flags rather than a second program on
+purpose: everything hard here -- mission start/end, the retry that leaves an
+unsent frame unsent, resume detection, idle exit, the ordering rule below -- is
+identical for a directory of DJI stills, and a copy of it would be a copy that
+drifts. The only real differences are where the images live, what they are
+called, and that a real `poses.json` (from `tools/dji_stills.py`) numbers its
+frames by `video_frame` rather than carrying a `frame_idx`.
 
 **Why a sidecar and not HTTP inside the controller.** `parkdrone.py` is one
 control loop: every millisecond it spends in a socket is a millisecond the
@@ -30,7 +40,7 @@ import urllib.error
 
 from .config import SIM_OUTPUT_ROOT, SIM_WORLDS_ROOT
 from .ingest_client import post_frame, post_json
-from .vision.scoring import pose_idx
+from .vision.scoring import pose_idx as _sim_pose_idx
 
 # Two stdout fixes, both learned the hard way on this project:
 #   * UTF-8 — Windows consoles default to cp1252, and a UnicodeEncodeError on a
@@ -53,6 +63,24 @@ def _flag(args, name, default, cast=float):
     if i + 1 >= len(args):
         raise SystemExit(f"{name} needs a value")
     return cast(args[i + 1]), args[:i] + args[i + 2:]
+
+
+def frame_index(pose, order):
+    """The frame number to ingest this pose under.
+
+    A sim pose carries `frame_idx` (or the legacy `i`) and `pose_idx` reads it.
+    A real pose from `tools/dji_stills.py` carries neither -- it has `file` and
+    `video_frame`, because a still is identified by which video frame it was cut
+    from. `order` (its position in poses.json) is the fallback, and it is the
+    right one: ingest is idempotent per (drone, mission, frame_idx), so the
+    index only has to be stable and unique WITHIN a flight, and a still's place
+    in the list is exactly that. Using `video_frame` instead would work too but
+    produces sparse five-digit indices that read as gaps in the ops dashboard.
+    """
+    try:
+        return _sim_pose_idx(pose)
+    except (KeyError, TypeError):
+        return order
 
 
 def _read_poses(path):
@@ -93,6 +121,9 @@ def main() -> None:
     idle_exit, args = _flag(args, "--idle-exit", 0.0)
     poll_s, args = _flag(args, "--poll", 1.0)
     start_from, args = _flag(args, "--from", 0, int)
+    rate, args = _flag(args, "--rate", 0.0)
+    root, args = _flag(args, "--root", None, str)
+    pattern, args = _flag(args, "--pattern", None, str)
     once = "--once" in args
     args = [a for a in args if a != "--once"]
 
@@ -103,13 +134,18 @@ def main() -> None:
         raise SystemExit("set API_KEY (from register_drone)")
     drone_id = os.environ.get("DRONE_ID", "drone-1")
 
-    out_dir = os.path.join(SIM_OUTPUT_ROOT, survey_area)
+    out_dir = root or os.path.join(SIM_OUTPUT_ROOT, survey_area)
     poses_file = os.path.join(out_dir, "poses.json")
-    expected = _expected_frames(survey_area)
+    # A real stills directory has no route file; its frame count IS its pose
+    # count, which is only known once the extraction has finished, so the
+    # mission simply has no plan-vs-actual target. That is honest -- inventing
+    # one would put a fictional denominator on the ops dashboard.
+    expected = None if root else _expected_frames(survey_area)
 
     print(f"uplink: {out_dir} -> {api_base}  (drone {drone_id}, area {survey_area})")
     print(f"  route target: {expected if expected else 'unknown'} waypoints · "
-          f"poll {poll_s}s · " + (f"idle exit {idle_exit}s" if idle_exit else "runs until Ctrl-C"))
+          f"poll {poll_s}s · " + (f"idle exit {idle_exit}s" if idle_exit else "runs until Ctrl-C")
+          + (f" · replaying at {rate} frame/s" if rate > 0 else ""))
 
     sent: set[int] = set()
     mission_id = None
@@ -125,17 +161,26 @@ def main() -> None:
             # was re-flown from scratch (its output dir was cleared). Start over
             # rather than sit there thinking everything is already uploaded.
             if poses is not None and sent and max(sent, default=-1) >= 0:
-                highest = max((pose_idx(p) for p in poses), default=-1)
+                highest = max((frame_index(p, n) for n, p in enumerate(poses)),
+                              default=-1)
                 if highest < max(sent):
                     print(f"! poses.json restarted (now ends at {highest}) — treating as a new flight")
                     sent.clear()
                     mission_id = None
 
-            for pose in poses or []:
-                idx = pose_idx(pose)
+            for order, pose in enumerate(poses or []):
+                idx = frame_index(pose, order)
                 if idx in sent or idx < start_from:
                     continue
-                png_path = os.path.join(out_dir, f"frame_{idx:03d}.png")
+                # Prefer the pose's OWN filename when it has one: a real stills
+                # directory records what it wrote, and reconstructing the name
+                # from an index would have to re-guess the extraction's numbering.
+                if pose.get("file"):
+                    png_path = os.path.join(out_dir, pose["file"])
+                elif pattern:
+                    png_path = os.path.join(out_dir, pattern % idx)
+                else:
+                    png_path = os.path.join(out_dir, f"frame_{idx:03d}.png")
                 try:
                     if os.path.getsize(png_path) == 0:
                         continue  # still being written; next poll
@@ -146,7 +191,8 @@ def main() -> None:
 
                 if mission_id is None:
                     try:
-                        body = {"survey_area": survey_area, "area": "sim uplink"}
+                        body = {"survey_area": survey_area,
+                                "area": "real uplink" if root else "sim uplink"}
                         if expected:
                             body["frames_expected"] = expected
                         mission_id = post_json(
@@ -157,22 +203,38 @@ def main() -> None:
                         print(f"! mission start failed ({exc}) — retrying")
                         break
 
+                # Stamp the index INTO the pose. The ingest endpoint reads it
+                # with pose_idx(), and a real pose from tools/dji_stills.py has
+                # no frame_idx to read -- it is identified by `file`. Done here
+                # rather than on disk because poses.json is the record of what
+                # was captured, and the index is a fact about this upload.
                 meta = json.dumps({
                     "drone_id": drone_id,
                     "survey_area": survey_area,
                     "mission_id": mission_id,
-                    "pose": pose,
+                    "pose": {**pose, "frame_idx": idx},
                 })
                 try:
                     status = post_frame(
                         f"{api_base}/api/v1/ingest/frame", api_key, png, meta,
-                        f"frame_{idx}.png",
+                        os.path.basename(png_path),
                     )
                 except (urllib.error.URLError, OSError) as exc:
                     print(f"! frame {idx} not sent ({exc}) — will retry")
                     break  # leave it unsent; the next poll picks it up again
 
                 sent.add(idx)
+                if rate > 0:
+                    # DEMO PACING. A live flight paces itself -- frames appear
+                    # on disk as the drone captures them -- but a directory of
+                    # already-extracted stills has no such clock, so the uplink
+                    # would empty it as fast as the server accepts, and a map
+                    # that repaints in eight seconds shows nothing happening.
+                    # --rate 1.0 replays the 1 Hz stills at the speed they were
+                    # flown, so the map advances in step with the rendered
+                    # video beside it. It is a REPLAY, not a live feed, and the
+                    # flag name says so.
+                    time.sleep(1.0 / rate)
                 last_progress = time.monotonic()
                 if status == 202:
                     posted += 1

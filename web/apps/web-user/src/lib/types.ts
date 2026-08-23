@@ -10,6 +10,11 @@ export interface BayProps {
   last_frame: number | null;
   updated_at: string | null;
   source: string | null;
+  /** Which model decided this bay: "heuristic" (the calibrated colour
+   *  classifier, simulated surveys) or "detector" (the fine-tuned car detector,
+   *  real footage). Null on rows written before migration 0010, and on any
+   *  verdict that has aged out of the freshness window. */
+  backend: string | null;
 }
 
 export interface BayFeature {
@@ -41,12 +46,34 @@ export interface RouteResult {
 
 export type BayStatus = "free" | "occupied" | "unknown";
 
-/** Occupancy TTL: a bay not re-surveyed within this window is "unknown", not free. */
-export const FRESHNESS_MS = 10 * 60 * 1000;
+/** Occupancy TTL: a bay not re-surveyed within this window is "unknown", not free.
+ *
+ *  **The SERVER owns this window** (`OCCUPANCY_WINDOW_S`, default 2 h): it is
+ *  the same number the occupancy vote runs over, and `/api/v1/bays` has already
+ *  NULLed `occupied` on anything past it. A second, shorter TTL here was a bug,
+ *  not a belt-and-braces: at a hard-coded 10 minutes the browser greyed out bays
+ *  the API was still reporting, so a survey went blank ten minutes after it
+ *  landed while the server considered it current for two hours.
+ *
+ *  The fallback below only matters before the first `/summary` response arrives.
+ *  The client still applies it rather than trusting `occupied` alone, because a
+ *  tab left open overnight would otherwise keep painting last night's map. */
+export const FRESHNESS_FALLBACK_MS = 2 * 60 * 60 * 1000;
+
+let freshnessMs = FRESHNESS_FALLBACK_MS;
+
+/** Adopt the server's occupancy window (seconds), so the two cannot disagree. */
+export function setFreshnessWindow(seconds: number): void {
+  if (Number.isFinite(seconds) && seconds > 0) freshnessMs = seconds * 1000;
+}
+
+export function getFreshnessMs(): number {
+  return freshnessMs;
+}
 
 export function bayStatus(p: BayProps, now = Date.now()): BayStatus {
   if (p.occupied === null || p.updated_at === null) return "unknown";
-  if (now - new Date(p.updated_at).getTime() > FRESHNESS_MS) return "unknown";
+  if (now - new Date(p.updated_at).getTime() > freshnessMs) return "unknown";
   return p.occupied ? "occupied" : "free";
 }
 

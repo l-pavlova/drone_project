@@ -108,6 +108,36 @@ ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "")
 # the GIL during array ops, so these parallelise real CV work off the event loop).
 CLASSIFY_THREADS = int(os.environ.get("CLASSIFY_THREADS", "4"))
 
+# ---- occupancy backend -----------------------------------------------------
+# Which model turns a frame into per-bay verdicts.
+#
+#   heuristic  vision/score_occupancy.classify() -- five colour thresholds
+#              calibrated on Webots tones. The ONLY backend that reproduces the
+#              simulator numbers on record, and the reason it is the default:
+#              `replay fmi_block` must stay 42/42 at 100% without anyone having
+#              to set a variable.
+#   detector   a fine-tuned whole-frame car detector. For REAL photographs,
+#              where the heuristic is meaningless -- and conversely useless on
+#              rendered frames, where a COCO-scale detector finds 0 of 52 cars.
+#
+# The two are not interchangeable, so this is deliberately a deployment-level
+# choice rather than something guessed per frame: a survey area is either
+# simulated or real, and whoever starts the server knows which.
+OCCUPANCY_BACKEND = os.environ.get("OCCUPANCY_BACKEND", "heuristic")
+DETECTOR_WEIGHTS = os.environ.get(
+    "DETECTOR_WEIGHTS",
+    os.path.join(REPO_ROOT, "vision", "runs", "merged1", "weights", "best.pt"))
+DETECTOR_CONF = float(os.environ.get("DETECTOR_CONF", "0.25"))
+# Inference size, which MUST match what the weights were trained at (merged1:
+# 1024). Ultralytics letterboxes to this, so leaving the 640 default would feed
+# a 3840 px frame in at 0.17 scale -- a 385 px car arriving as 64 px, against
+# the ~385 px the model learned. Silently worse, never an error.
+DETECTOR_IMGSZ = int(os.environ.get("DETECTOR_IMGSZ", "1024"))
+# Which camera's intrinsics to project with when the detector backend is on.
+# The sim camera is 400x240 at 45 deg and the real one 3840x2160 at 73.7 deg, so
+# this is not a detail -- see vision/cameras.py.
+DETECTOR_CAMERA = os.environ.get("DETECTOR_CAMERA", "dji")
+
 # ---- occupancy freshness ---------------------------------------------------
 # How far back an observation counts toward a bay's occupancy vote, and how old
 # a bay_state row may be before reads report it as unknown.

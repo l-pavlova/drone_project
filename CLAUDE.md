@@ -453,6 +453,158 @@ python vision/train_detector.py --epochs 80 --imgsz 1024  # fine-tune probe
   bootstrapping, RT-DETR) need their files fetched with `curl --ssl-no-revoke` into the HF cache —
   the same workaround `data/README.md` already uses for the Sofiaplan API.
 
+### 2c. Real footage -> the live map (built 2026-08-23)
+```bash
+python tools/dji_yaw.py <stills_dir> --self-test     # prove the estimator first
+python tools/dji_yaw.py <stills_dir> --write         # recover + write `yaw`
+python vision/diag/real_align.py <stills_dir> --every 20   # LOOK at the overlays
+python vision/detect_occupancy.py <stills_dir>       # bay verdicts, offline
+# live, through the whole stack:
+OCCUPANCY_BACKEND=detector python -m parkdrone_vision.server
+API_KEY=$(cat web/.quickstart/drone-1.key) python -m parkdrone_vision.sim_uplink     dji_0035 --root pics/dji/stills/DJI_..._0035_D --pattern 'frame_%04d.jpg'
+```
+**Verified end to end 2026-08-23: 137 real frames ingested, 0 failed, 88 bays now
+carry a `detector` verdict on the live map.**
+
+- **The blocker was YAW, and the SRT does not have it.** These flights record only
+  `latitude`/`longitude`/`rel_alt` -- no `gb_yaw`/`gb_pitch`/`gb_roll` block at all -- so
+  `poses.json` had a position and no orientation, `project()`/`unproject()` could not orient a
+  frame, and `frame.yaw` is `NOT NULL` in the web schema, i.e. a real frame could not even be
+  ingested. `tools/dji_yaw.py` recovers it: the GPS gives the world displacement between two
+  stills and image registration gives the ground content's pixel shift, and those are the same
+  vector in two frames, so `yaw = course + atan2(-du, dv)`. It writes `yaw` + `yaw_src`
+  (`flow`/`course`) + `yaw_resid_deg`.
+  **Phase correlation does NOT work on this footage and normalised cross-correlation does.**
+  The textbook choice for a pure translation returned peak responses of 0.002-0.02 and shifts
+  6.5x off the GPS, because a 30 m nadir frame over Lozenec is mostly summer canopy -- broadband,
+  self-similar, with a parallax of its own -- so there is no single global translation to lock on
+  to. `cv2.matchTemplate` on the central 40% scores 0.66-0.84 on the same pairs.
+  **Measured on flight 0035: implied GSD 12.50 mm/px against 11.74 expected (ratio 1.065), and
+  flow-vs-GPS-course agree to a median 1.9 deg / max 8.4 deg** -- two independent estimates
+  converging, which is the evidence the number is real. 125 of 137 poses come from flow.
+  `--self-test` is not optional and gates everything: a wrong yaw does not look wrong, it
+  produces a confident, plausible, wrong map. It proves the algebra against `project()` itself
+  (352 yaw/course pairs, 5e-14 deg), the registration against known shifts on a real frame
+  (worst 1.4 px), and the two composed (5 headings, worst 0.28 deg).
+- **`vision/cameras.py` -- intrinsics are now a VALUE, not module globals.** `project()`,
+  `unproject()` and `footprint_reach()` take an optional `cam=`; the default is built from
+  `score_occupancy`'s own `IMG_W`/`IMG_H`/`FOV`, so this file still owns the sim numbers and every
+  existing caller is byte-identical. `DJI_NADIR` is 3840x2160 at 73.7 deg -- a figure that lived
+  only in prose until now. `projection_selftest.py` round-trips both cameras (49,188 corners,
+  0.000000 mm) and `tools/check_consistency.py` now has a real-camera check (35 checks, was 33).
+- **The projection was verified by eye across all three flight legs before any number was
+  computed** (`vision/diag/real_align.py`): bay rectangles land on the parked cars, aligned with
+  the street and the right size. **No GPS-bias correction was applied, and that was a measurement,
+  not an oversight** -- the best global ENU shift over 115 detections only moves the median
+  detection-to-bay distance 4.35 -> 3.47 m and the within-3 m count 34 -> 42, at an implausible
+  4.5 m (about a car length). A real bias would show as a tight cluster at a small offset. What
+  the spread actually says is a DATA fact: **most cars on this street are not in a Sofiaplan-mapped
+  bay** -- visible directly in the overlays, where a whole column of bays sits over a pavement
+  strip while the cars are parked on the cobbles beside it.
+- **`vision/detect_occupancy.py::bay_votes_from_dets` is the one detections->bays rule**, extracted
+  from `detect_baseline.py` (whose numbers are the check that the extraction changed nothing:
+  still 0/52 detections, 58.8% base-rate occupancy on `fmi_block`). Box CENTRE unprojected to the
+  ground, bay occupied if a hit lands within `ASSIGN_MAX_M` 3.0 m of its centroid, only bays FULLY
+  in shot vote, strict majority across frames -- so a real verdict and a sim verdict are produced
+  by identical geometry and only the box source differs.
+- **`OCCUPANCY_BACKEND` selects the model, and `heuristic` stays the default.** The detector is
+  for real photographs, where `classify()` is meaningless; `classify()` is for rendered frames,
+  where a COCO-scale detector finds 0 of 52 cars. They are not interchangeable, so this is a
+  deployment-level choice -- a survey area is either simulated or real and whoever starts the
+  server knows which. `DETECTOR_IMGSZ` defaults to 1024 to match what `merged1` was trained at.
+  **Each classify thread gets its OWN model instance**: ultralytics keeps mutable predictor state
+  on the model object, so sharing one across threads is a data race, and a 22 MB copy is cheaper
+  than the lock that would undo the pool's parallelism.
+- **Migration `0010` records WHICH model decided a bay** (`observation.backend`/`det_score`,
+  `bay_state.backend`, all nullable, no backfill -- stamping pre-0010 rows would assert a fact the
+  migration never saw). It is not decoration: a detector observation has no `core_chroma` and a
+  heuristic one has no `det_score`, so NULL would otherwise be indistinguishable from a failed
+  measurement, and the two results must never be averaged. `/api/v1/bays` returns `backend` gated
+  on the same freshness as `occupied`, and the map popup shows it as a Source row.
+- **The client's freshness TTL was wrong and is now the server's.** `types.ts` hard-coded 10
+  minutes against `OCCUPANCY_WINDOW_S`'s 2 h, so a landed survey greyed out in the browser while
+  the API still reported it. `/health` now publishes `occupancy_window_s` and the client adopts it
+  at startup (2 h fallback).
+- `sim_uplink.py` gained `--root`/`--pattern` rather than gaining a real-footage twin -- mission
+  start/end, resume detection, the retry that leaves an unsent frame unsent and the
+  image-before-pose ordering rule are all identical for a directory of DJI stills. It stamps
+  `frame_idx` into the pose it POSTs, because a real pose is identified by `file` and has none.
+- **Known limit, by design this round:** there is no per-bay ground truth for flight 0035, so this
+  is a working pipeline and a demo, NOT a real accuracy number. `/api/v1/metrics` correctly reports
+  accuracy as `null` -- the production case. Getting a number means hand-labelling the ~86 bays
+  under this flight's footprint.
+
+### 2d. The demo: annotated video + the live map (built 2026-08-23)
+```bash
+python vision/render_demo.py pics/dji/stills/DJI_..._0035_D --out pics/dji/demo_0035.mp4
+# then, side by side:
+cd web/apps/vision-worker && OCCUPANCY_BACKEND=detector python -m parkdrone_vision.server &
+cd web/apps/web-user && pnpm exec vite &                      # map on :5173
+API_KEY=$(cat web/.quickstart/drone-1.key) python -m parkdrone_vision.sim_uplink     dji_0035 --root pics/dji/stills/DJI_..._0035_D --pattern 'frame_%04d.jpg'     --rate 1.0 --once                                          # start with the video
+```
+**Pre-rendered, deliberately.** Running the detector live during a presentation puts a CPU
+inference pass on the critical path, where a slow frame is a stall in front of an audience.
+`render_demo.py` does everything expensive once and caches the detections beside the video
+(`<out>.dets.json`), so a re-render with different drawing options costs seconds.
+
+- **It plays in real time and stays there.** The stills were cut at 1 Hz, so `--hold 1.0` shows
+  each for one second: 137 frames, 137 s, the speed the drone actually flew. `--fps` is a separate
+  knob -- each still is simply repeated `hold*fps` times -- because a 1 fps MP4 scrubs badly and
+  stutters in some players while a 10 fps one holding each image for ten frames plays smoothly.
+  `--rate 1.0` on the uplink replays the frames at the same 1 Hz so the map advances in step.
+- **Three layers are drawn and each earns its place**: amber detection boxes with confidences
+  (the model), projected bay outlines coloured by *this frame's* verdict — red occupied, green
+  free (the product decision, computed by the same `bay_votes_from_dets` the server runs, so a
+  viewer can watch a box land inside an outline and see it turn red), and a HUD carrying frame,
+  time, **yaw and its source**. The yaw is on screen because it is *estimated*, and a demo that
+  hides that is overclaiming. Note the per-frame colour is the SINGLE-VIEW verdict: a bay can
+  flicker here and still be decided correctly on the map, which is the multi-view vote working
+  and is worth pointing at rather than hiding.
+- **Codec:** `mp4v`. This machine has neither OpenH264 nor ffmpeg, so H.264 silently falls back
+  and produces nothing usable. mp4v plays in VLC and Windows Media Player but **not reliably in
+  Chrome**. At 1920x1080/10 fps the file is ~159 MB; `--width 1280 --fps 6` brings it to ~45 MB
+  at the same real-time speed.
+- **Watch out for two survey areas owning the same bays.** `bay_state` is keyed per bay, and
+  `recompute_states` resolves the newest mission *within one survey_area* — so `fmi_block` (sim)
+  and `dji_0035` (real) cover the same physical block and whichever ingested last owns the
+  overlap. Running the `fmi_block` replay after the real flight silently took 30 of the 88 real
+  bays back to `heuristic`. Not new behaviour and not a bug in this work, but **run the real
+  flight LAST before a demo**, and the Source row in the popup is how you check.
+
+### 2e. Test-run record — the real pipeline, verified 2026-08-23
+Every gate below was run on this date, in this order. They are ordered because each one is only
+meaningful if the previous passed: a projection cannot be trusted before the yaw estimator is, and
+no accuracy claim means anything before the projection has been looked at.
+
+| # | Command | Result |
+|---|---|---|
+| 1 | `python tools/dji_yaw.py --self-test` | **pass** — algebra vs `project()` 352 pairs worst **5e-14 deg**; registration on a real frame, 4 known shifts, worst **1.41 px**; end-to-end yaw→image→yaw, 5 headings, worst **0.28 deg** |
+| 2 | `python vision/diag/projection_selftest.py` | **pass** — 49,188 corner round-trips **0.000000 mm**, and the same again through `DJI_NADIR` |
+| 3 | `python vision/diag/real_align.py <stills> --every 20` | **pass, by eye** — bays land on the parked cars on all three flight legs (yaw 30 / 205 / 108 deg) |
+| 4 | `python tools/check_consistency.py` | **35 checks pass** (was 33; +2 for the real camera) |
+| 5 | `python vision/detect_baseline.py fmi_block` | **unchanged after the extraction** — TP=0 FP=0 FN=30, occupancy 58.8% (the base rate on record) |
+| 6 | `python -m parkdrone_vision.replay fmi_block` | **42/42, 100%** (TP=17 TN=25 FP=0 FN=0) — the heuristic path is untouched |
+| 7 | `pnpm db:migrate` then `replay_ingest fmi_block` | `0010` applied; **42/42**, 14 WS deltas, new rows carry `backend='heuristic'` |
+| 8 | real uplink of flight 0035 | **137 frames, 0 duplicate, 0 failed**; 88 bays with a `detector` verdict; `/api/v1/metrics` accuracy `null` (no GT — the production case) |
+
+**Measurements taken during the run, worth keeping:**
+- yaw estimator on flight 0035: implied GSD **12.50 mm/px** vs 11.74 expected (**ratio 1.065**);
+  flow vs GPS course **median 1.9 deg / 90th 4.2 / max 8.4**; 125 of 137 poses from flow, 12 from
+  course; 1 frame screened out as non-nadir.
+- detector on the 137 real frames: **473 detections, 3.5/frame** (median 3, max 10), confidence
+  p10 0.33 / p50 0.68 / p90 0.83, only **20 overlapping pairs** at IoU>0.3. Inspected the busiest
+  frame: **10 boxes on 10 real cars.** The detector is not over-firing.
+- detection-to-nearest-bay distance over 115 detections: **median 4.35 m**, p10 1.68, p90 11.16;
+  only 30% within the 3 m assignment radius. Best global ENU shift (grid search +/-6 m) reaches
+  median 3.47 m / 42 of 115 at an implausible **4.5 m** — so there is **no GPS bias worth
+  correcting**, and the spread is the data instead.
+- 674 detector observations recorded, **102 carrying a `det_score`** (avg 0.641), zero heuristic
+  colour statistics — the intended shape for migration `0010`.
+
+**Re-running gate 6 or 7 AFTER gate 8 silently steals bays back from the real flight** — measured,
+it took 30 of the 88. `bay_state` is per bay and the two survey areas cover the same block. See
+the warning in 2d.
+
 ### 3. Flight-log analysis (real-flight debugging, separate from sim)
 ```bash
 pip install pymavlink

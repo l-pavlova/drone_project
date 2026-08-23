@@ -137,9 +137,27 @@ def camera_axes(yaw, roll, pitch_res, cam_roll):
     return d, r, b
 
 
-def project(px, py, pose):
+def _intrinsics(cam):
+    """(width, height, focal px) for a Camera, or the module's sim defaults.
+
+    The default is spelled out here rather than as `cam=SIM_MAVIC` in each
+    signature so that this file keeps owning the sim numbers -- cameras.py
+    imports them FROM here, and a default argument evaluated at import time
+    would build a second, silently-frozen copy.
+    """
+    if cam is None:
+        return IMG_W, IMG_H, IMG_W / (2.0 * math.tan(FOV / 2.0))
+    return cam.w, cam.h, cam.f
+
+
+def project(px, py, pose, cam=None):
     """Ground ENU point -> pixel (u, v) for the camera at this pose.
-    Image up = drone heading; square pixels; horizontal FOV across IMG_W.
+    Image up = drone heading; square pixels; horizontal FOV across the width.
+
+    `cam` is a vision/cameras.py Camera. It defaults to the module's own
+    IMG_W/IMG_H/FOV -- the Webots proto camera -- so every existing caller and
+    every number on record is unaffected; pass cameras.DJI_NADIR to project onto
+    a real DJI still, whose intrinsics are an order of magnitude different.
 
     A pose that carries no attitude falls back to the exact nadir geometry, so
     every poses.json already on disk stays scorable -- same reasoning as
@@ -153,16 +171,16 @@ def project(px, py, pose):
     d, r, b = camera_axes(pose["yaw"], ang("roll"),
                           ang("pitch") + ang("cam_pitch", math.pi / 2) - math.pi / 2,
                           ang("cam_roll"))
-    f = IMG_W / (2.0 * math.tan(FOV / 2.0))
+    w, h, f = _intrinsics(cam)
     wx, wy, wz = px - pose["x"], py - pose["y"], -pose["alt"]
     z = wx * d[0] + wy * d[1] + wz * d[2]              # depth along the axis
     if z < 0.01:                     # at or behind the camera plane: clamp, so
         z = 0.01                     # a degenerate pose cannot divide by zero
-    return (IMG_W / 2.0 + f * (wx * r[0] + wy * r[1] + wz * r[2]) / z,
-            IMG_H / 2.0 + f * (wx * b[0] + wy * b[1] + wz * b[2]) / z)
+    return (w / 2.0 + f * (wx * r[0] + wy * r[1] + wz * r[2]) / z,
+            h / 2.0 + f * (wx * b[0] + wy * b[1] + wz * b[2]) / z)
 
 
-def unproject(u, v, pose):
+def unproject(u, v, pose, cam=None):
     """Pixel (u, v) -> the ground ENU point it sees, the exact inverse of project().
 
     Forward, project() takes a world offset, resolves it onto the camera axes
@@ -187,8 +205,8 @@ def unproject(u, v, pose):
     d, r, b = camera_axes(pose["yaw"], ang("roll"),
                           ang("pitch") + ang("cam_pitch", math.pi / 2) - math.pi / 2,
                           ang("cam_roll"))
-    f = IMG_W / (2.0 * math.tan(FOV / 2.0))
-    su, sv = (u - IMG_W / 2.0) / f, (v - IMG_H / 2.0) / f
+    w, h, f = _intrinsics(cam)
+    su, sv = (u - w / 2.0) / f, (v - h / 2.0) / f
     ray = (d[0] + su * r[0] + sv * b[0],
            d[1] + su * r[1] + sv * b[1],
            d[2] + su * r[2] + sv * b[2])
@@ -196,6 +214,26 @@ def unproject(u, v, pose):
         return None
     t = pose["alt"] / -ray[2]       # camera at z = alt, ground at z = 0
     return (pose["x"] + t * ray[0], pose["y"] + t * ray[1])
+
+
+def load_all_bays(path=None):
+    """EVERY bay in the dataset as an ENU polygon, with no ground truth needed.
+
+    `load_bays()` below filters to the bays a survey world's ground_truth.json
+    knows about, which is right for scoring a simulated flight and impossible
+    for a real one: real footage has no ground truth file, and the bays it flies
+    over are simply whichever of the 1698 fall under the camera. Same dict shape
+    minus `occupied`, so the same consumers work.
+    """
+    feats = json.load(open(path or BAYS, encoding="utf-8"))["features"]
+    bays = []
+    for f in feats:
+        ring = [to_enu(lon, lat)
+                for lon, lat in f["geometry"]["coordinates"][0][:-1]]
+        bays.append({"id": str(f["properties"].get("id")), "ring": ring,
+                     "cx": sum(p[0] for p in ring) / len(ring),
+                     "cy": sum(p[1] for p in ring) / len(ring)})
+    return bays
 
 
 def load_bays():

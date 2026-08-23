@@ -72,12 +72,17 @@ class BayIndex:
 
 
 def insert_observations(conn, survey_area, frame_idx, scores, gt=None,
-                        mission_id=None):
+                        mission_id=None, backend=None):
     """Append one observation row per scored bay (single view).
 
     `mission_id` is what lets the vote tell two flights apart (migration 0009).
     It stays optional: a caller with no mission records NULL, and the vote groups
     all mission-less observations of a bay together exactly as it did before.
+
+    `backend` (migration 0010) records WHICH model produced the verdict. The
+    colour statistics below are the heuristic's; on the detector backend `feat`
+    carries only `det_score` and the rest come out NULL, which is why the
+    backend has to be stated rather than guessed from which columns are set.
     """
     if not scores:
         return
@@ -105,6 +110,8 @@ def insert_observations(conn, survey_area, frame_idx, scores, gt=None,
                 fl(f.get("core_std")),
                 None if gt is None else gt.get(s["bay_id"]),
                 mission_id,
+                backend,
+                fl(f.get("det_score")),
             )
         )
     with conn.cursor() as cur:
@@ -113,7 +120,7 @@ def insert_observations(conn, survey_area, frame_idx, scores, gt=None,
             """INSERT INTO observation
                  (bay_id, occupied, frame_idx, survey_area, votes_occupied, views, vis,
                   center_off_px, core_paint_frac, core_dark_frac, core_chroma,
-                  core_brightness, core_std, gt, mission_id)
+                  core_brightness, core_std, gt, mission_id, backend, det_score)
                VALUES %s""",
             rows,
         )
@@ -147,7 +154,12 @@ WITH latest AS (
 ), agg AS (
   SELECT o.bay_id,
          count(*)                          AS n,
-         count(*) FILTER (WHERE o.occupied) AS occ
+         count(*) FILTER (WHERE o.occupied) AS occ,
+         -- Provenance of the flight that now owns this bay. `latest` already
+         -- pinned it to one mission, and a mission runs on one backend, so the
+         -- max() is picking the single value present rather than resolving a
+         -- disagreement.
+         max(o.backend)                     AS backend
     FROM observation o
     JOIN latest l ON l.bay_id = o.bay_id
                  -- IS NOT DISTINCT FROM, not =, so the pre-0009 rows (mission
@@ -160,18 +172,20 @@ WITH latest AS (
 ), calc AS (
   SELECT bay_id,
          (occ * 2 > n)                        AS occupied,   -- strict majority sees a car
-         GREATEST(occ, n - occ)::real / n     AS confidence
+         GREATEST(occ, n - occ)::real / n     AS confidence,
+         backend
     FROM agg
 ), prior AS (
   SELECT bay_id, occupied FROM bay_state WHERE bay_id = ANY(%(bay_ids)s)
 ), ups AS (
-  INSERT INTO bay_state (bay_id, occupied, confidence, last_frame, source, updated_at)
-  SELECT bay_id, occupied, confidence, %(frame_idx)s, 'vision', now() FROM calc
+  INSERT INTO bay_state (bay_id, occupied, confidence, last_frame, source, backend, updated_at)
+  SELECT bay_id, occupied, confidence, %(frame_idx)s, 'vision', backend, now() FROM calc
   ON CONFLICT (bay_id) DO UPDATE SET
     occupied   = EXCLUDED.occupied,
     confidence = EXCLUDED.confidence,
     last_frame = EXCLUDED.last_frame,
     source     = 'vision',
+    backend    = EXCLUDED.backend,
     updated_at = now()
   RETURNING bay_id, occupied, confidence, updated_at
 )

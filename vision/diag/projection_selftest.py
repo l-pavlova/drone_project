@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import json
 
+import cameras
 import score_occupancy as so
 
 TOL_M = 1e-3            # 1 mm: far below the 0.043 m the camera model achieves
@@ -48,7 +49,7 @@ def bays_of(area):
     return so.load_bays()
 
 
-def run(area):
+def run(area, cam=None):
     out = os.path.join(so.ROOT, "sim", "output", area)
     poses = json.load(open(os.path.join(out, "poses.json"), encoding="utf-8"))
     bays = bays_of(area)
@@ -59,8 +60,8 @@ def run(area):
     for pose in poses:
         for b in bays:
             for px, py in b["ring"]:
-                u, v = so.project(px, py, pose)
-                back = so.unproject(u, v, pose)
+                u, v = so.project(px, py, pose, cam=cam)
+                back = so.unproject(u, v, pose, cam=cam)
                 if back is None:
                     # A ray that never reaches the ground. For a nadir-ish
                     # survey pose this should not happen at all; count it rather
@@ -90,6 +91,24 @@ def main():
               + (f", {skipped} ray(s) never met the ground" if skipped else ""))
         if worst > TOL_M or skipped:
             failed = True
+
+    # And again through the REAL camera's intrinsics. Same poses and same bays,
+    # so this isolates the one thing that changed: that the width/height/focal
+    # length now flow through a parameter instead of module globals. A camera
+    # 10x wider with 1.6x the FOV must round-trip just as exactly, or the
+    # detector path is projecting real detections with sim optics.
+    for area in areas:
+        try:
+            worst, where, tested, skipped = run(area, cam=cameras.DJI_NADIR)
+        except OSError:
+            continue
+        status = "ok " if worst <= TOL_M and not skipped else "FAIL"
+        print(f"  {status} {area} @ {cameras.DJI_NADIR!r}: {tested} round-trips, "
+              f"worst {worst * 1000:.6f} mm"
+              + (f", {skipped} ray(s) never met the ground" if skipped else ""))
+        if worst > TOL_M or skipped:
+            failed = True
+
     if failed:
         print("\nFAILED: unproject() is not the inverse of project()")
         sys.exit(1)

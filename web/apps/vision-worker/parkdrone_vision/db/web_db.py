@@ -46,7 +46,12 @@ def feature_collection(conn, bbox=None, zona=None):
                       'park_txt', b.park_txt, 'bearing_deg', b.bearing_deg, 'public', b.public,
                       'occupied', CASE WHEN {_FRESH} THEN s.occupied END,
                       'confidence', CASE WHEN {_FRESH} THEN s.confidence END,
-                      'last_frame', s.last_frame, 'updated_at', s.updated_at, 'source', s.source
+                      'last_frame', s.last_frame, 'updated_at', s.updated_at, 'source', s.source,
+                      -- Which model decided this bay (migration 0010). Gated on
+                      -- freshness like `occupied` is: naming a backend beside a
+                      -- verdict that has already expired would attribute a claim
+                      -- nothing is currently making.
+                      'backend', CASE WHEN {_FRESH} THEN s.backend END
                     )
                   ) AS feat
              FROM bay b
@@ -91,7 +96,8 @@ def detail(conn, bay_id, history_limit=20):
                       ST_AsGeoJSON(b.geom)::json AS geometry,
                       CASE WHEN {_FRESH} THEN s.occupied END,
                       CASE WHEN {_FRESH} THEN s.confidence END,
-                      s.last_frame, s.updated_at, s.source
+                      s.last_frame, s.updated_at, s.source,
+                      CASE WHEN {_FRESH} THEN s.backend END
                  FROM bay b LEFT JOIN bay_state s USING (bay_id)
                 WHERE b.bay_id = %(bay_id)s""",
             {"bay_id": bay_id, "window_s": OCCUPANCY_WINDOW_S},
@@ -102,6 +108,7 @@ def detail(conn, bay_id, history_limit=20):
         cols = [
             "bay_id", "zona", "street", "park_txt", "bearing_deg", "public",
             "geometry", "occupied", "confidence", "last_frame", "updated_at", "source",
+            "backend",
         ]
         out = dict(zip(cols, bay))
         out["geometry"] = _asjson(out["geometry"])

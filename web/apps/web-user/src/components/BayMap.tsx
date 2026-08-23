@@ -22,6 +22,14 @@ import type {
   RouteResult,
 } from "../lib/types";
 import { bayStatus } from "../lib/types";
+
+/** How each occupancy backend is named to a driver. The stored values are
+ *  `heuristic` / `detector` (migration 0010); anything unrecognised falls
+ *  through and is shown verbatim rather than hidden. */
+const BACKEND_LABEL: Record<string, string> = {
+  heuristic: "colour classifier",
+  detector: "learned detector",
+};
 import { bayCentroid, directionsUrl, type NearestTarget, type UserPos } from "../lib/geo";
 import type { LiveState } from "../hooks/useOccupancySocket";
 import { NoFlyLayer } from "./NoFlyLayer";
@@ -294,6 +302,14 @@ function BayPopup({
         <dt>Street</dt><dd>{props.street ?? "—"}</dd>
         <dt>Zone</dt><dd>{props.zona ?? "—"}</dd>
         {props.confidence != null && (<><dt>Confidence</dt><dd>{Math.round(props.confidence * 100)}%</dd></>)}
+        {/* Which model decided this bay. Two now can, and they are not
+            comparable -- the heuristic is calibrated on simulated tones and the
+            detector is trained on real photographs -- so the verdict is only
+            fully readable next to its provenance. Note `Confidence` above is
+            the multi-view vote agreement, NOT a model score. */}
+        {props.backend != null && (
+          <><dt>Source</dt><dd>{BACKEND_LABEL[props.backend] ?? props.backend}</dd></>
+        )}
         <dt>Updated</dt>
         <dd>{props.updated_at ? new Date(props.updated_at).toLocaleTimeString() : "never surveyed"}</dd>
       </dl>

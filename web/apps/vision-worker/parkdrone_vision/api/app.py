@@ -14,6 +14,7 @@ WebSocket endpoint is async.
 """
 import asyncio
 import json
+import os
 import uuid
 from contextlib import asynccontextmanager
 
@@ -30,7 +31,7 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from .. import cleanup, nofly, routing, s3
+from .. import cleanup, config, nofly, routing, s3
 from ..config import (
     ADMIN_API_KEY,
     API_PORT,
@@ -40,7 +41,7 @@ from ..config import (
 )
 from ..db import vision_db, web_db
 from ..db.pool import borrow, close_pool, init_pool
-from ..processing import jobs
+from ..processing import jobs, pipeline
 from ..vision.scoring import pose_idx
 from . import metrics
 from .auth import require_admin, require_drone
@@ -112,7 +113,14 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/health")
 def health():
-    return {"ok": True}
+    # `occupancy_window_s` is served here rather than left for the client to
+    # guess: the browser applies its own staleness TTL when painting bays, and
+    # a second hard-coded number is a bug waiting to happen -- it used to be 10
+    # minutes against a 2 h server window, so a landed survey greyed out while
+    # the API still considered it current. One authority, published.
+    return {"ok": True,
+            "occupancy_window_s": config.OCCUPANCY_WINDOW_S,
+            "occupancy_backend": pipeline.backend_name()}
 
 
 # ---- ingest (auth-guarded) -------------------------------------------------
@@ -168,9 +176,16 @@ def ingest_frame(
     # it would overwrite the earlier flight's image while that flight's frame row
     # still points at it -- the row would then serve a different flight's pixels
     # to recovery and to cleanup. Mission-less frames keep the old key exactly.
+    # Keep the uploaded file's extension. PIL sniffs the format from the bytes
+    # so a JPEG under a .png key would still decode, but real DJI stills are
+    # JPEG and a key that lies about its content is a trap for anyone who later
+    # pulls one out of the bucket by hand.
+    ext = os.path.splitext(frame.filename or "")[1].lower()
+    if ext not in (".png", ".jpg", ".jpeg"):
+        ext = ".png"
     key = (f"{survey_area}/{drone_id}/"
            + (f"{mission_id}/" if mission_id else "")
-           + f"frame_{pose['frame_idx']:03d}.png")
+           + f"frame_{pose['frame_idx']:03d}{ext}")
     image_uri = s3.put_frame(key, frame.file.read())
 
     frame_id = str(uuid.uuid4())

@@ -42,12 +42,13 @@ import numpy as np
 from PIL import Image
 
 import score_occupancy as so
+from detect_occupancy import ASSIGN_MAX_M, bay_votes_from_dets
 
 CAR_CLASS = 2           # COCO 'car', the class the supervisor's pipeline filters to
-ASSIGN_MAX_M = 3.0      # how far a detection may land from a bay's centre and
-#   still be counted as that bay's car. A bay is 2.2 x 4.5-6 m, so this is about
-#   one bay width - beyond it the detection is evidence about some other bay, or
-#   about a car that is not parked in one at all.
+#   ASSIGN_MAX_M and the detections->bays rule now live in detect_occupancy.py,
+#   because the real-footage path needs the identical rule and a second copy of
+#   it would be the exact duplication hazard TODO #3 exists to retire. This
+#   file's occupancy numbers are what check the extraction did not change it.
 
 
 def iou(a, b):
@@ -131,20 +132,8 @@ def main():
         fn += len(gt_boxes) - len(used)
 
         # ---- occupancy: where did each detection LAND, and in whose bay?
-        hits = []
-        for box, _ in dets:
-            g = so.unproject((box[0] + box[2]) / 2, (box[1] + box[3]) / 2, pose)
-            if g:
-                hits.append(g)
-        for b in bays:
-            ring = [so.project(x, y, pose) for x, y in b["ring"]]
-            us, vs = [p[0] for p in ring], [p[1] for p in ring]
-            if min(us) < 0 or max(us) >= so.IMG_W or min(vs) < 0 or max(vs) >= so.IMG_H:
-                continue        # not fully in shot: the same rule the crops use
-            cx = sum(p[0] for p in b["ring"]) / len(b["ring"])
-            cy = sum(p[1] for p in b["ring"]) / len(b["ring"])
-            seen = any(math.hypot(hx - cx, hy - cy) <= ASSIGN_MAX_M for hx, hy in hits)
-            votes.setdefault(b["id"], []).append(seen)
+        for s in bay_votes_from_dets(dets, bays, pose):
+            votes.setdefault(s["bay_id"], []).append(s["occupied"])
 
     prec = tp / (tp + fp) if tp + fp else 0.0
     rec = tp / (tp + fn) if tp + fn else 0.0

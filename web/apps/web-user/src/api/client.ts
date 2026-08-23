@@ -9,6 +9,19 @@ export async function fetchBays(bbox?: string, zona?: string): Promise<BayFC> {
   return res.json();
 }
 
+/** Server-side occupancy window + active backend. Fetched once at startup so
+ *  the client's staleness TTL is the server's, not a second hard-coded guess
+ *  that can drift out of step with the vote (it used to, by 12x). */
+export async function fetchServerInfo(): Promise<{
+  ok: boolean;
+  occupancy_window_s: number;
+  occupancy_backend: string;
+}> {
+  const res = await fetch("/health");
+  if (!res.ok) throw new Error(`GET /health -> ${res.status}`);
+  return res.json();
+}
+
 export async function fetchSummary(): Promise<{ zones: ZoneSummary[] }> {
   const res = await fetch("/api/v1/summary");
   if (!res.ok) throw new Error(`GET /summary -> ${res.status}`);

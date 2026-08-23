@@ -16,8 +16,12 @@ import time
 
 from botocore.exceptions import ClientError
 
-from .. import s3
+from .. import config, s3
 from ..db import vision_db, web_db
+from ..vision import scoring
+# `cameras` is importable because scoring.py injects <repo>/vision on sys.path
+from ..vision.scoring import cameras
+from . import pipeline
 from .pipeline import process_frame
 
 # S3 error codes meaning "the frame image is gone" (e.g. expired under the
@@ -74,6 +78,15 @@ def start_workers(n: int, bays, index, hub, loop) -> None:
 
 def _worker_loop(bays, index, hub, loop) -> None:
     conn = vision_db.connect()
+    # A per-THREAD detector, not a shared one: ultralytics keeps mutable
+    # predictor state on the model object, so one instance across four classify
+    # threads is a data race. A yolov8s is ~22 MB, which is far cheaper than the
+    # lock that sharing would need -- and a lock would undo the parallelism this
+    # thread pool exists for. Nothing is loaded at all on the heuristic backend.
+    model = cam = None
+    if pipeline.backend_name() == "detector":
+        model = scoring.load_detector(config.DETECTOR_WEIGHTS)
+        cam = cameras.get(config.DETECTOR_CAMERA)
     while True:
         job = _q.get()
         _bump(in_flight=1)
@@ -90,6 +103,8 @@ def _worker_loop(bays, index, hub, loop) -> None:
                 frame_id=job.get("frame_id"),
                 index=index,
                 mission_id=job.get("mission_id"),
+                model=model,
+                cam=cam,
             )
             if job.get("frame_id"):
                 web_db.mark_frame_processed(conn, job["frame_id"])

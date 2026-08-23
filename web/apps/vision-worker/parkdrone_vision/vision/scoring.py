@@ -15,7 +15,9 @@ _VISION_DIR = os.path.normpath(os.path.join(_HERE, "..", "..", "..", "..", "..",
 if _VISION_DIR not in sys.path:
     sys.path.insert(0, _VISION_DIR)
 
+import cameras  # noqa: E402
 import score_occupancy as so  # noqa: E402
+from detect_occupancy import bay_votes_from_dets  # noqa: E402
 
 # Re-export the calibrated pieces so the rest of the worker never re-implements them.
 IMG_W, IMG_H = so.IMG_W, so.IMG_H
@@ -37,7 +39,7 @@ pose_idx = so.pose_idx
 TILT_ALLOW = 0.06
 
 
-def footprint_reach(alt):
+def footprint_reach(alt, cam=None):
     """Half-diagonal, in metres, of the ground rectangle a frame covers.
 
     Inverts `project`'s scale: it maps ground metres to pixels with
@@ -50,8 +52,10 @@ def footprint_reach(alt):
     tilt, which slides the footprint off the drone's own position and would
     otherwise let this cheap test reject a bay that is genuinely in shot.
     """
-    half_w = alt * math.tan(FOV / 2.0)
-    half_h = half_w * (IMG_H / IMG_W)
+    fov = FOV if cam is None else cam.fov_h
+    aspect = (IMG_H / IMG_W) if cam is None else (cam.h / cam.w)
+    half_w = alt * math.tan(fov / 2.0)
+    half_h = half_w * aspect
     return math.hypot(half_w, half_h) + alt * math.tan(TILT_ALLOW)
 
 
@@ -95,4 +99,64 @@ def score_frame(img_arr, bays, pose, index=None):
                 "feat": feat,
             }
         )
+    return out
+
+
+# --------------------------------------------------------------------------
+# The learned-detector backend.
+#
+# It answers the SAME question as score_frame -- which bays in this frame hold
+# a car -- and returns the identical contract, so processing/pipeline.py picks
+# between them by configuration and nothing downstream knows the difference.
+#
+# The two are NOT interchangeable in practice and must not be treated as such:
+# `classify()` is five thresholds calibrated on Webots tones and is the only
+# thing that reproduces the sim's numbers on record (replay fmi_block 42/42 at
+# 100%), while COCO-scale detectors find literally 0 of 52 cars in those same
+# rendered frames. The detector is for real photographs, where the heuristic is
+# meaningless. Which is why the default backend is the heuristic and the
+# detector is opted into.
+
+
+def load_detector(weights):
+    """One YOLO instance. Call once PER THREAD -- see score_frame_detector."""
+    from ultralytics import YOLO
+    return YOLO(weights)
+
+
+def score_frame_detector(img_arr, bays, pose, index=None, model=None,
+                         cam=None, conf=0.25, imgsz=1024):
+    """Detector counterpart of score_frame, returning the same contract.
+
+    Runs the detector ONCE on the whole frame, then hands the boxes to the
+    shared `bay_votes_from_dets` rule (vision/detect_occupancy.py) that the
+    offline sim baseline also uses -- so a real verdict and a sim verdict are
+    produced by the same geometry, and only the box source differs.
+
+    `model` must be a per-thread instance: ultralytics keeps mutable predictor
+    state on the model object, so sharing one across the classify threads is a
+    data race. A yolov8s is ~22 MB, so a copy per thread is cheaper than the
+    lock that would be needed to share one.
+
+    `feat` carries only `det_score` -- the heuristic's five colour statistics do
+    not exist here and are left ABSENT rather than zero-filled, because a zero
+    in `core_chroma` would be indistinguishable from a measured zero when those
+    columns are read back for analysis.
+    """
+    import numpy as np
+
+    if model is None:
+        raise ValueError("score_frame_detector needs a per-thread model; "
+                         "call load_detector() at worker start")
+    if index is not None:
+        bays = index.visible(bays, pose["x"], pose["y"],
+                             footprint_reach(pose["alt"], cam))
+    res = model.predict(np.asarray(img_arr), conf=conf, imgsz=imgsz,
+                        verbose=False)[0]
+    dets = list(zip(res.boxes.xyxy.tolist(), res.boxes.conf.tolist()))
+    out = bay_votes_from_dets(dets, bays, pose, cam=cam)
+    for s in out:
+        s["off"] = round(s["off"], 1)
+        score = s.pop("det_score")
+        s["feat"] = {} if score is None else {"det_score": round(score, 4)}
     return out

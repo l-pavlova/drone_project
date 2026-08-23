@@ -39,7 +39,7 @@ check 3's regexes stop matching, that is reported as a FAILURE rather than
 silently passing - but the regexes will then need updating together with this
 file's copy of the rules.
 """
-import json, math, os, re, sys
+import glob, json, math, os, re, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..")
@@ -302,6 +302,54 @@ elif (asp_c.group(1), asp_c.group(2)) != (f"{iw.group(2)}.0", f"{iw.group(1)}.0"
 else:
     print(f"  ok  CAM_ASPECT {asp_c.group(1)}/{asp_c.group(2)} matches "
           f"{iw.group(1)}x{iw.group(2)}")
+
+# --- 7. the REAL camera vs the footage it describes ---------------------------
+# vision/cameras.py is where the DJI intrinsics finally became code rather than
+# prose (they were quoted in CLAUDE.md, LABELING.md and docs/training.md and
+# nowhere else). The frames themselves are the ground truth for the resolution,
+# exactly as in check 5 -- and the FOV is checked the only way it can be from
+# here, against the ground footprint the whole real pipeline is scaled by. A
+# drifted FOV silently rescales every real bay projection without erroring.
+print()
+print("camera: real DJI (vision/cameras.py vs the stills)")
+sys.path.insert(0, os.path.join(ROOT, "vision"))
+try:
+    import cameras as _cams
+except Exception as exc:                                        # pragma: no cover
+    skips.append(f"real camera: cannot import vision/cameras.py ({exc})")
+    _cams = None
+if _cams is not None:
+    dji = _cams.DJI_NADIR
+    stills = sorted(glob.glob(os.path.join(
+        ROOT, "pics", "dji", "stills", "*", "frame_0000.jpg")))
+    checks += 1
+    if not stills:
+        skips.append("real camera: no DJI stills on disk to check against")
+    else:
+        from PIL import Image
+        bad = []
+        for f in stills:
+            with Image.open(f) as im:
+                if im.size != (dji.w, dji.h):
+                    bad.append(f"{os.path.basename(os.path.dirname(f))} is "
+                               f"{im.size[0]}x{im.size[1]}")
+        if bad:
+            failures.append(f"real camera: cameras.DJI_NADIR is {dji.w}x{dji.h} "
+                            f"but " + "; ".join(bad))
+        else:
+            print(f"  ok  {len(stills)} still set(s) are {dji.w}x{dji.h}")
+    # The documented figures this camera has to reproduce, from the 2026-08-21
+    # flight at 30.1 m: 45.0 m across the frame and 11.7 mm/px.
+    checks += 1
+    fw, _ = dji.footprint(30.1)
+    gsd_mm = dji.gsd(30.1) * 1000.0
+    if abs(fw - 45.0) > 0.5 or abs(gsd_mm - 11.7) > 0.2:
+        failures.append(f"real camera: at 30.1 m DJI_NADIR gives a {fw:.2f} m "
+                        f"footprint / {gsd_mm:.2f} mm/px, but the flight record "
+                        f"says 45.0 m / 11.7 mm/px")
+    else:
+        print(f"  ok  at 30.1 m: {fw:.2f} m wide, {gsd_mm:.2f} mm/px "
+              f"(record: 45.0 m, 11.7 mm/px)")
 
 # --- report -------------------------------------------------------------------
 print()
