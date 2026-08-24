@@ -8,23 +8,38 @@ export interface ProcessMetrics {
   classify_threads: number;
   workers_started: number;
   hub_clients: number;
+  /** Which replica answered this poll. Several may be serving the same DB. */
+  replica_id: string;
 }
 
 export interface QueueMetrics {
+  /** THIS replica's local prefetch, not the shared backlog — that is
+   *  JobMetrics.queued. Since job claiming, a deep shared backlog with a
+   *  shallow local queue is the normal healthy picture. */
   depth: number;
   in_flight: number;
   processed_lifetime: number;
   failed_lifetime: number;
-  recovered_on_start: number;
+  /** Jobs this process took over from a replica whose lease lapsed. */
+  reclaimed_lifetime: number;
+  /** Deltas PRODUCED by frames this replica classified. Delivery is via the
+   *  shared channel, so the client that sees one may be on another replica. */
   deltas_pushed_lifetime: number;
   avg_classify_s: number | null;
 }
 
 export interface JobMetrics {
+  /** Unclaimed by any replica — the shared backlog. */
   queued: number;
+  /** Claimed and being classified right now, by any replica. */
+  running: number;
   processed: number;
   failed: number;
   oldest_queued_age_s: number | null;
+  /** Claimed jobs whose holder stopped renewing: a replica died mid-frame.
+   *  Self-healing (the next claim takes them over), so a persistent non-zero
+   *  value is the alert, not a single reading. */
+  expired_leases: number;
 }
 
 export interface IngestMetrics {

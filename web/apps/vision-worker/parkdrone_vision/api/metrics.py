@@ -13,6 +13,9 @@ The snapshot has two halves, and the split is not arbitrary:
     this process's ``queue.Queue``, and per-frame CV cost plus process-lifetime
     totals outlive the DB's retention window, so they are counted in memory.
     They reset on restart, which is correct: they describe *this* process.
+    Since job claiming (0011) that distinction matters more, not less: ``queue.
+    depth`` is this replica's PREFETCH, while the backlog every replica shares
+    is ``jobs.queued`` below.
   * **durable** (``db.web_db``) — job outcomes, ingest times, fleet/mission
     progress, bay coverage and model accuracy where ground truth exists. Survive
     a restart; bounded by the frame retention sweep (and, for accuracy, by a
@@ -29,7 +32,8 @@ they belong behind the admin auth that P7 introduces.
 """
 import time
 
-from ..config import CLASSIFY_THREADS, FRAME_RETENTION_S, OCCUPANCY_WINDOW_S
+from ..config import (CLASSIFY_THREADS, FRAME_RETENTION_S, OCCUPANCY_WINDOW_S,
+                      REPLICA_ID)
 from ..db import web_db
 from ..processing import jobs
 
@@ -54,6 +58,7 @@ def snapshot(conn, window_s: int = DEFAULT_WINDOW_S, hub=None) -> dict:
             "classify_threads": CLASSIFY_THREADS,
             "workers_started": proc["workers"],
             "hub_clients": hub.client_count() if hub else 0,
+            "replica_id": REPLICA_ID,
         },
         "queue": {
             "depth": proc["queue_depth"],
@@ -61,7 +66,10 @@ def snapshot(conn, window_s: int = DEFAULT_WINDOW_S, hub=None) -> dict:
             # lifetime = since this process started, not since the DB was seeded
             "processed_lifetime": proc["processed"],
             "failed_lifetime": proc["failed"],
-            "recovered_on_start": proc["recovered"],
+            # Jobs taken off a replica whose lease lapsed — i.e. how much work
+            # this process picked up from a dead one. Replaces the old
+            # "recovered_on_start", which could only ever mean "my own".
+            "reclaimed_lifetime": proc["reclaimed"],
             "deltas_pushed_lifetime": proc["deltas_pushed"],
             "avg_classify_s": proc["avg_classify_s"],
         },
@@ -86,16 +94,19 @@ _SERIES = [
     ("parkdrone_uptime_seconds", "gauge", "Seconds since this server process started", ("process", "uptime_s")),
     ("parkdrone_classify_threads", "gauge", "Configured classify threads", ("process", "classify_threads")),
     ("parkdrone_ws_clients", "gauge", "Connected occupancy WebSocket clients", ("process", "hub_clients")),
-    ("parkdrone_queue_depth", "gauge", "Frames waiting in the in-process classify queue", ("queue", "depth")),
+    ("parkdrone_queue_depth", "gauge", "Frames claimed by this replica and waiting on its local queue", ("queue", "depth")),
     ("parkdrone_queue_in_flight", "gauge", "Frames being classified right now", ("queue", "in_flight")),
     ("parkdrone_frames_classified_total", "counter", "Frames classified since process start", ("queue", "processed_lifetime")),
     ("parkdrone_frames_failed_total", "counter", "Classify failures since process start", ("queue", "failed_lifetime")),
-    ("parkdrone_deltas_pushed_total", "counter", "Bay deltas broadcast since process start", ("queue", "deltas_pushed_lifetime")),
+    ("parkdrone_deltas_pushed_total", "counter", "Bay deltas produced by frames this process classified; delivery is via the shared channel, to whichever replica holds the client", ("queue", "deltas_pushed_lifetime")),
     ("parkdrone_classify_seconds_avg", "gauge", "Mean per-frame classify time this process", ("queue", "avg_classify_s")),
-    ("parkdrone_jobs_queued", "gauge", "frame_job rows still queued", ("jobs", "queued")),
+    ("parkdrone_jobs_queued", "gauge", "frame_job rows unclaimed by any replica", ("jobs", "queued")),
+    ("parkdrone_jobs_running", "gauge", "frame_job rows claimed and being classified", ("jobs", "running")),
+    ("parkdrone_jobs_expired_leases", "gauge", "Claimed jobs whose holder stopped renewing; a replica died mid-frame", ("jobs", "expired_leases")),
+    ("parkdrone_frames_reclaimed_total", "counter", "Jobs this process took over from a lapsed lease", ("queue", "reclaimed_lifetime")),
     ("parkdrone_jobs_processed", "gauge", "frame_job rows processed (within retention)", ("jobs", "processed")),
     ("parkdrone_jobs_failed", "gauge", "frame_job rows failed (within retention)", ("jobs", "failed")),
-    ("parkdrone_oldest_queued_age_seconds", "gauge", "Age of the oldest queued job; grows when the pipeline stalls", ("jobs", "oldest_queued_age_s")),
+    ("parkdrone_oldest_queued_age_seconds", "gauge", "Age of the oldest UNCLAIMED job; grows when the pipeline stalls", ("jobs", "oldest_queued_age_s")),
     ("parkdrone_frames_ingested_1m", "gauge", "Frames ingested in the last minute", ("ingest", "frames_last_1m")),
     ("parkdrone_frames_ingested_1h", "gauge", "Frames ingested in the last hour", ("ingest", "frames_last_1h")),
     ("parkdrone_frames_per_minute", "gauge", "Ingest rate over the metrics window", ("ingest", "frames_per_min_window")),

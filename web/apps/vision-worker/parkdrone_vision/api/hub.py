@@ -1,35 +1,46 @@
-"""WebSocket fan-out hub.
+"""WebSocket fan-out: this replica's half of the shared delta channel.
 
-The classifier runs in this same process, so deltas are pushed straight to
-connected browsers. `broadcast` is a coroutine on the server's event loop; the
-classify threads and the sync dev routes reach it via
-asyncio.run_coroutine_threadsafe(...). A small bounded replay buffer lets a
-reconnecting client catch up with ?since=<cursor>.
+The hub used to be the whole story — a classify thread called `broadcast`, the
+hub stamped a cursor from a process-local counter, kept the message in a
+process-local deque and sent it to process-local clients. All three of those
+words are why a second replica was unsafe: a browser attached to replica B never
+saw replica A's deltas, and `?since=` meant something different on each process
+(and after every restart, since the counter began at 0).
+
+Now the hub only DELIVERS. Ordering, replay and cross-replica fan-out belong to
+`processing/deltas.py` + the `bay_delta` table:
+
+    process_frame --publish--> bay_delta row + pg_notify
+                                        |
+        every replica's delta_listener --> hub.deliver() --> its own clients
+
+So the hub holds no cursor of its own, and a message it sends was already
+assigned its cursor by the database. `connect(since=...)` replays out of the
+table, which is the same answer whichever replica the client lands on.
 """
 import asyncio
 import json
-from collections import deque
-
-REPLAY_MAX = 500
 
 
 class Hub:
-    def __init__(self, replay_max: int = REPLAY_MAX):
+    def __init__(self):
         self._clients: set = set()
-        self._replay: deque = deque(maxlen=replay_max)
-        self._cursor = 0
-        # A reconnect must see every delta after its cursor.  Serialising
-        # connect + broadcast closes the otherwise tiny gap between replaying
-        # the buffer and registering the new client.
+        # A reconnect must see every delta after its cursor. Serialising
+        # connect + deliver closes the otherwise tiny gap between replaying the
+        # backlog and registering the new client.
         self._lock = asyncio.Lock()
 
-    async def connect(self, ws, since: int | None = None) -> None:
+    async def connect(self, ws, replay: list | None = None, cursor: int = 0) -> None:
+        """Register a client, after replaying what it missed.
+
+        The caller does the DB work (a blocking read has no business on the
+        event loop) and hands the result in; the hub's job is only to get the
+        ordering right — backlog first, then the cursor, then live traffic.
+        """
         async with self._lock:
-            if since:
-                for cursor, msg in list(self._replay):
-                    if cursor > since:
-                        await self._safe_send(ws, msg)
-            await self._safe_send(ws, {"type": "snapshot_cursor", "cursor": str(self._cursor)})
+            for msg in replay or []:
+                await self._safe_send(ws, msg)
+            await self._safe_send(ws, {"type": "snapshot_cursor", "cursor": str(cursor)})
             self._clients.add(ws)
 
     def disconnect(self, ws) -> None:
@@ -38,26 +49,19 @@ class Hub:
     def client_count(self) -> int:
         return len(self._clients)
 
-    async def broadcast(self, deltas: list[dict]) -> None:
-        """Fan out bay deltas. Each is tagged {type:"bay_delta", ...} to match
-        the frontend's useOccupancySocket."""
+    async def deliver(self, msg: dict) -> None:
+        """Send one already-published delta to this replica's clients.
+
+        Verbatim: the cursor and the `type` tag were set at publish time, so a
+        live message and a replayed one are the identical object.
+        """
         async with self._lock:
             dead = []
-            for delta in deltas:
-                self._cursor += 1
-                # Include the cursor on every event, not just at connection
-                # time.  The browser can then reconnect from the precise last
-                # event it applied instead of silently losing an outage window.
-                msg = {
-                    **(delta if delta.get("type") else {"type": "bay_delta", **delta}),
-                    "cursor": str(self._cursor),
-                }
-                self._replay.append((self._cursor, msg))
-                for ws in list(self._clients):
-                    try:
-                        await ws.send_text(json.dumps(msg))
-                    except Exception:
-                        dead.append(ws)
+            for ws in list(self._clients):
+                try:
+                    await ws.send_text(json.dumps(msg))
+                except Exception:
+                    dead.append(ws)
             for ws in dead:
                 self._clients.discard(ws)
 

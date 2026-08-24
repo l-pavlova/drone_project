@@ -76,9 +76,11 @@ export function useOccupancySocket(): {
         ) {
           // Sent after replay, so this is the newest safe resume point.
           const nextCursor = (msg as { cursor: string }).cursor;
-          // Cursors are process-local. If the API restarted, its counter goes
-          // back to zero; discard the old-process overlay before reconciling
-          // from REST, otherwise it could mask fresher DB state indefinitely.
+          // Cursors are now global (a Postgres sequence behind bay_delta), so
+          // they survive a restart and mean the same thing on every replica —
+          // this can no longer go backwards. Kept as cheap insurance: if it
+          // ever did, the overlay would be from a world that no longer exists
+          // and could mask fresher DB state indefinitely.
           if (
             cursor.current !== null &&
             Number.isFinite(Number(cursor.current)) &&

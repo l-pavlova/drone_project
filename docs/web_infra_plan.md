@@ -206,18 +206,43 @@ what the disk-first design here already emulates.
   classifier runs in this same process, deltas reach the hub directly — no cross-process channel.
 - Heartbeat/ping (uvicorn's default) + last-event replay on reconnect (client sends `since` cursor,
   served from the hub's bounded replay deque).
-- **Scale-out caveat — single replica is currently a correctness requirement.** Three things are
-  per-process or unowned, and all three must change before a second replica is safe:
-  1. `jobs.recover()` re-enqueues *every* `frame_job` with `status='queued'` and no ownership
-     filter, so two replicas would both classify the same backlog and double-count the vote. Needs
-     `FOR UPDATE SKIP LOCKED` claiming with `owner`/`claimed_at` and a reaper for orphaned leases.
-  2. The hub is per-process, so a browser on replica B never sees a delta produced by replica A.
-     Postgres `LISTEN`/`NOTIFY` covers this with no new infrastructure.
-  3. `Hub._cursor` is a per-process counter, so `?since=` means different things per replica.
-     Needs a shared sequence or a timestamp cursor.
+- **Scale-out — DONE 2026-08-24 (migration `0011`).** A single replica used to be a correctness
+  requirement. Three things were per-process or unowned, and all three are now fixed, in Postgres,
+  with no new infrastructure — the DB stays the only shared state:
+  1. `jobs.recover()` re-enqueued *every* `frame_job` with `status='queued'` and no ownership
+     filter, so two replicas both classified the same backlog and double-counted the vote. **Now**
+     `web_db.claim_frames` claims with `FOR UPDATE SKIP LOCKED` and a `claimed_by`/`lease_expires_at`
+     lease; one dispatcher thread per replica feeds the unchanged local queue. `recover()` is gone
+     — the claim query's second arm reclaims any lapsed lease, so a *live* replica recovers a dead
+     one's work instead of waiting for it to restart. Recovery stopped being a startup step.
+     `observation` also gained a partial unique index on `(frame_id, bay_id)`, because claiming
+     stops concurrent duplicates but not sequential ones: the pipeline is at-least-once by
+     construction (observations commit, then `frame_job` is marked processed in a second
+     transaction), so a crash in that window re-scores the frame. Measured: re-running 34 frames
+     leaves 87 observations, not 174.
+  2. The hub was per-process, so a browser on replica B never saw a delta produced by replica A.
+     **Now** `processing/deltas.py` publishes each delta as a `bay_delta` row + `pg_notify` **inside
+     the transaction that produced it** (NOTIFY fires on COMMIT, so the wire can never be ahead of
+     the database), and each replica's `api/delta_listener.py` thread delivers to its own clients.
+     A replica hears its own deltas back the same way — one delivery path, so every client sees one
+     order.
+  3. `Hub._cursor` was a per-process counter, so `?since=` meant different things per replica and
+     restarted at 0 every boot. **Now** the cursor is `bay_delta.id`, one sequence shared by all of
+     them, and the table *is* the replay buffer (the per-process deque is gone). Replay reads a
+     little behind the cursor (`DELTA_REPLAY_SLACK`), because sequence ids are assigned before
+     commit and can become visible out of order; a delta is idempotent, so over-replay is free and
+     a miss is not.
 
-  Throughput is not the reason to scale out: measured ~103 frames/s per classify thread against
-  ~0.5 frames/s per drone. Availability during deploys would be — a different problem.
+  Throughput is still not the reason to scale out: measured ~103 frames/s per classify thread
+  against ~0.5 frames/s per drone. Availability during deploys is, and that is now possible.
+
+  **Verified with two replicas** (A :4000, B :4001, one Postgres, one MinIO): a staged 34-frame
+  backlog split **17/17** with zero duplicate observations and both replicas' `/api/v1/bays`
+  matching the golden fixture 42/42 at 100%; 49/49 deltas published by A delivered to a client on
+  B with identical cursors; a resume with A's cursor against B replayed correctly; 12 jobs left
+  `running` by a vanished replica reclaimed 8-then-4 (the prefetch gate) and finished clean. The
+  single-replica path is unchanged, proved by A/B against the stashed pre-change code — identical
+  `/api/v1/metrics` model block and the same 49 WS deltas.
 
 ### Queue + in-process vision
 - **Queue:** a thread-safe `queue.Queue` drained by `CLASSIFY_THREADS` dedicated OS threads. Jobs
@@ -299,7 +324,8 @@ classifier trustworthy, what's the occupancy picture over time. Auth-gated (admi
   >
   > Verified against the live stack: replay of `fmi_block` → 34 classified / 52 deltas / p95 30 ms;
   > staged with `CLASSIFY_THREADS=0` → depth 26, `oldest_queued_age_s` climbing; restart →
-  > `recovered_on_start=26`, queue drained, latency reflecting the stall. Both endpoints are
+  > the backlog reclaimed and drained, latency reflecting the stall. (Since `0011` that counter is
+  > `reclaimed_lifetime`, and the same test passes with a *second* replica doing the draining.) Both endpoints are
   > **unauthenticated**, like every other read route — they belong behind P7's admin auth before
   > the port is exposed.
 - **Model quality:** when ground truth is available (sim/eval runs), accuracy / precision / recall /
@@ -356,8 +382,11 @@ classifier trustworthy, what's the occupancy picture over time. Auth-gated (admi
   (MinIO in-cluster or S3). Postgres + PostGIS runs as a managed instance (e.g. cloud Postgres with
   the PostGIS extension) or a StatefulSet with a persistent volume; connection pooling (PgBouncer)
   in front so replicas share the DB safely. CDN for the static React bundles and (optionally) frame
-  thumbnails. **Scaling to >1 replica requires solving WebSocket fan-out across replicas first**
-  (see the Segment 1 caveat) — the one thing the broker used to provide for free.
+  thumbnails. **Scaling to >1 replica is unblocked as of migration `0011`** (job claiming +
+  `LISTEN`/`NOTIFY` fan-out + a shared `bay_delta` cursor; see the scale-out note above). What it
+  still wants in production is a deploy story (see the Segment 1 note) — the one thing the broker
+  used to provide for free. WebSocket routing needs no stickiness: any replica serves any client,
+  because the cursor and the replay buffer are in the database.
 - **Observability:** structured logs, Prometheus metrics from the server, Grafana dashboards,
   alerting on queue backlog / classify failures / stalled missions. **The exposition side exists**
   since 2026-08-02 (`GET /metrics`, see Segment 3) — `parkdrone_queue_depth`,

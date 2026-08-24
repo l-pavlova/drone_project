@@ -607,36 +607,77 @@ vote rule was tested with teeth — 20 contrary views from an older mission chan
 
 `pnpm clear` stays, for what its name says: wiping an area deliberately.
 
-### 11. Multi-replica: job claiming + a shared delta channel — **TO DISCUSS, not started**
+### 11. Multi-replica: job claiming + a shared delta channel — **DONE 2026-08-24 (migration `0011`)**
 
-Raised 2026-08-23 while reviewing the thesis draft. The draft claimed "any replica with a DB
-connection can pick up a job"; that is the opposite of today's truth (see the review finding §1.5 in
-`docs/final_doc_review.md`), and the *question underneath it* is a fair one: today job recovery and
-horizontal scaling are treated as if they trade off, and they do not have to.
+Raised 2026-08-23 while reviewing the thesis draft, which claimed "any replica with a DB connection
+can pick up a job". That was the opposite of the truth (review finding §1.1 in
+`docs/final_doc_review.md`). Rather than weaken the sentence, the code was changed to match it.
 
-**Why single-replica is currently a correctness requirement, not a preference:**
-- `jobs.recover()` re-enqueues every `status='queued'` row with **no ownership filter**, so two
-  replicas both drain the same backlog. The same frame classifies twice, `observation` gets two rows
-  for one look, and the occupancy vote double-counts.
-- The WebSocket hub is per-process — a delta pushed by replica A never reaches a client held by
-  replica B, so half the map stops updating.
-- The hub's replay cursor is per-process too, so a reconnecting client resumes against whichever
-  replica it lands on.
+**What was actually wrong** — three things per-process or unowned, and the first was a defect even
+at one replica:
+- `jobs.recover()` re-enqueued every `status='queued'` row with **no ownership filter**, so two
+  replicas both drained the whole backlog: one frame scored twice, two `observation` rows for one
+  look, and a vote that double-counts. And even alone, the pipeline is at-least-once by
+  construction — `process_frame` commits the observations, then `mark_frame_processed` commits in a
+  *separate* transaction, so a crash between them re-scores the frame on the next boot.
+- The WebSocket hub was per-process: a delta from replica A never reached a browser on B.
+- `Hub._cursor` was a per-process counter starting at 0 every boot, so `?since=` meant something
+  different on each replica *and* after every restart.
+- (Found on the way.) A job that failed for any reason other than a missing image stayed `queued`
+  **forever** and was re-run on every restart — no attempt counter, no dead-letter.
 
-**What to discuss (the shape looks standard, so this is a design session, not research):**
-- **Claiming:** `SELECT ... FOR UPDATE SKIP LOCKED` over `frame_job`, or a `claimed_by`/`claimed_at`
-  lease with a heartbeat. Recovery then stops meaning "everything queued" and starts meaning
-  "queued, or leased by someone who stopped renewing" — which is exactly the cancelled-transaction
-  semantics wanted here, and it makes recovery *safe* under N replicas rather than merely possible.
-- **Shared deltas:** Postgres `LISTEN`/`NOTIFY` is the cheapest option since the DB is already
-  there and deltas are small; Redis pub/sub if it outgrows that.
-- **Global cursor:** the replay cursor has to move out of process memory alongside the hub.
-- **Decide whether it is worth building at all.** Throughput is not the reason to: ~103 frames/s per
-  classify thread against ~0.5 frames/s per drone, so one process serves a large fleet. The real
-  arguments are availability (a restart currently drops the whole edge) and rolling deploys.
+**What was built.** All of it in Postgres — no Redis, no broker; the DB stays the only shared state.
+- **Claiming.** `web_db.claim_frames` takes rows with `FOR UPDATE SKIP LOCKED` and stamps a
+  `claimed_by`/`lease_expires_at` lease; `frame_job` also gained `attempts` and `last_error` and a
+  `running` status. One dispatcher thread per replica claims into the existing local `queue.Queue`
+  and the classify threads are untouched. **`recover()` is gone, and that is an upgrade**: the claim
+  query's second arm takes any lease that stopped being renewed, so a dead replica's work is picked
+  up by a *live* one within `LEASE_S` instead of waiting for the dead process to come back.
+  Recovery stopped being a startup step and became something continuous.
+- **`observation` is idempotent per `(frame_id, bay_id)`** (partial unique index, partial so
+  pre-`0011` NULLs do not collide). Claiming cannot fix the sequential re-score above; only a
+  unique key can.
+- **Deltas over `LISTEN`/`NOTIFY`, ordered by a `bay_delta` table.** `process_frame` publishes in
+  the **same transaction** as the state it announces — NOTIFY fires on COMMIT, so the wire is never
+  ahead of the database. Each replica's listener thread delivers to its own clients, and a replica
+  hears **its own** deltas back the same way: one delivery path, so every client sees one order.
+  `bay_delta.id` is the cursor, the table is the replay buffer, and both are shared.
+- Replay reads a little **behind** the client's cursor (`DELTA_REPLAY_SLACK`), because sequence ids
+  are assigned before commit and can become visible out of order. A delta is an idempotent "set bay
+  X to this state", so over-replaying is free and missing one is not.
 
-Whatever is decided, `docs/web_infra_plan.md` and the "single replica" invariant in `CLAUDE.md` are
-the two places that must change with it.
+Two things kept deliberately shallow, both of which would otherwise reintroduce the problem under a
+new name: **local prefetch** (`CLAIM_PREFETCH`) — a replica that claims the whole backlog holds
+leases on work it will not start for minutes — and the **poll**, which is a plain 1 s tick rather
+than a second NOTIFY channel, because at ~0.5 frames/s per drone a second of latency on
+cross-replica pickup is nothing.
+
+**Verified with two replicas** (A :4000, B :4001, one Postgres, one MinIO):
+
+| check | result |
+|---|---|
+| staged 34-frame backlog, both replicas started | **17 / 17** split, `claimed_by` shows both |
+| duplicate `(frame_id, bay_id)` observations | **0**, and re-running all 34 frames left the count at **87, not 174** |
+| `/api/v1/bays` vs the golden fixture, *both* replicas | **42/42, 100%** (TP=17 TN=25 FP=0 FN=0) |
+| deltas published by A, client attached to **B** | **49 / 49**, identical cursors |
+| resume with A's cursor against B | replayed correctly; both report the same `snapshot_cursor` |
+| 12 jobs left `running` by a vanished replica | reclaimed **8 then 4** (the prefetch gate), finished clean |
+| missing image / corrupt image | `failed` after **1** attempt / after exactly **3**, `last_error` recorded, neither loops |
+| cleanup past retention with a job `running` | left in place, warned, exit 1 |
+
+**The single-replica path is unchanged, and that was proved by A/B rather than argued.** The same
+end-to-end run against the stashed pre-change code returns the identical `/api/v1/metrics` model
+block (`views_scored 524, views_correct 508, view_accuracy 0.9695, bays_scored 49, bays_correct 42,
+state_accuracy 0.8571`) and the same **49** WebSocket deltas. Offline `replay fmi_block` is 42/42 at
+100%, `check_consistency.py` still 35/35.
+
+*Correction to the record while measuring this:* the "**52** WS deltas" in `CLAUDE.md` is stale — it
+predates the 2026-08-20 camera-model fix. **49** is right, and it is exactly the number of
+`bay_state` transitions the observation history contains (checked independently in SQL).
+
+**Still open, and deliberately not in scope here:** running >1 replica in production also wants a
+deploy story and a process supervisor. It does *not* want sticky WebSocket routing — any replica
+serves any client now, because the cursor and the replay buffer live in the database.
 
 ---
 

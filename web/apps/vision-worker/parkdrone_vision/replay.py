@@ -42,7 +42,10 @@ def main():
         idx = pose_idx(pose)
         path = os.path.join(out_dir, f"frame_{idx:03d}.png")
         img = np.array(Image.open(path).convert("RGB"))
-        res = process_frame(conn, survey_area, idx, img, pose, bays, index=index)
+        # publish=False: no server, no listener, nobody to tell -- and the
+        # golden test must not leave rows in the live delta channel.
+        res = process_frame(conn, survey_area, idx, img, pose, bays,
+                            index=index, publish=False)
 
     # ---- compare final bay_state to the offline result (intersection = the
     #      bays the offline script scored; the worker also scores non-GT bays).

@@ -13,6 +13,7 @@ import {
   clock,
   count,
   failureTone,
+  leaseTone,
   percent,
   queueTone,
   seconds,
@@ -37,7 +38,9 @@ export default function App() {
     [history],
   );
 
-  const qTone = data ? queueTone(data.queue.depth, data.jobs.oldest_queued_age_s) : "idle";
+  // The shared backlog, not this replica's prefetch: with job claiming the
+  // local queue is deliberately shallow and says nothing about the whole.
+  const qTone = data ? queueTone(data.jobs.queued, data.jobs.oldest_queued_age_s) : "idle";
   const fTone = data ? failureTone(data.latency.failure_rate) : "idle";
   const idleS = data ? secondsSince(data.ingest.last_frame_at) : null;
 
@@ -52,7 +55,7 @@ export default function App() {
           <h1 className={styles.wordmark}>PARKDRONE · OPS</h1>
           <p className={styles.sub}>
             {data
-              ? `server up ${age(data.process.uptime_s)} · ${data.process.classify_threads} classify threads · ${data.process.hub_clients} live client${data.process.hub_clients === 1 ? "" : "s"}`
+              ? `replica ${data.process.replica_id} · up ${age(data.process.uptime_s)} · ${data.process.classify_threads} classify threads · ${data.process.hub_clients} live client${data.process.hub_clients === 1 ? "" : "s"}`
               : "connecting to the server…"}
           </p>
         </div>
@@ -92,16 +95,21 @@ export default function App() {
         >
           <StatGrid>
             <Stat
-              label="Queue depth"
-              value={count(data?.queue.depth)}
+              label="Backlog"
+              value={count(data?.jobs.queued)}
               tone={qTone}
               caption={
                 data?.jobs.oldest_queued_age_s != null
-                  ? `oldest queued ${age(data.jobs.oldest_queued_age_s)}`
+                  ? `oldest unclaimed ${age(data.jobs.oldest_queued_age_s)}`
                   : "nothing waiting"
               }
             />
-            <Stat label="In flight" value={count(data?.queue.in_flight)} caption="classifying now" />
+            <Stat
+              label="Claimed"
+              value={count(data?.jobs.running)}
+              caption={`${count(data?.queue.depth)} queued on this replica`}
+            />
+            <Stat label="In flight" value={count(data?.queue.in_flight)} caption="classifying here" />
             <Stat
               label="Latency p50"
               value={seconds(data?.latency.p50_s)}
@@ -203,14 +211,27 @@ export default function App() {
               caption="unrecoverable"
             />
             <Stat
-              label="Recovered"
-              value={count(data?.queue.recovered_on_start)}
-              caption="re-queued at boot"
+              label="Reclaimed"
+              value={count(data?.queue.reclaimed_lifetime)}
+              tone={data ? leaseTone(data.jobs.expired_leases) : "idle"}
+              caption={
+                data?.jobs.expired_leases
+                  ? `${count(data.jobs.expired_leases)} lease(s) lapsed now`
+                  : "from a lapsed lease"
+              }
             />
-            <Stat label="Deltas pushed" value={count(data?.queue.deltas_pushed_lifetime)} caption="to clients" />
+            <Stat
+              label="Deltas produced"
+              value={count(data?.queue.deltas_pushed_lifetime)}
+              caption="by frames classified here"
+            />
             <Stat
               label="Jobs on record"
-              value={count(data ? data.jobs.processed + data.jobs.failed + data.jobs.queued : null)}
+              value={count(
+                data
+                  ? data.jobs.processed + data.jobs.failed + data.jobs.queued + data.jobs.running
+                  : null,
+              )}
               caption={data ? `within ${age(data.config.frame_retention_s)} retention` : undefined}
             />
           </StatGrid>

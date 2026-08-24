@@ -44,14 +44,26 @@ export const STALL_WARN_S = 60;
 export const STALL_CRIT_S = 300;
 export const DEPTH_WARN = 50;
 export const MISSION_IDLE_WARN_S = 120;
+/** Lapsed leases are normal in ones — a replica restarting mid-frame leaves a
+ *  few and the next claim takes them over within a poll. A pile of them means
+ *  something is dying repeatedly. */
+export const EXPIRED_LEASE_WARN = 5;
 
 /** A backlog is only a problem if it isn't moving: depth alone is a burst, but
- *  a job that has sat queued for minutes means the classify threads are stuck. */
+ *  a job that has sat UNCLAIMED for minutes means no replica is draining it.
+ *  `depth` here is the shared backlog (jobs.queued), not one replica's local
+ *  prefetch — with several replicas the latter says nothing about the whole. */
 export function queueTone(depth: number, oldestQueuedS: number | null): Tone {
   if (oldestQueuedS != null && oldestQueuedS >= STALL_CRIT_S) return "critical";
   if (oldestQueuedS != null && oldestQueuedS >= STALL_WARN_S) return "warn";
   if (depth >= DEPTH_WARN) return "warn";
   return depth > 0 ? "good" : "idle";
+}
+
+/** Lapsed leases: fine in ones, a symptom in numbers. */
+export function leaseTone(expired: number): Tone {
+  if (expired >= EXPIRED_LEASE_WARN) return "warn";
+  return expired > 0 ? "good" : "idle";
 }
 
 export function failureTone(rate: number | null): Tone {

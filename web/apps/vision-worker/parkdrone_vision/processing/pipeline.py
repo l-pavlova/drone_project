@@ -2,8 +2,13 @@
 bay_state -> return deltas. Shared by the in-process classify threads (jobs.py)
 and the offline replay golden test (replay.py).
 
-process_frame returns the deltas rather than publishing them itself; the caller
-broadcasts them (the FastAPI hub in production, nothing in the replay test).
+process_frame PUBLISHES the deltas here, inside the same transaction that wrote
+them, and returns them for the caller's counters. Publishing means a bay_delta
+row + a pg_notify; every replica's listener thread then pushes to its own
+clients. Doing it in-transaction is what makes the wire and the database agree:
+NOTIFY fires on COMMIT, so nothing is ever announced for state that rolled back.
+`publish=False` opts the offline replay golden test out — it has no server, no
+listener and nobody to tell.
 
 **Two backends answer the same question here** (see config.OCCUPANCY_BACKEND):
 the calibrated per-bay heuristic, which is the only thing that reproduces the
@@ -16,6 +21,7 @@ from .. import config
 from ..db import vision_db
 from ..vision import ground_truth
 from ..vision.scoring import score_frame, score_frame_detector
+from . import deltas as delta_channel
 
 
 def backend_name():
@@ -30,7 +36,8 @@ def backend_name():
 
 
 def process_frame(conn, survey_area, frame_idx, img_arr, pose, bays, frame_id=None,
-                  gt=None, index=None, mission_id=None, model=None, cam=None):
+                  gt=None, index=None, mission_id=None, model=None, cam=None,
+                  publish=True):
     # Labels are a property of the survey area, not of the caller, so they are
     # resolved here — that way live ingest and the offline replay both record
     # them and accuracy is measured on the same path production runs. Passing
@@ -46,8 +53,14 @@ def process_frame(conn, survey_area, frame_idx, img_arr, pose, bays, frame_id=No
         scores = score_frame(img_arr, bays, pose, index=index)
     vision_db.insert_observations(conn, survey_area, frame_idx, scores, gt=gt,
                                   mission_id=mission_id,
-                                  backend=backend_name())
+                                  backend=backend_name(),
+                                  # (0011) makes the append idempotent, so a
+                                  # frame re-claimed after a crash records one
+                                  # look rather than double-voting
+                                  frame_id=frame_id)
     touched = [s["bay_id"] for s in scores]
     deltas = vision_db.recompute_states(conn, survey_area, touched, frame_idx)
+    if publish:
+        delta_channel.publish(conn, deltas)
     conn.commit()
     return {"scored": len(scores), "deltas": deltas}

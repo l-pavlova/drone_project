@@ -64,7 +64,7 @@
 
         <!-- ============================ frame ============================ -->
         <mxCell id="e_frame" value="frame  ·  ingest ledger (append-only)" style="swimlane;html=1;startSize=26;fontStyle=1;fontSize=12;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=0;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#FDE9E4;strokeColor=#E14B2E;fontColor=#5c1c10;" vertex="1" parent="1">
-          <mxGeometry x="60" y="570" width="320" height="286" as="geometry" />
+          <mxGeometry x="60" y="570" width="320" height="326" as="geometry" />
         </mxCell>
         <mxCell id="frm_1" value="PK · frame_id : text  — uuid4" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontStyle=1;fontColor=#5c1c10;" vertex="1" parent="e_frame">
           <mxGeometry y="26" width="320" height="20" as="geometry" />
@@ -78,7 +78,7 @@
         <mxCell id="frm_4" value="UK · survey_area : text  NOT NULL" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
           <mxGeometry y="86" width="320" height="20" as="geometry" />
         </mxCell>
-        <mxCell id="frm_5" value="UK · frame_idx : integer  NOT NULL  — frame index" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
+        <mxCell id="frm_5" value="UK · frame_idx : integer  NOT NULL  ·  UNIQUE per MISSION (0009)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
           <mxGeometry y="106" width="320" height="20" as="geometry" />
         </mxCell>
         <mxCell id="frm_6" value="x : double precision  NOT NULL  — ENU m" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
@@ -99,11 +99,17 @@
         <mxCell id="frm_11" value="pitch : double precision" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
           <mxGeometry y="226" width="320" height="20" as="geometry" />
         </mxCell>
-        <mxCell id="frm_12" value="image_uri : text  NOT NULL  — s3://…" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
+        <mxCell id="frm_12a" value="cam_pitch : double precision  — gimbal (0008)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_frame">
           <mxGeometry y="246" width="320" height="20" as="geometry" />
         </mxCell>
-        <mxCell id="frm_14" value="received_at : timestamptz  NOT NULL  · never UPDATEd" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
+        <mxCell id="frm_12b" value="cam_roll : double precision  — gimbal (0008)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_frame">
           <mxGeometry y="266" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="frm_12" value="image_uri : text  NOT NULL  — s3://…" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
+          <mxGeometry y="286" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="frm_14" value="received_at : timestamptz  NOT NULL  · never UPDATEd" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_frame">
+          <mxGeometry y="306" width="320" height="20" as="geometry" />
         </mxCell>
 
         <!-- ============================ bay ============================ -->
@@ -137,13 +143,13 @@
 
 
         <!-- ============================ frame_job ============================ -->
-        <mxCell id="e_fjob" value="frame_job  ·  durable classify queue" style="swimlane;html=1;startSize=26;fontStyle=1;fontSize=12;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=0;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#FDE9E4;strokeColor=#E14B2E;fontColor=#5c1c10;" vertex="1" parent="1">
-          <mxGeometry x="60" y="900" width="320" height="106" as="geometry" />
+        <mxCell id="e_fjob" value="frame_job  ·  durable, CLAIMABLE classify queue" style="swimlane;html=1;startSize=26;fontStyle=1;fontSize=12;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=0;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#FDE9E4;strokeColor=#E14B2E;fontColor=#5c1c10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="930" width="320" height="206" as="geometry" />
         </mxCell>
         <mxCell id="fjob_1" value="PK,FK · frame_id : text  ·  ON DELETE CASCADE" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#5c1c10;fontStyle=1" vertex="1" parent="e_fjob">
           <mxGeometry y="26" width="320" height="20" as="geometry" />
         </mxCell>
-        <mxCell id="fjob_2" value="status : text  NOT NULL  CHECK queued|processed|failed" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_fjob">
+        <mxCell id="fjob_2" value="status : text  NOT NULL  CHECK queued|running|processed|failed" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_fjob">
           <mxGeometry y="46" width="320" height="20" as="geometry" />
         </mxCell>
         <mxCell id="fjob_3" value="enqueued_at : timestamptz  NOT NULL DEFAULT now()" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_fjob">
@@ -152,10 +158,25 @@
         <mxCell id="fjob_4" value="finished_at : timestamptz  ·  NULL until terminal" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_fjob">
           <mxGeometry y="86" width="320" height="20" as="geometry" />
         </mxCell>
+        <mxCell id="fjob_5" value="claimed_by : text  — which replica holds it (0011)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_fjob">
+          <mxGeometry y="106" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="fjob_6" value="claimed_at : timestamptz" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_fjob">
+          <mxGeometry y="126" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="fjob_7" value="lease_expires_at : timestamptz  ·  lapsed = reclaimable" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_fjob">
+          <mxGeometry y="146" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="fjob_8" value="attempts : integer  NOT NULL DEFAULT 0  ·  give up at MAX" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_fjob">
+          <mxGeometry y="166" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="fjob_9" value="last_error : text  — why it stopped" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_fjob">
+          <mxGeometry y="186" width="320" height="20" as="geometry" />
+        </mxCell>
 
         <!-- ============================ observation ============================ -->
         <mxCell id="e_obs" value="observation  ·  append-only evidence" style="swimlane;html=1;startSize=26;fontStyle=1;fontSize=12;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=0;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#E4F7F4;strokeColor=#0F9E90;fontColor=#06403a;" vertex="1" parent="1">
-          <mxGeometry x="480" y="550" width="340" height="346" as="geometry" />
+          <mxGeometry x="480" y="550" width="340" height="426" as="geometry" />
         </mxCell>
         <mxCell id="obs_1" value="PK · id : bigserial" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontStyle=1;fontColor=#06403a;" vertex="1" parent="e_obs">
           <mxGeometry y="26" width="340" height="20" as="geometry" />
@@ -205,10 +226,22 @@
         <mxCell id="obs_16" value="observed_at : timestamptz  NOT NULL" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_obs">
           <mxGeometry y="326" width="340" height="20" as="geometry" />
         </mxCell>
+        <mxCell id="obs_17" value="mission_id : text  — the vote is scoped per flight (0009)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_obs">
+          <mxGeometry y="346" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_18" value="backend : text  — heuristic | detector (0010)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_obs">
+          <mxGeometry y="366" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_19" value="det_score : real  — detector only (0010)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_obs">
+          <mxGeometry y="386" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_20" value="UK · frame_id : text  ·  UNIQUE(frame_id, bay_id) (0011)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_obs">
+          <mxGeometry y="406" width="340" height="20" as="geometry" />
+        </mxCell>
 
         <!-- ============================ bay_state ============================ -->
         <mxCell id="e_state" value="bay_state  ·  THE PRODUCT (current occupancy)" style="swimlane;html=1;startSize=26;fontStyle=1;fontSize=12;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=0;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#E6F6EC;strokeColor=#2E9E57;fontColor=#0f4023;" vertex="1" parent="1">
-          <mxGeometry x="920" y="140" width="330" height="146" as="geometry" />
+          <mxGeometry x="920" y="140" width="330" height="166" as="geometry" />
         </mxCell>
         <mxCell id="st_1" value="PK · FK · bay_id : text" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontStyle=1;fontColor=#0f4023;" vertex="1" parent="e_state">
           <mxGeometry y="26" width="330" height="20" as="geometry" />
@@ -228,8 +261,26 @@
         <mxCell id="st_6" value="source : text  CHECK vision|manual" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d;" vertex="1" parent="e_state">
           <mxGeometry y="126" width="330" height="20" as="geometry" />
         </mxCell>
+        <mxCell id="st_7" value="backend : text  — which model owns this bay (0010)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_state">
+          <mxGeometry y="146" width="330" height="20" as="geometry" />
+        </mxCell>
 
         <!-- ============================ schema_migrations ============================ -->
+        <mxCell id="e_delta" value="bay_delta  ·  shared WebSocket replay log (0011)" style="swimlane;html=1;startSize=26;fontStyle=1;fontSize=12;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=0;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#FDE9E4;strokeColor=#E14B2E;fontColor=#5c1c10;" vertex="1" parent="1">
+          <mxGeometry x="920" y="350" width="330" height="106" as="geometry" />
+        </mxCell>
+        <mxCell id="dlt_1" value="PK · id : bigserial  ·  THE cursor, one sequence for all" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_delta">
+          <mxGeometry y="26" width="330" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="dlt_2" value="emitted_at : timestamptz  ·  swept at DELTA_RETENTION_S" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_delta">
+          <mxGeometry y="46" width="330" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="dlt_3" value="payload : jsonb  — exactly what goes on the wire" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_delta">
+          <mxGeometry y="66" width="330" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="dlt_4" value="written in the SAME tx as bay_state, then pg_notify" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=6;overflow=hidden;fontSize=10;fontColor=#33383d" vertex="1" parent="e_delta">
+          <mxGeometry y="86" width="330" height="20" as="geometry" />
+        </mxCell>
         <mxCell id="e_migr" value="schema_migrations  ·  migrate-runner ledger" style="swimlane;html=1;startSize=26;fontStyle=1;fontSize=12;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=0;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#F1F3F5;strokeColor=#9AA6AE;fontColor=#6b747c;dashed=1;" vertex="1" parent="1">
           <mxGeometry x="920" y="800" width="330" height="46" as="geometry" />
         </mxCell>

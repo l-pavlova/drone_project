@@ -169,10 +169,17 @@ def upsert_state(conn, bay_id, occupied, confidence, last_frame, source):
 # frame_received_idx / frame_job_status_idx.
 
 def job_counts(conn):
-    """Rows per frame_job status, plus the age of the oldest still-queued job.
+    """Rows per frame_job status, plus the two stall signals.
 
-    A growing `oldest_queued_age_s` is the stall signal: work is arriving that
-    the classify threads are not finishing.
+    `oldest_queued_age_s` keeps the meaning it always had — work that NO replica
+    has picked up — which is why 'running' is a separate count rather than being
+    folded into 'queued': a claimed job is being worked on, and counting it as
+    backlog would make a healthy pipeline look stalled.
+
+    `expired_leases` is the new signal that only exists once work is claimed: a
+    job whose holder stopped renewing, i.e. a replica that died mid-frame. It
+    self-heals (the next claim reclaims it), so a persistently non-zero value is
+    the alert, not a single blip.
     """
     with conn.cursor() as cur:
         cur.execute("SELECT status, COUNT(*) FROM frame_job GROUP BY status")
@@ -182,11 +189,18 @@ def job_counts(conn):
                  FROM frame_job WHERE status = 'queued'"""
         )
         oldest = cur.fetchone()[0]
+        cur.execute(
+            """SELECT COUNT(*) FROM frame_job
+                WHERE status = 'running' AND lease_expires_at < now()"""
+        )
+        expired = int(cur.fetchone()[0])
     return {
         "queued": counts.get("queued", 0),
+        "running": counts.get("running", 0),
         "processed": counts.get("processed", 0),
         "failed": counts.get("failed", 0),
         "oldest_queued_age_s": round(float(oldest), 1) if oldest is not None else None,
+        "expired_leases": expired,
     }
 
 
@@ -441,69 +455,148 @@ def insert_frame(conn, frame_id, drone_id, mission_id, survey_area, pose, image_
 
 
 def mark_frame_processed(conn, frame_id):
-    """Mark a frame's job scored so startup crash-recovery won't re-enqueue it."""
+    """Mark a frame's job scored, and drop its lease so nothing reclaims it."""
     with conn.cursor() as cur:
         cur.execute(
-            "UPDATE frame_job SET status = 'processed', finished_at = now() WHERE frame_id = %s",
+            """UPDATE frame_job
+                  SET status = 'processed', finished_at = now(),
+                      lease_expires_at = NULL
+                WHERE frame_id = %s""",
             (frame_id,),
         )
     conn.commit()
 
 
-def mark_frame_failed(conn, frame_id):
-    """Mark a frame's job unrecoverable (e.g. its image expired from the store)
-    so crash-recovery stops re-enqueuing it every restart."""
-    with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE frame_job SET status = 'failed', finished_at = now() WHERE frame_id = %s",
-            (frame_id,),
-        )
-    conn.commit()
+def mark_frame_failed(conn, frame_id, err=None):
+    """Give up on a job permanently: its image is gone, or it has burned through
+    MAX_ATTEMPTS. Terminal — the claim query never returns a 'failed' row again.
 
-
-def unscored_frames(conn):
-    """Frames whose job is still queued (never scored) — the recovery backlog.
-
-    Reconstructs the classify-job payload by joining the work state in
-    frame_job back to the immutable pose/payload facts in frame, so an
-    in-memory queue lost on restart is rebuilt from Postgres + S3.
+    `err` is kept because "why did this stop" is otherwise unanswerable after
+    the fact: the exception only ever reached stdout, which is routinely lost.
     """
     with conn.cursor() as cur:
         cur.execute(
-            """SELECT f.frame_id, f.survey_area, f.frame_idx, f.x, f.y, f.alt, f.yaw,
-                      f.roll, f.pitch, f.cam_pitch, f.cam_roll, f.image_uri,
-                      f.mission_id
-                 FROM frame_job j JOIN frame f USING (frame_id)
-                WHERE j.status = 'queued' ORDER BY j.enqueued_at"""
+            """UPDATE frame_job
+                  SET status = 'failed', finished_at = now(),
+                      lease_expires_at = NULL, last_error = %s
+                WHERE frame_id = %s""",
+            (None if err is None else str(err)[:2000], frame_id),
         )
+    conn.commit()
+
+
+def release_frame_job(conn, frame_id, err=None):
+    """Hand a job back after a TRANSIENT failure: queued again, lease dropped.
+
+    The point is that some other replica (or this one) retries it in seconds
+    rather than at the next restart. `attempts` is not touched here — it was
+    already incremented by the claim, which is what makes MAX_ATTEMPTS count
+    tries rather than failures.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """UPDATE frame_job
+                  SET status = 'queued', claimed_by = NULL, claimed_at = NULL,
+                      lease_expires_at = NULL, last_error = %s
+                WHERE frame_id = %s""",
+            (None if err is None else str(err)[:2000], frame_id),
+        )
+    conn.commit()
+
+
+def _job_payload(row):
+    """One frame_job+frame row -> the classify-job dict the workers consume."""
+    (frame_id, survey_area, frame_idx, x, y, alt, yaw, roll, pitch,
+     cam_pitch, cam_roll, image_uri, mission_id, reclaimed, attempts) = row
+    # The gimbal angles are part of the pose for projection purposes, so a
+    # claimed job must carry them or it would classify this frame differently
+    # from the live path. Absent (pre-0008 rows, or a drone that reports none)
+    # means "assume nadir", which is what project() falls back to -- so they are
+    # only set when actually known.
+    pose = {"frame_idx": frame_idx, "x": x, "y": y, "alt": alt,
+            "yaw": yaw, "roll": roll, "pitch": pitch}
+    if cam_pitch is not None:
+        pose["cam_pitch"] = cam_pitch
+    if cam_roll is not None:
+        pose["cam_roll"] = cam_roll
+    return {
+        "frame_id": frame_id,
+        "survey_area": survey_area,
+        "frame_idx": frame_idx,
+        # Carried for the same reason as the gimbal angles: the vote is scoped
+        # per mission (0009), so a job must record the flight it came from or
+        # its observations would join the wrong one -- and a reclaimed frame
+        # must score identically to the same frame processed live.
+        "mission_id": mission_id,
+        "pose": pose,
+        "image_uri": image_uri,
+        # True when this claim took a lapsed lease off someone else, i.e. it is
+        # recovery rather than fresh work. Counted separately in the metrics.
+        "reclaimed": bool(reclaimed),
+        # Tries INCLUDING this one (RETURNING reads the post-UPDATE value), so
+        # the worker can tell a retryable failure from the last allowed one.
+        "attempts": int(attempts),
+    }
+
+
+# One statement claims work and reads the payload back, because a claim that is
+# not atomic with the read is not a claim. SKIP LOCKED is what makes N replicas
+# (and N dispatcher polls) share the backlog instead of queueing behind each
+# other on the same rows.
+_CLAIM_SQL = """
+WITH c AS (
+    SELECT frame_id, (status = 'running') AS reclaimed
+      FROM frame_job
+     WHERE attempts < %(max_attempts)s
+       AND (status = 'queued'
+            -- the reaper, inline: a lease nobody renewed is abandoned work, and
+            -- the replica that notices is by definition alive
+            OR (status = 'running' AND lease_expires_at < now()))
+     ORDER BY enqueued_at
+     FOR UPDATE SKIP LOCKED
+     LIMIT %(limit)s
+)
+UPDATE frame_job j
+   SET status = 'running',
+       claimed_by = %(owner)s,
+       claimed_at = now(),
+       lease_expires_at = now() + make_interval(secs => %(lease_s)s),
+       attempts = j.attempts + 1
+  FROM c JOIN frame f ON f.frame_id = c.frame_id
+ WHERE j.frame_id = c.frame_id
+RETURNING f.frame_id, f.survey_area, f.frame_idx, f.x, f.y, f.alt, f.yaw,
+          f.roll, f.pitch, f.cam_pitch, f.cam_roll, f.image_uri,
+          f.mission_id, c.reclaimed, j.attempts
+"""
+
+
+def claim_frames(conn, owner, limit, lease_s, max_attempts):
+    """Claim up to `limit` unfinished frames for `owner`; returns job payloads.
+
+    This replaces the old unscored_frames()/recover() pair, which selected every
+    'queued' row with no ownership filter — safe only because exactly one
+    process ever ran it. Claiming makes the same backlog shareable: two replicas
+    booting together split it instead of both doing all of it, and a frame
+    already being classified is invisible to everyone else until its lease runs
+    out.
+    """
+    with conn.cursor() as cur:
+        cur.execute(_CLAIM_SQL, {"owner": owner, "limit": limit,
+                                 "lease_s": lease_s, "max_attempts": max_attempts})
         rows = cur.fetchall()
-    jobs = []
-    for (frame_id, survey_area, frame_idx, x, y, alt, yaw, roll, pitch,
-         cam_pitch, cam_roll, image_uri, mission_id) in rows:
-        # The gimbal angles are part of the pose for projection purposes, so a
-        # recovered job must carry them or it would classify this frame
-        # differently from the live path. Absent (pre-0008 rows, or a drone that
-        # reports none) means "assume nadir", which is what project() falls back
-        # to -- so they are only set when actually known.
-        pose = {"frame_idx": frame_idx, "x": x, "y": y, "alt": alt,
-                "yaw": yaw, "roll": roll, "pitch": pitch}
-        if cam_pitch is not None:
-            pose["cam_pitch"] = cam_pitch
-        if cam_roll is not None:
-            pose["cam_roll"] = cam_roll
-        jobs.append(
-            {
-                "frame_id": frame_id,
-                "survey_area": survey_area,
-                "frame_idx": frame_idx,
-                # Carried for the same reason as the gimbal angles: the vote is
-                # scoped per mission (0009), so a recovered job must record the
-                # flight it came from or its observations would join the wrong
-                # one -- and a recovered frame must score identically to the
-                # same frame processed live.
-                "mission_id": mission_id,
-                "pose": pose,
-                "image_uri": image_uri,
-            }
+    conn.commit()
+    return [_job_payload(r) for r in rows]
+
+
+def claimable_count(conn, max_attempts):
+    """Unfinished work any replica could pick up right now — the startup banner
+    and the 'is the pipeline stalled' question, without claiming anything."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """SELECT count(*) FROM frame_job
+                WHERE attempts < %(max_attempts)s
+                  AND (status = 'queued'
+                       OR (status = 'running' AND lease_expires_at < now()))""",
+            {"max_attempts": max_attempts},
         )
-    return jobs
+        return cur.fetchone()[0]

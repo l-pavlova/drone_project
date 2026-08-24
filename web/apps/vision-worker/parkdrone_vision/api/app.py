@@ -1,9 +1,9 @@
 """PARKDRONE server — one FastAPI process owning the web edge and the vision CV.
 
-  ingest (auth + S3 + frame row) ─┐
-                                  ├─ jobs.enqueue → in-process queue → classify
-  read  (PostGIS GeoJSON/summary) │                 threads (jobs.py) → hub push
-  dev toggle ─────────────────────┘
+  ingest (auth + S3 + frame row) ─┐   frame_job row ─claim─► classify threads
+                                  ├─  (jobs.py; ANY replica may claim it)
+  read  (PostGIS GeoJSON/summary) │        │
+  dev toggle ─────────────────────┘   bay_delta + NOTIFY ─► every replica's hub
   route proxy ── OSRM driving directions to a free bay (routing.py)
   metrics ────── pipeline/ingest/fleet health, JSON + Prometheus (metrics.py)
   WS /ws/occupancy ── hub fan-out to browsers
@@ -41,9 +41,9 @@ from ..config import (
 )
 from ..db import vision_db, web_db
 from ..db.pool import borrow, close_pool, init_pool
-from ..processing import jobs, pipeline
+from ..processing import deltas, jobs, pipeline
 from ..vision.scoring import pose_idx
-from . import metrics
+from . import delta_listener, metrics
 from .auth import require_admin, require_drone
 from .hub import Hub
 
@@ -54,8 +54,9 @@ FMI = {"lon": 23.3298956, "lat": 42.6747105}
 # dependency providers below rather than `app.state`, which FastAPI discourages
 # ("for most of the cases you would instead use FastAPI dependencies") — that
 # way a handler declares what it needs and a test can swap it via
-# app.dependency_overrides. The classify threads don't go through either: they
-# receive hub/loop as plain arguments from start_workers.
+# app.dependency_overrides. The classify threads never touch the hub at all any
+# more -- they publish to the shared delta channel and the listener thread
+# (which does get hub/loop as plain arguments) delivers.
 _hub: Hub | None = None
 _loop: asyncio.AbstractEventLoop | None = None
 
@@ -64,12 +65,6 @@ def get_hub() -> Hub:
     if _hub is None:  # only reachable if lifespan never ran
         raise RuntimeError("hub not initialised")
     return _hub
-
-
-def get_loop() -> asyncio.AbstractEventLoop:
-    if _loop is None:
-        raise RuntimeError("event loop not captured")
-    return _loop
 
 
 @asynccontextmanager
@@ -84,16 +79,23 @@ async def lifespan(app: FastAPI):
     loop = _loop = asyncio.get_running_loop()
     hub = _hub = Hub()
 
-    # crash recovery: rebuild the in-memory queue from unscored frame rows
+    # No crash-recovery step any more: unfinished work is CLAIMED (migration
+    # 0011), so it is picked up by the dispatcher's ordinary poll — by this
+    # replica or by any other that is already running. Report the backlog rather
+    # than claiming it, so the banner does not lie about who will do it.
     rconn = vision_db.connect()
-    recovered = jobs.recover(rconn)
+    backlog = web_db.claimable_count(rconn, config.MAX_ATTEMPTS)
     rconn.close()
 
-    jobs.start_workers(CLASSIFY_THREADS, bays, bay_index, hub, loop)
+    jobs.start_workers(CLASSIFY_THREADS, bays, bay_index)
+    # Deltas reach this replica's clients only through the shared channel, so
+    # the listener is not optional: without it the map never moves.
+    delta_listener.start_thread(hub, loop)
     sweeping = cleanup.start_thread()
     print(
         f"parkdrone server on :{API_PORT} — {len(bays)} bays, "
-        f"{CLASSIFY_THREADS} classify threads, recovered {recovered} queued frames, "
+        f"{CLASSIFY_THREADS} classify threads, replica {config.REPLICA_ID}, "
+        f"{backlog} frames claimable, "
         f"frame cleanup {'every %ds' % CLEANUP_INTERVAL_S if sweeping else 'disabled'}"
     )
     # Say it out loud rather than let an unset key look like a secured one. The
@@ -161,7 +163,7 @@ def ingest_frame(
 
     survey_area = meta_obj["survey_area"]
     # Normalize the pose once, here at the edge: everything downstream (the
-    # frame row, the job payload, the rebuild in unscored_frames) then speaks
+    # frame row, the job payload rebuilt by claim_frames) then speaks
     # the canonical `frame_idx` and needs no fallback of its own. Drone builds
     # older than 2026-08-01 post the legacy `i`.
     pose = dict(meta_obj["pose"])
@@ -200,16 +202,9 @@ def ingest_frame(
         if mission_id:
             web_db.bump_mission_done(conn, mission_id)
 
-    jobs.enqueue(
-        {
-            "frame_id": frame_id,
-            "survey_area": survey_area,
-            "frame_idx": pose["frame_idx"],
-            "mission_id": mission_id,
-            "pose": pose,
-            "image_uri": image_uri,
-        }
-    )
+    # The frame_job row committed above IS the queue entry (any replica can
+    # claim it); this only spares the dispatcher its poll interval.
+    jobs.wake()
     return {"frame_id": frame_id}
 
 
@@ -332,7 +327,7 @@ def get_metrics_prometheus(hub: Hub = Depends(get_hub),
 
 # ---- dev/test manual occupancy toggle --------------------------------------
 
-def _set_occupancy(bay_id: str | None, occupied: bool, hub: Hub, loop):
+def _set_occupancy(bay_id: str | None, occupied: bool):
     with borrow(commit=True) as conn:
         if bay_id and bay_id.strip():
             target = bay_id.strip() if web_db.bay_exists(conn, bay_id.strip()) else None
@@ -341,41 +336,49 @@ def _set_occupancy(bay_id: str | None, occupied: bool, hub: Hub, loop):
         if not target:
             raise HTTPException(status_code=404, detail="no matching bay")
         updated_at = web_db.upsert_state(conn, target, occupied, 1, None, "manual")
-    ua = updated_at.isoformat()
-    delta = {"bay_id": target, "occupied": occupied, "confidence": 1, "updated_at": ua}
-    # sync handler on a threadpool thread -> the loop's only thread-safe door
-    asyncio.run_coroutine_threadsafe(hub.broadcast([delta]), loop).result()
+        ua = updated_at.isoformat()
+        # Same channel as a classified delta, in the same transaction as the
+        # state it announces -- so a manual toggle reaches every replica's
+        # clients and lands in the replay log, exactly like a real verdict.
+        deltas.publish(conn, [{"bay_id": target, "occupied": occupied,
+                               "confidence": 1, "updated_at": ua}])
     return {"bay_id": target, "occupied": occupied, "updated_at": ua}
 
 
 if ENABLE_DEV_ROUTES:
     @app.post("/api/v1/dev/occupy")
-    def dev_occupy(
-        bay_id: str | None = None,
-        hub: Hub = Depends(get_hub),
-        loop: asyncio.AbstractEventLoop = Depends(get_loop),
-    ):
-        return _set_occupancy(bay_id, True, hub, loop)
+    def dev_occupy(bay_id: str | None = None):
+        return _set_occupancy(bay_id, True)
 
     @app.post("/api/v1/dev/free")
-    def dev_free(
-        bay_id: str | None = None,
-        hub: Hub = Depends(get_hub),
-        loop: asyncio.AbstractEventLoop = Depends(get_loop),
-    ):
-        return _set_occupancy(bay_id, False, hub, loop)
+    def dev_free(bay_id: str | None = None):
+        return _set_occupancy(bay_id, False)
 
     print("dev routes enabled: POST /api/v1/dev/occupy | /free")
 
 
 # ---- realtime occupancy push ----------------------------------------------
 
+def _replay_since(since: int):
+    """(missed deltas, current head cursor) for a (re)connecting client."""
+    with borrow() as conn:
+        cursor = deltas.head(conn)
+        missed = deltas.replay(conn, since, config.DELTA_REPLAY_SLACK,
+                               config.DELTA_REPLAY_MAX) if since else []
+    return missed, cursor
+
+
 @app.websocket("/ws/occupancy")
 async def ws_occupancy(ws: WebSocket, hub: Hub = Depends(get_hub)):
     await ws.accept()
     raw = ws.query_params.get("since")
-    since = int(raw) if raw and raw.isdigit() else None
-    await hub.connect(ws, since)
+    since = int(raw) if raw and raw.isdigit() else 0
+    # Replay comes out of bay_delta, so it reads the same on every replica --
+    # the point of the exercise. Blocking DB work goes to a worker thread: this
+    # is the one async handler in the app and the event loop must not stall on
+    # it while other clients are receiving deltas.
+    replay, cursor = await asyncio.to_thread(_replay_since, since)
+    await hub.connect(ws, replay, cursor)
     try:
         while True:
             await ws.receive_text()  # client sends nothing; this just detects close

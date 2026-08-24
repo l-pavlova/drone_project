@@ -699,9 +699,11 @@ independent of the Python sim/vision code. Full design in `docs/web_infra_plan.m
 Diagrams: `web/docs/architecture.drawio` (system level), `docs/server_modules.md` +
 `docs/server_modules.drawio` (inside the server), `docs/db_schema_er.md` (schema).
 
-**Status: Phases 1–6 built & verified end-to-end (re-verified 2026-08-20: migrations through
-`0008`, golden replay 42/42 at 100%, full-stack ingest 42/42, and the restart-recovery path
-reproducing both). Phase 7 (prod hardening) remains.** See project memory `project-web-infra.md` for the running log.
+**Status: Phases 1–6 built & verified end-to-end (re-verified 2026-08-24: migrations through
+`0011`, golden replay 42/42 at 100%, full-stack ingest 42/42, restart recovery reproducing both,
+and a two-replica run splitting one backlog 17/17 with cross-replica delta fan-out). Phase 7 (prod
+hardening) remains — horizontal scaling no longer blocks it.** See project memory
+`project-web-infra.md` for the running log.
 
 ### The no-fly map is a SEPARATE product, in its own repo
 `https://github.com/l-pavlova/nofly-map` (public, GPL-3.0) — a standalone static map of Bulgaria's
@@ -794,9 +796,9 @@ What is worth knowing from here:
   area's `frame` rows still clears its jobs.
 - **The pose stored with a frame must include the GIMBAL angles** (`cam_pitch`, `cam_roll`,
   migration `0008`), not just body roll/pitch. `project()` needs them (see **Camera model**), and
-  `jobs.recover()` rebuilds a restarted job's pose from the `frame` row — without them a recovered
-  frame would be re-projected as if the camera were nadir and could classify differently from the
-  same frame processed live. Nullable: pre-0008 rows and any drone that reports no gimbal fall back
+  `web_db.claim_frames` rebuilds a claimed job's pose from the `frame` row — without them a job
+  picked up after a restart (or by another replica) would be re-projected as if the camera were
+  nadir and could classify differently from the same frame processed live. Nullable: pre-0008 rows and any drone that reports no gimbal fall back
   to nadir, exactly as they did before.
 - **Bay ids: int in `block_bays.geojson`, string everywhere in the web tier**.
 - **Frame ingest is idempotent per MISSION, not per survey area** (migration `0009`, 2026-08-21):
@@ -830,12 +832,53 @@ What is worth knowing from here:
   `FRAME_RETENTION_S` (4 h); `observation` and `mission` are kept as the analytics history. It
   refuses to collect a frame whose job is still `queued` — that is unclassified work, and dropping
   it silently would hide a stalled pipeline.
-- **Single replica is a correctness requirement, not a preference.** `jobs.recover()` re-enqueues
-  every `status='queued'` row with no ownership filter, so two replicas would both classify the
-  same backlog and double-count the vote; the WebSocket hub and its replay cursor are also
-  per-process. Scaling out needs job claiming, a shared delta channel and a global cursor first —
-  see `docs/web_infra_plan.md`. Throughput is not the reason to: ~103 frames/s per classify thread
-  against ~0.5 frames/s per drone.
+- **N replicas are safe (migration `0011`, 2026-08-24). Work is CLAIMED, not pushed.** Until this
+  a single replica was a correctness *requirement*: `jobs.recover()` re-enqueued every
+  `status='queued'` row with no ownership filter, so two replicas both drained the whole backlog and
+  double-counted the vote, and the WebSocket hub and its replay cursor were per-process. Three
+  changes, all in Postgres — no Redis, no broker, the DB stays the only shared state:
+  * **Claiming.** `web_db.claim_frames` takes rows with `FOR UPDATE SKIP LOCKED` and stamps a
+    `claimed_by` / `lease_expires_at` lease (`frame_job` also gained `attempts` and `last_error`).
+    One dispatcher thread per replica (`processing/jobs.py`) claims into the existing local
+    `queue.Queue`; the classify threads are unchanged. **`recover()` is gone**, and that is an
+    upgrade rather than a removal: the claim query's second arm takes any lease that stopped being
+    renewed, so a dead replica's work is picked up by a *live* one within `LEASE_S` instead of
+    waiting for the dead process to restart. Recovery stopped being a startup step.
+  * **`observation` is idempotent per `(frame_id, bay_id)`.** Claiming stops two replicas doing one
+    frame at once; it does not stop the same frame being done twice in *sequence*, and that window
+    is real even on one replica — `process_frame` commits the observations, then
+    `mark_frame_processed` commits separately, so a crash in between re-scores the frame. A partial
+    unique index is the only place that can actually be guaranteed. **Measured:** re-running all 34
+    frames of `fmi_block` leaves the observation count at 87, not 174.
+  * **Deltas cross replicas over `LISTEN`/`NOTIFY`, ordered by a `bay_delta` table.** `process_frame`
+    publishes in the **same transaction** as the state it announces — NOTIFY fires on COMMIT, so
+    nothing is ever announced for state that rolled back. Every replica's listener thread
+    (`api/delta_listener.py`) delivers to its own clients, and a replica hears **its own** deltas
+    back the same way: one delivery path means every client sees one order. `bay_delta.id` is the
+    cursor `?since=` resumes from, so it means the same thing on every replica and survives a
+    restart (the old counter began at 0 each boot). Replay reads a little *behind* the cursor
+    (`DELTA_REPLAY_SLACK`) because sequence ids are assigned before commit and can become visible
+    out of order; a delta is an idempotent "set bay X to this state", so over-replaying is free and
+    missing one is not.
+  Local `queue_depth` is now this replica's **prefetch** (`CLAIM_PREFETCH`, kept deliberately
+  shallow — a replica that claims the whole backlog holds leases on work it will not start for
+  minutes); the shared backlog is `jobs.queued`, and `expired_leases` is the new "a replica died
+  mid-frame" signal. Throughput is still not the reason to scale out (~103 frames/s per classify
+  thread against ~0.5 frames/s per drone) — availability and rolling deploys are.
+  **Verified 2026-08-24 with two replicas** (A on :4000, B on :4001, one Postgres, one MinIO):
+  a staged 34-frame backlog split **17/17**, zero duplicate `(frame_id, bay_id)` observations, and
+  both replicas' `/api/v1/bays` matched the golden fixture 42/42 at 100%. Deltas published by A were
+  delivered in full (49/49, cursors identical) to a client on **B**. A resume with A's cursor against
+  B replayed correctly and both reported the same `snapshot_cursor`. Twelve jobs left `running` by a
+  vanished replica were reclaimed 8-then-4 (the prefetch gate) and finished with no duplicates. And
+  the single-replica path is **unchanged, proved by A/B rather than by argument**: the same E2E on
+  the stashed pre-change code returns the identical `/api/v1/metrics` model block
+  (`views_scored 524, view_accuracy 0.9695, bays_scored 49, state_accuracy 0.8571`) and the same 49
+  WS deltas. *(The "52 deltas" figure below is stale — it predates the 2026-08-20 camera-model fix.
+  49 is exactly the number of `bay_state` transitions in the observation history, checked in SQL.)*
+  A job that fails now stops: a missing image is terminal on the first attempt, anything else is
+  released for a retry and given up on after `MAX_ATTEMPTS` with `last_error` recorded — before
+  this, such a job stayed `queued` forever and was re-run on every restart.
 - The server classifies **all** visible bays (production has no ground truth); `gt` is eval-only.
   Labels are resolved inside `processing/pipeline.py` from
   `sim/worlds/<area>.ground_truth.json` (`vision/ground_truth.py`, `GROUND_TRUTH_ROOT`, cached
@@ -888,14 +931,17 @@ Verification harnesses (all Python, run from `apps/vision-worker`):
   no longer reproduced; the 95.2% and 97.6% figures that followed it are both superseded by the
   camera-model fix below.
 - Restart recovery (what migration `0008` protects): stage frames with the server started as
-  `CLASSIFY_THREADS=0`, kill it, start it normally — `recovered_on_start` should equal the staged
-  count and the resulting `bay_state` must match the live-path result exactly. Verified 2026-08-20
+  `CLASSIFY_THREADS=0`, kill it, start it normally — the startup banner reports the staged count as
+  "N frames claimable", the dispatcher claims them, and the resulting `bay_state` must match the
+  live-path result exactly. (Since `0011` the same test works with a *second* replica doing the
+  claiming, which is the stronger version of it.) Verified 2026-08-20
   (34 frames, 42/42 at 100% both ways). It is a real check, not a formality: stripping
   `cam_pitch`/`cam_roll` from a pose moves bay 17685's projected outline by 0.35–1.55 m on the
   frames that see it, against a 0.21 m core-crop clearance.
 - Full stack E2E: register a drone `python -m parkdrone_vision.register_drone drone-1`, then
-  `API_KEY=<key> python -m parkdrone_vision.replay_ingest fmi_block` (expect 52 WS deltas + final
-  `/bays` matching the offline result, 42/42). To re-run, clear the survey area first
+  `API_KEY=<key> python -m parkdrone_vision.replay_ingest fmi_block` (expect **49** WS deltas +
+  final `/bays` matching the offline result, 42/42 — 49 is the number of `bay_state` transitions the
+  observation history actually contains; the 52 on record here predates the camera-model fix). To re-run, clear the survey area first
   (`pnpm clear <area>`, which is exactly this): `frame` because idempotency skips duplicates, and
   `observation`/`bay_state` because deltas only fire on a *change* — replay straight after the golden test
   leaves the state already correct and reports a green "0 deltas".
@@ -908,8 +954,10 @@ Verification harnesses (all Python, run from `apps/vision-worker`):
 render one snapshot with two halves: **in-process** counters from `processing.jobs.stats()` — queue
 depth and in-flight, which exist only in this process's `queue.Queue`, plus lifetime
 classified/failed/recovered/deltas and mean classify time (they reset per process, by design) — and
-**durable** queries in `db/web_db.py`: `frame_job` status counts + `oldest_queued_age_s` (the stall
-signal), ingest rates, enqueue→finish latency avg/p50/p95 + failure rate, fleet/active-mission
+**durable** queries in `db/web_db.py`: `frame_job` status counts (`queued` = unclaimed by anyone,
+`running` = claimed and being classified) + `oldest_queued_age_s` (the stall signal — deliberately
+*unclaimed* work, since counting claimed jobs as backlog would make a healthy pipeline look stalled)
++ `expired_leases`, ingest rates, enqueue→finish latency avg/p50/p95 + failure rate, fleet/active-mission
 progress, bay coverage, and **model accuracy** (`state_accuracy` = voted bay verdicts vs `gt`, the
 product-level number; `view_accuracy` = single looks before voting; both `null` where there is no
 ground truth, never 0). **Both endpoints require `x-admin-key` when `ADMIN_API_KEY` is set** (P7, 2026-08-21). They expose
@@ -920,8 +968,9 @@ and the server prints a loud one-line warning at startup, so "unset" cannot quie
 proxy reads `web/.env` and injects the header server-side, so the key never reaches the browser
 bundle and :5174 works either way. A shared key is the smallest thing that closes the door — a real
 admin login (sessions, users, audit) is still open P7 work. To see a stall by hand: run the server with `CLASSIFY_THREADS=0`, ingest,
-and watch `jobs.queued` / `oldest_queued_age_s` climb; restarting normally then shows
-`recovered_on_start` and drains it.
+and watch `jobs.queued` / `oldest_queued_age_s` climb (`CLASSIFY_THREADS=0` starts no dispatcher
+either, so nothing is claimed); restarting normally then reports the backlog as "N frames claimable"
+and drains it. Starting a *second* replica instead drains it just as well — which is the point.
 
 ### Live sim uplink (watch a flight land on the map in real time)
 `sim_uplink.py` is a **sidecar**, not part of the server: it watches

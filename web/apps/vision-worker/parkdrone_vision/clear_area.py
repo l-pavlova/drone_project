@@ -9,7 +9,7 @@ that come back 200-duplicate: no classify job, no `bay_state` change, and
 therefore no WebSocket delta. The map just sits there while the drone flies,
 and nothing in the logs looks broken — the uplink says "already ingested" once
 and then goes quiet. Clearing the area first is the fix, and doing it by hand
-means three DELETEs in the right order plus the object store plus the capture
+means four DELETEs in the right order plus the object store plus the capture
 folder, which is exactly the kind of thing that gets half-done.
 
 What it removes, and why each one is needed:
@@ -23,6 +23,10 @@ What it removes, and why each one is needed:
     never repaints. Note `bay_state` has no `survey_area` column (a bay has one
     current answer, whoever saw it), so the rows to drop are resolved from the
     observations *before* those are deleted.
+  * `bay_delta` rows announcing those bays — the WebSocket replay log. A client
+    reconnecting with an old `?since=` would otherwise be replayed news about
+    bays this command just deleted. Resolved from the observations for the same
+    reason `bay_state` is.
   * `mission` rows for the area — otherwise the ops dashboard keeps showing
     stale plan-vs-actual progress for a flight that no longer exists.
   * the on-disk captures in `sim/output/<area>/` — `frame_*.png`, `snap_*.png`,
@@ -109,6 +113,19 @@ def clear_db(conn, survey_area):
             (survey_area,),
         )
         counts["bay_state"] = cur.rowcount
+        # ...and the announcements of those states. bay_delta is the WebSocket
+        # replay log, so a client reconnecting with an old ?since= would
+        # otherwise be told about bays this command just deleted. It has no
+        # survey_area column (a delta is about a bay, not a flight), so the
+        # cleared area's bays are named directly -- while the observations that
+        # name them are still here to resolve.
+        cur.execute(
+            """DELETE FROM bay_delta
+                WHERE payload->>'bay_id' IN (SELECT DISTINCT bay_id FROM observation
+                                              WHERE survey_area = %s)""",
+            (survey_area,),
+        )
+        counts["bay_delta"] = cur.rowcount
         cur.execute("DELETE FROM observation WHERE survey_area = %s", (survey_area,))
         counts["observation"] = cur.rowcount
         cur.execute("DELETE FROM frame WHERE survey_area = %s", (survey_area,))
@@ -211,8 +228,8 @@ def main() -> None:
             finally:
                 conn.close()
             print(f"  db:   {c['frame']} frames (+jobs), {c['observation']} observations, "
-                  f"{c['bay_state']} bay states, {c['mission']} missions, "
-                  f"{c['objects']} stored images")
+                  f"{c['bay_state']} bay states, {c['bay_delta']} deltas, "
+                  f"{c['mission']} missions, {c['objects']} stored images")
 
         print(f"cleared '{survey_area}' — re-fly it and the map will repaint live.")
         if do_db and not do_disk:

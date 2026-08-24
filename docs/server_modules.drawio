@@ -9,7 +9,7 @@
         <mxCell id="title" value="PARKDRONE Server — Module Map (inside the FastAPI monolith)" style="text;html=1;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#14181D;" vertex="1" parent="1">
           <mxGeometry x="40" y="20" width="760" height="30" as="geometry" />
         </mxCell>
-        <mxCell id="subtitle" value="Zooms into the &quot;PARKDRONE Server&quot; component of web/docs/architecture.drawio. One Python process owns the HTTP/WS edge AND the vision CV. The api/ ↔ processing/ line is a THREAD boundary: api/ runs on request threads (plus the event loop for WS), processing/ on dedicated classify threads; jobs.enqueue and run_coroutine_threadsafe(hub.broadcast) are the only two crossings." style="text;html=1;align=left;verticalAlign=top;fontSize=11;fontColor=#6b747c;" vertex="1" parent="1">
+        <mxCell id="subtitle" value="Zooms into the &quot;PARKDRONE Server&quot; component of web/docs/architecture.drawio. One Python process owns the HTTP/WS edge AND the vision CV. The api/ ↔ processing/ line is a THREAD boundary: api/ runs on request threads (plus the event loop for WS), processing/ on dedicated classify threads; jobs.wake() and the delta listener&#39;s run_coroutine_threadsafe(hub.deliver) are the only two crossings — and note the second is no longer a classify thread reaching into the hub, but a Postgres NOTIFY arriving." style="text;html=1;align=left;verticalAlign=top;fontSize=11;fontColor=#6b747c;" vertex="1" parent="1">
           <mxGeometry x="40" y="48" width="1010" height="40" as="geometry" />
         </mxCell>
 
@@ -36,28 +36,34 @@
         <mxCell id="pkg_api" value="api/  — HTTP + WebSocket edge" style="shape=folder;tabWidth=170;tabHeight=20;tabPosition=left;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontStyle=1;fillColor=#E4F7F4;strokeColor=#0F9E90;fontColor=#06403a;spacingLeft=8;spacingTop=2;" vertex="1" parent="1">
           <mxGeometry x="270" y="150" width="380" height="240" as="geometry" />
         </mxCell>
-        <mxCell id="m_app" value="&lt;b&gt;app.py&lt;/b&gt;&#10;FastAPI app + lifespan (pool · bays · recover · threads)&#10;ingest · reads (/bays /summary /bays/:id) · /route&#10;metrics · dev occupancy toggle · WS /ws/occupancy&#10;sync handlers → Starlette threadpool" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#0F9E90;fontColor=#06403a;" vertex="1" parent="1">
+        <mxCell id="m_app" value="&lt;b&gt;app.py&lt;/b&gt;&#10;FastAPI app + lifespan (pool · bays · threads · delta listener)&#10;ingest · reads (/bays /summary /bays/:id) · /route&#10;metrics · dev occupancy toggle · WS /ws/occupancy&#10;sync handlers → Starlette threadpool" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#0F9E90;fontColor=#06403a;" vertex="1" parent="1">
           <mxGeometry x="285" y="186" width="350" height="72" as="geometry" />
         </mxCell>
         <mxCell id="m_auth" value="&lt;b&gt;auth.py&lt;/b&gt;&#10;require_drone dependency&#10;x-api-key → SHA-256 → drone_id&#10;bumps last_seen · 401 / 403" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#0F9E90;fontColor=#06403a;" vertex="1" parent="1">
           <mxGeometry x="285" y="266" width="168" height="62" as="geometry" />
         </mxCell>
-        <mxCell id="m_hub" value="&lt;b&gt;hub.py&lt;/b&gt;&#10;WS fan-out to browsers&#10;bay_delta tagging&#10;replay deque + ?since cursor" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#0F9E90;fontColor=#06403a;" vertex="1" parent="1">
+        <mxCell id="m_hub" value="&lt;b&gt;hub.py&lt;/b&gt;&#10;WS fan-out to THIS replica&#39;s clients&#10;deliver(msg) verbatim&#10;no cursor, no buffer — both in bay_delta" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#0F9E90;fontColor=#06403a;" vertex="1" parent="1">
           <mxGeometry x="467" y="266" width="168" height="62" as="geometry" />
         </mxCell>
+        <mxCell id="m_dlisten" value="&lt;b&gt;delta_listener.py&lt;/b&gt;&#10;LISTEN bay_delta (own conn, autocommit)&#10;any replica&#39;s delta → hub.deliver" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#0F9E90;fontColor=#06403a;" vertex="1" parent="1">
+          <mxGeometry x="467" y="336" width="168" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="m_deltas" value="&lt;b&gt;deltas.py&lt;/b&gt;&#10;publish(): bay_delta row + pg_notify,&#10;IN the caller&#39;s transaction — NOTIFY fires on&#10;COMMIT, so the wire is never ahead of the DB.&#10;bay_delta.id IS the shared ?since cursor." style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#0F9E90;fontColor=#06403a;" vertex="1" parent="1">
+          <mxGeometry x="871" y="292" width="174" height="82" as="geometry" />
+        </mxCell>
         <mxCell id="m_metrics" value="&lt;b&gt;metrics.py&lt;/b&gt;&#10;GET /api/v1/metrics (JSON) · GET /metrics (Prometheus text, no client lib)&#10;in-process: queue depth · in-flight · lifetime totals    durable: job counts · oldest-queued age · ingest rate · latency p50/p95 · fleet · coverage · model accuracy" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=9;fillColor=#FFFFFF;strokeColor=#0F9E90;fontColor=#06403a;" vertex="1" parent="1">
-          <mxGeometry x="285" y="336" width="350" height="48" as="geometry" />
+          <mxGeometry x="285" y="336" width="168" height="48" as="geometry" />
         </mxCell>
 
         <!-- ==== processing/ ==== -->
         <mxCell id="pkg_proc" value="processing/  — frame → occupancy" style="shape=folder;tabWidth=180;tabHeight=20;tabPosition=left;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontStyle=1;fillColor=#FDE9E4;strokeColor=#E14B2E;fontColor=#5c1c10;spacingLeft=8;spacingTop=2;" vertex="1" parent="1">
           <mxGeometry x="680" y="150" width="380" height="240" as="geometry" />
         </mxCell>
-        <mxCell id="m_jobs" value="&lt;b&gt;jobs.py&lt;/b&gt;&#10;in-process queue.Queue&#10;N classify threads, each with its own DB conn&#10;a bad frame is logged / marked failed — thread survives&#10;recover(): re-enqueue status='queued' on boot" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#E14B2E;fontColor=#5c1c10;" vertex="1" parent="1">
+        <mxCell id="m_jobs" value="&lt;b&gt;jobs.py&lt;/b&gt;&#10;dispatcher CLAIMS → queue.Queue → N classify threads&#10;each thread with its own DB conn; prefetch kept shallow&#10;failure releases the lease, gives up at MAX_ATTEMPTS&#10;no recover(): a lapsed lease is reclaimable by anyone" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#E14B2E;fontColor=#5c1c10;" vertex="1" parent="1">
           <mxGeometry x="695" y="188" width="350" height="90" as="geometry" />
         </mxCell>
         <mxCell id="m_pipeline" value="&lt;b&gt;pipeline.py&lt;/b&gt;&#10;process_frame(): score → insert observations → recompute bay_state → commit → return deltas&#10;shared verbatim by the live classify threads AND replay.py" style="rounded=0;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fontSize=10;fillColor=#FFFFFF;strokeColor=#E14B2E;fontColor=#5c1c10;" vertex="1" parent="1">
-          <mxGeometry x="695" y="292" width="350" height="82" as="geometry" />
+          <mxGeometry x="695" y="292" width="168" height="82" as="geometry" />
         </mxCell>
 
         <!-- ==== db/ ==== -->
@@ -181,24 +187,29 @@
         <mxCell id="e_app_auth" value="Depends(require_drone)" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#0F9E90;fontColor=#06403a;labelBackgroundColor=#E4F7F4;exitX=0.2;exitY=1;exitDx=0;exitDy=0;entryX=0.2;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_app" target="m_auth">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e_app_hub" value="dev toggle → broadcast" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#0F9E90;fontColor=#06403a;labelBackgroundColor=#E4F7F4;exitX=0.85;exitY=1;exitDx=0;exitDy=0;entryX=0.85;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_app" target="m_hub">
+        <mxCell id="e_app_hub" value="dev toggle → publish" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#0F9E90;fontColor=#06403a;labelBackgroundColor=#E4F7F4;exitX=0.85;exitY=1;exitDx=0;exitDy=0;entryX=0.85;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_app" target="m_deltas">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
         <!-- ===== edges: the two thread crossings ===== -->
-        <mxCell id="e_app_jobs" value="&lt;b&gt;jobs.enqueue(job)&lt;/b&gt;&#10;crossing 1 — non-blocking put" style="endArrow=block;endFill=1;html=1;strokeWidth=2;fontSize=10;strokeColor=#E14B2E;fontColor=#5c1c10;labelBackgroundColor=#EAF2FB;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_app" target="m_jobs">
+        <mxCell id="e_app_jobs" value="&lt;b&gt;jobs.wake()&lt;/b&gt;&#10;crossing 1 — the committed frame_job row IS the entry" style="endArrow=block;endFill=1;html=1;strokeWidth=2;fontSize=10;strokeColor=#E14B2E;fontColor=#5c1c10;labelBackgroundColor=#EAF2FB;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_app" target="m_jobs">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e_jobs_hub" value="&lt;b&gt;run_coroutine_threadsafe(hub.broadcast)&lt;/b&gt;&#10;crossing 2 — deltas back onto the loop" style="endArrow=block;endFill=1;html=1;strokeWidth=2;fontSize=10;strokeColor=#E14B2E;fontColor=#5c1c10;labelBackgroundColor=#EAF2FB;exitX=0;exitY=0.8;exitDx=0;exitDy=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_jobs" target="m_hub">
+        <mxCell id="e_jobs_hub" value="&lt;b&gt;run_coroutine_threadsafe(hub.deliver)&lt;/b&gt;&#10;crossing 2 — a NOTIFY back onto the loop" style="endArrow=block;endFill=1;html=1;strokeWidth=2;fontSize=10;strokeColor=#E14B2E;fontColor=#5c1c10;labelBackgroundColor=#EAF2FB;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_dlisten" target="m_hub">
           <mxGeometry relative="1" as="geometry">
-            <Array as="points">
-              <mxPoint x="668" y="255" />
-              <mxPoint x="668" y="282" />
-            </Array>
           </mxGeometry>
         </mxCell>
 
         <!-- ===== edges: inside processing/ + vision/ ===== -->
+        <mxCell id="e_pipe_deltas" value="publish(deltas)&#10;same transaction as the state" style="endArrow=open;endFill=0;html=1;fontSize=10;strokeColor=#0F9E90;fontColor=#06403a;" edge="1" parent="1" source="m_pipeline" target="m_deltas">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_deltas_pg" value="&#171;SQL&#187; INSERT bay_delta&#10;+ pg_notify" style="endArrow=block;endFill=1;html=1;fontSize=10;strokeColor=#0F9E90;fontColor=#06403a;" edge="1" parent="1" source="m_deltas" target="pg">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_pg_dlisten" value="&#171;NOTIFY bay_delta&#187;&#10;to EVERY replica, this one included" style="endArrow=block;endFill=1;html=1;dashed=1;strokeWidth=2;fontSize=10;strokeColor=#E14B2E;fontColor=#5c1c10;labelBackgroundColor=#EAF2FB;" edge="1" parent="1" source="pg" target="m_dlisten">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
         <mxCell id="e_jobs_pipe" value="process_frame()" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#E14B2E;fontColor=#5c1c10;labelBackgroundColor=#FDE9E4;exitX=0.3;exitY=1;exitDx=0;exitDy=0;entryX=0.3;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_jobs" target="m_pipeline">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
@@ -276,7 +287,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="e_jobs_webdb" value="mark processed / failed&#10;unscored_frames() on boot" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#6b7686;fontColor=#14181D;labelBackgroundColor=#EAF2FB;exitX=0.05;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_jobs" target="m_webdb">
+        <mxCell id="e_jobs_webdb" value="claim_frames(): FOR UPDATE SKIP LOCKED&#10;+ lease · mark processed / failed / released" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#6b7686;fontColor=#14181D;labelBackgroundColor=#EAF2FB;exitX=0.05;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" edge="1" parent="1" source="m_jobs" target="m_webdb">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="712" y="404" />
@@ -358,7 +369,7 @@
         </mxCell>
 
         <!-- ===== notes ===== -->
-        <mxCell id="note_durab" value="Durability without a broker: frame (append-only ledger) and frame_job (work state) are written in ONE transaction, so every committed frame has a recoverable job. On boot jobs.recover() rebuilds the in-memory queue from Postgres + S3; a frame whose image has expired is marked failed so recovery never loops on it." style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#33383d;" vertex="1" parent="1">
+        <mxCell id="note_durab" value="Durability without a broker, and now N replicas without one either (migration 0011). frame (append-only ledger) and frame_job (work state) are written in ONE transaction, so every committed frame has a claimable job. Work is CLAIMED with FOR UPDATE SKIP LOCKED under a lease, so replicas split one backlog instead of both doing all of it — and the claim query&#39;s second arm takes back any lease that stopped being renewed, which means a LIVE replica recovers a dead one&#39;s work rather than waiting for it to restart. observation is unique per (frame_id, bay_id), because at-least-once delivery would otherwise double-count the vote. A frame whose image has expired is marked failed on the first attempt so nothing loops on it." style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#33383d;" vertex="1" parent="1">
           <mxGeometry x="1150" y="850" width="230" height="130" as="geometry" />
         </mxCell>
         <mxCell id="note_config" value="config.py is read by pool.py, s3.py, routing.py, vision_db.py and server.py — arrows omitted to keep the diagram readable." style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#6b747c;" vertex="1" parent="1">

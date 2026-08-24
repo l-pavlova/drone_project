@@ -4,6 +4,7 @@ Loads the nearest .env (walking up from CWD) so the server and the dev tooling
 share the monorepo root .env. Existing process env always wins.
 """
 import os
+import socket
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # parkdrone_vision -> vision-worker -> apps -> web -> <repo root>
@@ -107,6 +108,53 @@ ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "")
 # Dedicated classify threads draining the in-process job queue (numpy releases
 # the GIL during array ops, so these parallelise real CV work off the event loop).
 CLASSIFY_THREADS = int(os.environ.get("CLASSIFY_THREADS", "4"))
+
+# ---- multi-replica: job claiming (migration 0011) --------------------------
+# Work is not handed to a replica, it is CLAIMED from Postgres with
+# FOR UPDATE SKIP LOCKED. That is what lets N replicas share one backlog without
+# classifying the same frame twice, and what lets a live replica pick up the
+# work of one that died instead of waiting for it to restart.
+#
+# Who this replica says it is when it claims. Only ever read back by a human (or
+# the ops dashboard) asking "who has this job?", so hostname:pid is enough.
+REPLICA_ID = os.environ.get("REPLICA_ID") or f"{socket.gethostname()}:{os.getpid()}"
+# How long the dispatcher waits for a local wake-up before polling anyway. This
+# is the ONLY latency cross-replica work pays: a frame ingested by another
+# replica is claimed within a tick. Against ~0.5 frames/s per drone, 1 s is
+# nothing -- which is why there is no NOTIFY channel for jobs, only for deltas.
+CLAIM_POLL_S = float(os.environ.get("CLAIM_POLL_S", "1.0"))
+# Local prefetch, as a multiple of CLASSIFY_THREADS. Deliberately small: a
+# replica that claims the whole backlog holds leases on work it will not start
+# for minutes, which is today's imbalance under a new name.
+CLAIM_PREFETCH = int(os.environ.get("CLAIM_PREFETCH", "2"))
+# Lease length. Must exceed prefetch_depth x per-frame classify time, or a job
+# still sitting in the local queue looks abandoned and a second replica takes
+# it. With CLASSIFY_THREADS 4 x CLAIM_PREFETCH 2 = 8 frames queued, that is 8 x
+# ~10 ms on the heuristic backend and 8 x a few seconds on the detector -- so
+# 300 s is orders of magnitude of headroom either way, and the cost of being
+# generous is only how long a genuinely dead replica's work waits.
+LEASE_S = int(os.environ.get("LEASE_S", "300"))
+# Give up after this many claims of the same job. Before 0011 a job that failed
+# for any reason other than a missing image stayed queued forever and was re-run
+# on every restart; this is the stop.
+MAX_ATTEMPTS = int(os.environ.get("MAX_ATTEMPTS", "3"))
+
+# ---- multi-replica: the shared delta channel -------------------------------
+# Deltas cross replicas over Postgres LISTEN/NOTIFY and are ordered by
+# bay_delta.id, which is the cursor clients resume from.
+#
+# How long the delta tail is kept. It is a replay buffer, not history --
+# `observation` is the history -- so this only has to cover a browser's outage.
+DELTA_RETENTION_S = int(os.environ.get("DELTA_RETENTION_S", "3600"))  # 1 h
+# Cap on a single reconnect's replay. Beyond this the client reconciles from
+# GET /api/v1/bays, which it already refetches on every snapshot_cursor.
+DELTA_REPLAY_MAX = int(os.environ.get("DELTA_REPLAY_MAX", "500"))
+# Ids are handed out by the sequence BEFORE commit, so under concurrent writers
+# id 100 can become visible after id 101 and a strict `id > since` would skip
+# it. A delta is an idempotent "set bay X to this state", so re-sending a few is
+# free while missing one leaves a stale bay on the map. Replay a little behind
+# the cursor rather than exactly at it.
+DELTA_REPLAY_SLACK = int(os.environ.get("DELTA_REPLAY_SLACK", "50"))
 
 # ---- occupancy backend -----------------------------------------------------
 # Which model turns a frame into per-bay verdicts.

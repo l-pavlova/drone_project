@@ -72,8 +72,16 @@ class BayIndex:
 
 
 def insert_observations(conn, survey_area, frame_idx, scores, gt=None,
-                        mission_id=None, backend=None):
+                        mission_id=None, backend=None, frame_id=None):
     """Append one observation row per scored bay (single view).
+
+    `frame_id` (migration 0011) makes the append IDEMPOTENT: (frame_id, bay_id)
+    is unique, so scoring the same frame twice records one look, not two. That
+    matters because the pipeline is at-least-once by construction — the
+    observations commit, then frame_job is marked processed in a SECOND
+    transaction, so a crash between them leaves the job claimable and the frame
+    is scored again. Without the key that double-votes silently. It stays
+    optional: the offline replay passes none and behaves exactly as before.
 
     `mission_id` is what lets the vote tell two flights apart (migration 0009).
     It stays optional: a caller with no mission records NULL, and the vote groups
@@ -112,6 +120,7 @@ def insert_observations(conn, survey_area, frame_idx, scores, gt=None,
                 mission_id,
                 backend,
                 fl(f.get("det_score")),
+                frame_id,
             )
         )
     with conn.cursor() as cur:
@@ -120,8 +129,10 @@ def insert_observations(conn, survey_area, frame_idx, scores, gt=None,
             """INSERT INTO observation
                  (bay_id, occupied, frame_idx, survey_area, votes_occupied, views, vis,
                   center_off_px, core_paint_frac, core_dark_frac, core_chroma,
-                  core_brightness, core_std, gt, mission_id, backend, det_score)
-               VALUES %s""",
+                  core_brightness, core_std, gt, mission_id, backend, det_score,
+                  frame_id)
+               VALUES %s
+               ON CONFLICT DO NOTHING""",
             rows,
         )
 
@@ -134,6 +145,16 @@ def insert_observations(conn, survey_area, frame_idx, scores, gt=None,
 #     same pass as the upsert;
 #   * the whole thing is atomic, so two writers can no longer interleave a
 #     read-then-write on the same bay.
+#
+# What it does NOT give is serialisation of two writers across the whole
+# statement. Under READ COMMITTED, two concurrent recomputes touching the same
+# bay each read `prior` from their own snapshot, so one change can be announced
+# twice or (if they resolve to the same verdict) once by each. Both outcomes are
+# harmless -- a delta is an idempotent "set bay X to this state", and the state
+# itself is serialised by the row lock ON CONFLICT takes. This is NOT new with
+# multi-replica: four classify threads in one process have always been able to
+# do it. Worth knowing rather than worth fixing, until a delta is ever made to
+# carry something other than the current state.
 #
 # The vote only counts observations inside OCCUPANCY_WINDOW_S, so cost is bounded
 # by the window rather than growing with the bay's accumulated history.
