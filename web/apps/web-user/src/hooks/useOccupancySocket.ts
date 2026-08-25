@@ -4,15 +4,21 @@ export interface BayDelta {
   type: "bay_delta";
   cursor?: string;
   bay_id: string;
-  occupied: boolean;
-  confidence: number;
-  updated_at: string;
+  // Nullable: a closure delta reports whatever the camera last said, which may
+  // be nothing at all (never surveyed, or aged out of the freshness window).
+  occupied: boolean | null;
+  confidence: number | null;
+  updated_at: string | null;
+  /** Street closure (migration 0012). Absent on a vision delta, where it means
+   *  "unchanged" — never "not closed". */
+  closed?: boolean;
 }
 
 export interface LiveState {
-  occupied: boolean;
-  confidence: number;
-  updated_at: string;
+  occupied: boolean | null;
+  confidence: number | null;
+  updated_at: string | null;
+  closed?: boolean;
 }
 
 /**
@@ -65,6 +71,7 @@ export function useOccupancySocket(): {
               occupied: d.occupied,
               confidence: d.confidence,
               updated_at: d.updated_at,
+              closed: d.closed,
             });
             return next;
           });

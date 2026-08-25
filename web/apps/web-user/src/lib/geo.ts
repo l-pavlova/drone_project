@@ -1,4 +1,4 @@
-import type { BayFeature, BayProps } from "./types";
+import type { BayFeature, BayProps, BayStatus } from "./types";
 
 export interface UserPos {
   lat: number;
@@ -125,7 +125,10 @@ export function formatDuration(s: number): string {
 /** Nearest free bay to a position, using the merged (live) occupancy state. */
 export function nearestFree(
   features: BayFeature[],
-  statusOf: (p: BayProps) => "free" | "occupied" | "unknown",
+  // BayStatus rather than an inline union: this predicate keeps only "free", so
+  // a new status must be added in one place and is excluded here by default —
+  // which is the safe direction. A closed bay is never offered for parking.
+  statusOf: (p: BayProps) => BayStatus,
   from: UserPos,
 ): NearestTarget | null {
   let best: NearestTarget | null = null;

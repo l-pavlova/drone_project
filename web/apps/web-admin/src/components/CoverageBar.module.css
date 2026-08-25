@@ -17,6 +17,9 @@
 .occupied { background: var(--signal); }
 .free { background: var(--zelena); }
 .unknown { background: rgba(154, 166, 174, 0.45); }
+/* Hazard amber — the same closed colour the driver map uses (BayMap.tsx
+   COLOR.closed), so an operator and a driver are looking at one thing. */
+.closed { background: #F0A020; }
 
 .legend {
   display: grid;

@@ -60,6 +60,8 @@
 .seg { display: block; flex-basis: 0; min-width: 3px; border-radius: 2px; }
 .seg.free { background: var(--zelena); }
 .seg.occ { background: var(--signal); }
+/* Hazard amber — must match COLOR.closed in BayMap.tsx and .badge.closed. */
+.seg.closedSeg { background: #F0A020; }
 
 .meterLegend {
   display: flex; gap: 16px; margin-top: 9px;

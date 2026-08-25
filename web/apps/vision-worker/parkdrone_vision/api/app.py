@@ -245,6 +245,17 @@ def get_bay(bay_id: str):
     return d
 
 
+@app.get("/api/v1/closures")
+def get_closures(bbox: str | None = None, all: bool = False):
+    """Active street closures as GeoJSON (migration 0012, TODO #13).
+
+    `all=true` includes expired and not-yet-started ones, which is what an
+    operator wants when checking why a street is (or is not) greyed out.
+    """
+    with borrow() as conn:
+        return web_db.closures(conn, _bbox(bbox), active_only=not all)
+
+
 # ---- UAS no-fly zones (public) ---------------------------------------------
 
 _RESTRICTIONS = {"PROHIBITED", "REQ_AUTHORISATION", "CONDITIONAL"}

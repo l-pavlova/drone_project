@@ -7,7 +7,7 @@ picked up cold.
 Order agreed 2026-08-12: **#2 → #3 → obstacle track (#4)**. #2 and #3 are done;
 the vision track (#5, #6, #7) is handled separately.
 
-**Closed:** #1, #2, #3, #6, #5b, #10. **Open:** #5 (learned detector — the main line),
+**Closed:** #1, #2, #3, #6, #5b, #10, #13. **Open:** #5 (learned detector — the main line),
 #4 residue, #7, #8 (P7), #9, #11 (multi-replica — to discuss), **#12 (powertrain mismatch —
 do not fly as built)**, plus the two data defects #1 uncovered.
 
@@ -541,11 +541,27 @@ deltas it missed, in order, with nothing it had already applied and no backlog f
 client; across a server restart the cursor resets below the client's, which is the signal
 `useOccupancySocket.ts` uses to discard a stale overlay and reconcile from REST.
 
-Still open in P7:
-and note that **single-replica is a correctness requirement, not a preference** —
-`jobs.recover()` re-enqueues every queued row with no ownership filter, so two
-replicas would double-count the vote. Scaling out needs job claiming, a shared
-delta channel and a global cursor first.
+**2026-08-24 — horizontal scaling is no longer a P7 blocker.** This section used to end by
+warning that single-replica was a correctness requirement. It is not any more: migration `0011`
+added job claiming, a shared delta channel and a global cursor, verified with two replicas
+(#11). Nothing in P7 now depends on it.
+
+Still open in P7 (the list below was lost in an earlier edit of this file and is restored here
+from `docs/web_infra_plan.md` "Security follow-ups" + the Production section):
+
+- **A real admin login** — sessions, users, an audit trail. `ADMIN_API_KEY` is a shared secret,
+  which is the smallest thing that closes the door on `/metrics`, not an answer.
+- **The dev toggle still has no auth**, only a default-off flag. `POST /api/v1/dev/occupy|free`
+  must at minimum require the drone API key before anything beyond localhost can reach `:4000`.
+- **Production secrets** — the one that actually matters. No value that has ever been in this
+  repo gets reused: Postgres, the object store and the drone keys are all generated at deploy
+  time into a real secret store. Until that exists, the whole stack is dev-only.
+- **Deployment**: containers, a process supervisor, PgBouncer in front of Postgres, CI. Now that
+  several replicas are safe, a rolling deploy is worth having — and it needs no sticky WebSocket
+  routing, because the cursor and the replay buffer live in the database.
+- **Observability**: the exposition side exists (`GET /metrics`); a scrape config, Grafana
+  dashboards and alerting on `oldest_queued_age_s` / `expired_leases` / `job_failure_rate` /
+  `frames_per_minute` do not.
 
 ### 10. A re-flight should ingest itself — **DONE 2026-08-21**
 **Today it does not, and it fails silently.** Fly a survey area the stack has
@@ -678,6 +694,106 @@ predates the 2026-08-20 camera-model fix. **49** is right, and it is exactly the
 **Still open, and deliberately not in scope here:** running >1 replica in production also wants a
 deploy story and a process supervisor. It does *not* want sticky WebSocket routing — any replica
 serves any client now, because the cursor and the replay buffer live in the database.
+
+---
+
+### 13. A CLOSED STREET must be represented end to end — **BUILT & VERIFIED 2026-08-25**
+
+A street can be closed — roadworks, a market, an accident, a parade. Today nothing in the chain
+knows the concept exists, so a closed street is silently surveyed and its bays are reported as
+ordinary free/occupied parking. The point of this task is that "closed" is not one feature in one
+place: it has to be *indicated everywhere along the chain*, and each link means something different.
+
+**The chain, link by link — what "closed" means at each:**
+- **Data (`data/`, `tools/`).** Where does the closure come from? There is no closure field in the
+  Sofiaplan datasets and OSM's `access=no` / `highway=construction` on a way is at best a
+  long-lived closure, not a temporary one. So the first decision is the *source*: a hand-authored
+  `data/closures.geojson` (street geometry or a polygon + a validity interval) is the honest
+  starting point, with an OSM/municipal feed as a later upgrade. Whatever it is, it must be able to
+  say **which** street and **for how long**, because a closure that never expires is a different
+  product from one that does.
+- **Route planning (`sim/generate_world.py`).** The postman walk covers every street that has bays.
+  A closed street should either be dropped from the coverage set (do not fly it) or kept and flown
+  but marked — that is a real design choice and needs deciding, not assuming. Dropping it changes
+  the walk, so `route.json` and `ground_truth.json` stop being byte-identical: gate it behind an
+  opt-in flag exactly like `--shadows`/`--obstacles`, so the three survey worlds regenerate
+  unchanged and every accuracy number on record stays valid.
+- **The controller (`sim/controllers/parkdrone/parkdrone.py`).** If a closed street is skipped, its
+  waypoints join the existing "declared, not hidden" machinery — the same discipline as an
+  unreachable waypoint behind an obstacle: `coverage.json` must say the ground was not covered and
+  **why** (`closed`, not just `uncovered`). Never let a closure look like a bad pass.
+- **Scoring (`vision/score_occupancy.py`).** Bays on a closed street must not be counted as
+  free — an empty bay on a closed street is not available parking. They are a third state, and
+  folding them into either existing one corrupts the accuracy number in the direction that
+  flatters us.
+- **Schema + server (`web/`).** This is the bulk of the work. `bay.occupied` is a boolean today;
+  the read paths already have an `occupied: null` = *unknown* (stale) case, and **closed is not
+  unknown** — it is known and negative. Expect a new nullable `closure` concept (a `closure` table
+  keyed by street or geometry + validity window, joined at read time the same way freshness is
+  derived at read time rather than swept), a field on `/api/v1/bays` and `/summary`, and a delta
+  when a closure opens or ends so the map moves live. Decide explicitly whether an observation on
+  a closed street is still *recorded* (it should be — `observation` is history) while being
+  excluded from the vote's product answer.
+- **Both UIs (`web-user`, `web-admin`).** The driver map needs a visibly distinct third state —
+  not red, not green — plus the street itself drawn as closed, and the popup saying so. Watch the
+  Leaflet `preferCanvas` click-order trap documented in CLAUDE.md if the closure is drawn as a
+  layer over the bays: draw it **before** the bays or it swallows every bay click inside it, the
+  same way the airspace layer would have. The ops dashboard should report closed streets and
+  exclude their bays from coverage, or coverage permanently reads short with no explanation.
+- **The no-fly map is NOT this.** A closed *street* is a ground-traffic fact; a closed *airspace*
+  is `nofly.py`. Do not conflate them — but note the closure layer is the second piece of
+  reference data with a validity window, so it is worth looking at how `nofly.py` does it before
+  inventing something new.
+
+**Why it is worth doing:** it is the first thing in the product that is *not* derived from the
+camera. Everything so far flows one way (fly → detect → vote → map); a closure flows the other way
+(an external fact that overrides what the camera saw), and getting it right proves the chain can
+carry an authoritative override at all. It also exposes, in one concrete case, the gap between
+"this bay is empty" and "you can park here", which is the actual product claim.
+
+**BUILT 2026-08-25.** The whole chain carries it, and the design choice that made it cheap was
+**matching by GEOMETRY, not by street name**: bays carry only `mestopoloz` and roads carry OSM
+`name`, reconciled by `norm_street()`'s substring test which already fails on 2 of 49 streets
+(TODO #9) and exists only in Python. A polygon needs no reconciliation and is the same test in the
+generator and in SQL. One source file, `data/closures.geojson`, feeds both consumers.
+
+What each link does — and the two links that deliberately do NOTHING:
+- **`generate_world.py --closures [path]`** drops closed streets from the coverage set and writes
+  `worlds/<name>.closures.json`. The street's road runs stay in the `full` graph: it is closed to
+  *ground traffic*, not to a drone at 30 m, so it must remain available as a transit or the MST
+  fallback starts making straight hops. Opt-in, so the three survey worlds regenerate byte-identical.
+- **The controller is untouched**, on purpose. A skipped street's waypoints never enter
+  `route.json`, so there is nothing to skip; and `coverage.json` means *flight-time* unreachability
+  (a waypoint inside an obstacle disc), so folding a plan-time exclusion into `unreachable` would
+  destroy the very distinction the scorer prints it to preserve.
+- **`score_occupancy.py`** excludes closed bays from the metrics entirely — neither TP/TN/FP/FN nor
+  `uncovered` — and says so on its own line. Counting a closed-and-empty bay as a correct FREE call
+  would inflate accuracy with bays the product deliberately hides.
+- **Migration `0012` + `web_db._CLOSED`** apply the override at READ time, as a second fragment
+  beside `_FRESH`. **`bay_state` is not touched and `process_frame` / the vote are not touched**:
+  frames over a closed street are still classified and still write `observation` rows. The closure
+  overrides the published *answer*, not the *record* — which is what keeps it falsifiable and lets
+  a closure be lifted without re-flying. *Verified with teeth:* 143 observation rows before, 143
+  after.
+- **`python -m parkdrone_vision.closures load|list|end|rm`** loads the same geojson into Postgres
+  and publishes a `bay_delta` for every affected bay, so the map repaints live on every replica
+  through machinery that already existed.
+- **Both UIs** gained a fourth `BayStatus`. `COLOR` is a `Record<BayStatus, string>`, so the
+  compiler refused to build until every branch handled it.
+
+**Known limit, stated rather than hidden:** a closure that expires on its *own clock* pushes no
+delta, because nothing runs at that instant to notice; such a bay corrects itself on the client's
+next fetch or reconnect. That is the same already-accepted limitation as a `bay_state` row going
+stale under `OCCUPANCY_WINDOW_S`.
+
+**Verified 2026-08-25:** three survey worlds byte-identical without the flag; `check_consistency.py`
+40 checks (3 new, mutation-tested); route 34 -> 20 waypoints with one street closed; scorer 42 -> 38
+classified with 4 excluded and the golden `fmi_block` still **42/42 at 100%**; golden replay 42/42;
+full-stack ingest **49 deltas, 42/42**; summary 25/24/0 -> 24/20/5 -> back, reversible; 5 live
+WebSocket deltas on lifting.
+
+**Not done, deliberately:** an OSM or municipal closure feed (the hand-authored file is the source
+until the shape is proven), and a real per-closure authoring UI — closures are created by CLI today.
 
 ---
 

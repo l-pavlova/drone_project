@@ -15,6 +15,20 @@ export interface BayProps {
    *  real footage). Null on rows written before migration 0010, and on any
    *  verdict that has aged out of the freshness window. */
   backend: string | null;
+  /** Street closure (migration 0012): an EXTERNAL authoritative fact —
+   *  roadworks, a market, an accident — that overrides what the camera saw. An
+   *  empty bay on a closed street is not available parking. Absent on a server
+   *  older than 0012, which is why it is optional rather than `boolean`. */
+  closed?: boolean;
+  closure?: ClosureInfo | null;
+}
+
+/** The closure covering a bay, for the popup. */
+export interface ClosureInfo {
+  closure_id: string;
+  label: string | null;
+  reason: string | null;
+  valid_to: string | null;
 }
 
 export interface BayFeature {
@@ -44,7 +58,7 @@ export interface RouteResult {
   cached: boolean;
 }
 
-export type BayStatus = "free" | "occupied" | "unknown";
+export type BayStatus = "free" | "occupied" | "unknown" | "closed";
 
 /** Occupancy TTL: a bay not re-surveyed within this window is "unknown", not free.
  *
@@ -72,6 +86,12 @@ export function getFreshnessMs(): number {
 }
 
 export function bayStatus(p: BayProps, now = Date.now()): BayStatus {
+  // The closure wins, and it wins FIRST — over "occupied", and over "unknown"
+  // too. It is asserted by an authority rather than observed by the drone, so
+  // unlike a verdict it does not go stale when the survey does: it ends when
+  // its own validity window ends. Checking it after the freshness test would
+  // hide a live closure behind an expired observation.
+  if (p.closed) return "closed";
   if (p.occupied === null || p.updated_at === null) return "unknown";
   if (now - new Date(p.updated_at).getTime() > freshnessMs) return "unknown";
   return p.occupied ? "occupied" : "free";

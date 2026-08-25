@@ -18,6 +18,37 @@ from ..config import OCCUPANCY_WINDOW_S
 # rewrite the whole table on every tick and lose the last reading for good.
 _FRESH = "s.updated_at > now() - make_interval(secs => %(window_s)s)"
 
+# A street closure is an EXTERNAL authoritative fact that overrides what the
+# camera saw (TODO #13, migration 0012): roadworks, a market, an accident. An
+# empty bay on a closed street is not available parking, however clearly the
+# detector saw that it was empty.
+#
+# Derived at read time and expressed as one shared fragment for the same reason
+# _FRESH is: the four read paths below must not be able to disagree about what
+# "closed" means, and nothing is written into bay_state - the observations stay
+# exactly as the camera recorded them, and only the published answer moves. That
+# is what lets a closure be lifted without re-flying the street.
+#
+# NULL bound = open: no valid_from means already in force, no valid_to means no
+# known end date.
+_CLOSED = """EXISTS (SELECT 1 FROM street_closure c
+                      WHERE ST_Intersects(c.geom, b.centroid)
+                        AND (c.valid_from IS NULL OR c.valid_from <= now())
+                        AND (c.valid_to   IS NULL OR c.valid_to   >  now()))"""
+
+# The reason to show in the popup, when there is more than one overlapping
+# closure the earliest-starting one wins so the answer is stable.
+_CLOSURE_INFO = """(SELECT json_build_object('closure_id', c.closure_id,
+                                             'label', c.label,
+                                             'reason', c.reason,
+                                             'valid_to', c.valid_to)
+                      FROM street_closure c
+                     WHERE ST_Intersects(c.geom, b.centroid)
+                       AND (c.valid_from IS NULL OR c.valid_from <= now())
+                       AND (c.valid_to   IS NULL OR c.valid_to   >  now())
+                     ORDER BY c.valid_from NULLS FIRST, c.closure_id
+                     LIMIT 1)"""
+
 
 def _asjson(v):
     """Coerce a PostGIS json column to a Python object (parse if it came as text)."""
@@ -51,7 +82,13 @@ def feature_collection(conn, bbox=None, zona=None):
                       -- freshness like `occupied` is: naming a backend beside a
                       -- verdict that has already expired would attribute a claim
                       -- nothing is currently making.
-                      'backend', CASE WHEN {_FRESH} THEN s.backend END
+                      'backend', CASE WHEN {_FRESH} THEN s.backend END,
+                      -- Street closure (0012). NOT gated on freshness: a
+                      -- closure is asserted by an authority, not observed by
+                      -- the drone, so it does not go stale when the flight does
+                      -- - it ends when its own validity window ends.
+                      'closed', {_CLOSED},
+                      'closure', {_CLOSURE_INFO}
                     )
                   ) AS feat
              FROM bay b
@@ -73,9 +110,18 @@ def summary(conn):
     with conn.cursor() as cur:
         cur.execute(
             f"""SELECT b.zona,
-                      COUNT(*) FILTER (WHERE {_FRESH} AND s.occupied IS FALSE) AS free,
-                      COUNT(*) FILTER (WHERE {_FRESH} AND s.occupied IS TRUE)  AS occupied,
-                      COUNT(*) FILTER (WHERE NOT ({_FRESH}) OR s.occupied IS NULL) AS unknown
+                      COUNT(*) FILTER (WHERE NOT {_CLOSED} AND {_FRESH}
+                                             AND s.occupied IS FALSE) AS free,
+                      COUNT(*) FILTER (WHERE NOT {_CLOSED} AND {_FRESH}
+                                             AND s.occupied IS TRUE)  AS occupied,
+                      COUNT(*) FILTER (WHERE NOT {_CLOSED}
+                                             AND (NOT ({_FRESH}) OR s.occupied IS NULL))
+                                                                      AS unknown,
+                      -- A closed bay is its own count, taken out of the other
+                      -- three: folding it into `unknown` would say the survey
+                      -- failed to see it, and into `free` would advertise
+                      -- parking that does not exist.
+                      COUNT(*) FILTER (WHERE {_CLOSED})               AS closed
                  FROM bay b LEFT JOIN bay_state s USING (bay_id)
                 GROUP BY b.zona
                 ORDER BY b.zona""",
@@ -83,9 +129,66 @@ def summary(conn):
         )
         rows = cur.fetchall()
     return [
-        {"zona": z, "free": int(free), "occupied": int(occ), "unknown": int(unk)}
-        for (z, free, occ, unk) in rows
+        {"zona": z, "free": int(free), "occupied": int(occ), "unknown": int(unk),
+         "closed": int(cl)}
+        for (z, free, occ, unk, cl) in rows
     ]
+
+
+def closures(conn, bbox=None, active_only=True):
+    """Street closures as a GeoJSON FeatureCollection (migration 0012).
+
+    Unlike the no-fly zones this is NOT static reference data parsed from a file
+    - a closure is created and lifted while the system runs, and the bay read
+    paths join against it - so it lives in Postgres and is queried per request.
+    """
+    env = (
+        "ST_MakeEnvelope(%(minLon)s, %(minLat)s, %(maxLon)s, %(maxLat)s, 4326)"
+        if bbox
+        else "NULL"
+    )
+    active = """AND (c.valid_from IS NULL OR c.valid_from <= now())
+                AND (c.valid_to   IS NULL OR c.valid_to   >  now())""" if active_only else ""
+    sql = f"""SELECT json_build_object(
+                'type', 'FeatureCollection',
+                'features', COALESCE(json_agg(feat), '[]'::json)
+              ) AS fc
+         FROM (
+           SELECT json_build_object(
+                    'type', 'Feature',
+                    'geometry', ST_AsGeoJSON(c.geom)::json,
+                    'properties', json_build_object(
+                      'closure_id', c.closure_id, 'label', c.label,
+                      'reason', c.reason, 'source', c.source,
+                      'valid_from', c.valid_from, 'valid_to', c.valid_to,
+                      -- how many bays this closure actually takes off the map:
+                      -- the same ST_Intersects the bay reads use, so the number
+                      -- in the popup cannot disagree with the map
+                      'bays', (SELECT COUNT(*) FROM bay b
+                                WHERE ST_Intersects(c.geom, b.centroid))
+                    )
+                  ) AS feat
+             FROM street_closure c
+            WHERE ({env} IS NULL OR c.geom && {env})
+              {active}
+         ) t"""
+    params = dict(bbox or {})
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        row = cur.fetchone()
+    return _asjson(row[0]) if row and row[0] else {"type": "FeatureCollection", "features": []}
+
+
+def bays_in_closure(conn, closure_id):
+    """Bay ids a closure covers — the set whose published answer just changed."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """SELECT b.bay_id FROM bay b JOIN street_closure c
+                      ON ST_Intersects(c.geom, b.centroid)
+                WHERE c.closure_id = %s""",
+            (closure_id,),
+        )
+        return [r[0] for r in cur.fetchall()]
 
 
 def detail(conn, bay_id, history_limit=20):
@@ -97,7 +200,8 @@ def detail(conn, bay_id, history_limit=20):
                       CASE WHEN {_FRESH} THEN s.occupied END,
                       CASE WHEN {_FRESH} THEN s.confidence END,
                       s.last_frame, s.updated_at, s.source,
-                      CASE WHEN {_FRESH} THEN s.backend END
+                      CASE WHEN {_FRESH} THEN s.backend END,
+                      {_CLOSED}, {_CLOSURE_INFO}
                  FROM bay b LEFT JOIN bay_state s USING (bay_id)
                 WHERE b.bay_id = %(bay_id)s""",
             {"bay_id": bay_id, "window_s": OCCUPANCY_WINDOW_S},
@@ -108,7 +212,7 @@ def detail(conn, bay_id, history_limit=20):
         cols = [
             "bay_id", "zona", "street", "park_txt", "bearing_deg", "public",
             "geometry", "occupied", "confidence", "last_frame", "updated_at", "source",
-            "backend",
+            "backend", "closed", "closure",
         ]
         out = dict(zip(cols, bay))
         out["geometry"] = _asjson(out["geometry"])
@@ -343,18 +447,25 @@ def coverage_counts(conn):
     with conn.cursor() as cur:
         cur.execute(
             f"""SELECT COUNT(*),
-                       COUNT(*) FILTER (WHERE {_FRESH} AND s.occupied IS TRUE),
-                       COUNT(*) FILTER (WHERE {_FRESH} AND s.occupied IS FALSE)
+                       COUNT(*) FILTER (WHERE NOT {_CLOSED} AND {_FRESH}
+                                              AND s.occupied IS TRUE),
+                       COUNT(*) FILTER (WHERE NOT {_CLOSED} AND {_FRESH}
+                                              AND s.occupied IS FALSE),
+                       COUNT(*) FILTER (WHERE {_CLOSED})
                   FROM bay b LEFT JOIN bay_state s USING (bay_id)""",
             {"window_s": OCCUPANCY_WINDOW_S},
         )
-        total, occupied, free = cur.fetchone()
-    total, occupied, free = int(total), int(occupied), int(free)
+        total, occupied, free, closed = cur.fetchone()
+    total, occupied, free, closed = int(total), int(occupied), int(free), int(closed)
     return {
         "bays_total": total,
         "bays_occupied": occupied,
         "bays_free": free,
-        "bays_unknown": total - occupied - free,
+        "bays_closed": closed,
+        # Still derived by subtraction, so it must have every other count taken
+        # out of it - including the closed ones, or a closure would silently
+        # read as "the survey never saw this bay".
+        "bays_unknown": total - occupied - free - closed,
     }
 
 

@@ -81,6 +81,9 @@ export interface CoverageMetrics {
   bays_occupied: number;
   bays_free: number;
   bays_unknown: number;
+  /** Bays under an active street closure (migration 0012). Taken OUT of the
+   *  other three counts server-side, so the four still sum to bays_total. */
+  bays_closed: number;
 }
 
 /** Accuracy is null wherever there is no ground truth — production has none.

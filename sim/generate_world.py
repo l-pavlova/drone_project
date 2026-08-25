@@ -40,7 +40,7 @@ straight through the course and the sensors see nothing.
 NOTE: not run/verified here — needs Webots installed to open. The Mavic2Pro proto
 is pulled via EXTERNPROTO pinned to R2023b; if your Webots differs, change WEBOTS_VER.
 """
-import json, os, math, sys, random, heapq
+import json, os, math, sys, random, heapq, datetime
 
 HERE = os.path.dirname(__file__)
 BAYS = os.path.join(HERE, "..", "data", "block_bays.geojson")
@@ -75,6 +75,19 @@ if "--sun" in sys.argv:
     SUN = tuple(float(v) for v in sys.argv[_i + 1].split(","))
     if len(SUN) != 2:
         sys.exit("--sun takes exactly two numbers: AZ,EL")
+CLOSURES = None                            # --closures [path] - drop closed
+#   streets from the coverage set. OPT-IN like every other world flag, so the
+#   three survey worlds regenerate byte-identical and every accuracy number on
+#   record stays valid. A closure is an EXTERNAL authoritative fact (roadworks,
+#   a market, an accident): the camera can still see the bays perfectly well and
+#   the answer is still "you cannot park here", which is the first thing in this
+#   project that is NOT derived from the camera. See TODO #13.
+if "--closures" in sys.argv:
+    _i = sys.argv.index("--closures")
+    # the path is optional: bare --closures takes the project's own file
+    CLOSURES = (sys.argv[_i + 1] if _i + 1 < len(sys.argv)
+                and not sys.argv[_i + 1].startswith("--")
+                else os.path.join(HERE, "..", "data", "closures.geojson"))
 BAY_SOLIDS = "--bay-solids" in sys.argv    # one Solid per bay pad/line (the old
                                            # path). Off by default: bay paint is
                                            # merged into 2 IndexedFaceSets, which
@@ -385,6 +398,13 @@ def build_route(bays, road_runs):
     road_runs: (osm_name, polyline) in local metres."""
     streets = {}
     for b in bays:
+        # A bay inside an active closure is not a coverage target: whatever the
+        # camera would see there, the answer is already known and negative. The
+        # street's ROAD RUNS stay in the `full` graph below - it is closed to
+        # ground traffic, not to a drone at 30 m, so it must remain available as
+        # a transit/deadhead or the MST fallback starts making straight hops.
+        if b.get("closed"):
+            continue
         streets.setdefault(b["street"], []).append((b["x"], b["y"]))
 
     # coverage targets: the in-window portion of each bay-street's centerline
@@ -1468,6 +1488,51 @@ for i, (px, py, ang, sd) in enumerate(poles):
 if poles:
     print(f"scenery: {len(poles)} light poles   (every {spacing:.0f} m of street)")
 
+# ---------------------------------------------------------------------------
+# --- street closures (--closures). Matched by GEOMETRY, never by street name.
+# The obvious key is the name, and it is the wrong one: bays carry only
+# `mestopoloz` and roads carry OSM `name`, reconciled by norm_street()'s
+# conservative substring test, which already fails on 2 of the 49 streets in the
+# 1 km cut (TODO #9) - and the web tier would need a third copy of that rule, in
+# SQL. A polygon needs no reconciliation, is the same test everywhere, and can
+# cover half a street or a square, which a name never can.
+closures = []
+if CLOSURES:
+    if not os.path.exists(CLOSURES):
+        sys.exit(f"--closures: no such file: {CLOSURES}")
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    def _active(pr):
+        """Is this closure in force at generation time? Missing bound = open."""
+        for key, cmp in (("valid_from", True), ("valid_to", False)):
+            v = pr.get(key)
+            if not v:
+                continue
+            t = datetime.datetime.fromisoformat(v)
+            if t.tzinfo is None:            # naive stamp: read it as local time
+                t = t.astimezone()
+            if (now < t) if cmp else (now >= t):
+                return False
+        return True
+
+    for f in json.load(open(CLOSURES, encoding="utf-8"))["features"]:
+        pr = f["properties"]
+        if f["geometry"]["type"] != "Polygon" or not _active(pr):
+            continue
+        ring = [((lon - lon0) * mlon, (lat - lat0) * mlat)
+                for lon, lat in f["geometry"]["coordinates"][0][:-1]]
+        closures.append({"id": pr.get("id"), "street": pr.get("street"),
+                         "reason": pr.get("reason"), "source": pr.get("source"),
+                         "valid_from": pr.get("valid_from"),
+                         "valid_to": pr.get("valid_to"), "ring": ring})
+
+    for b in bays:
+        b["closed"] = next((c["id"] for c in closures
+                            if point_in_poly((b["x"], b["y"]), c["ring"])), None)
+    n_closed = sum(1 for b in bays if b.get("closed"))
+    print(f"closures: {len(closures)} active, {n_closed} bay(s) closed "
+          f"(of {len(bays)} in window)")
+
 route = build_route(bays, road_runs)
 
 # ---------------------------------------------------------------------------
@@ -1659,8 +1724,32 @@ json.dump(cars, open(os.path.join(WORLDS, f"{NAME}.cars.json"), "w"), indent=0)
 json.dump([[round(x, 2), round(y, 2)] for x, y in route],
           open(os.path.join(WORLDS, ROUTE_FILE), "w"), indent=0)
 
+# The closure sidecar: what was excluded from this world's coverage, and why.
+# A sidecar rather than a field on route.json because route.json is a bare
+# [[x, y], ...] array with no per-waypoint metadata at all, and the controller's
+# loader, its resume path and the 1:1 frame<->waypoint numbering all depend on
+# that shape. `<name>.cars.json` / `<name>.hazards.json` set the precedent.
+# Written ONLY when --closures was passed, so a world generated without the flag
+# is byte-identical down to the set of files on disk.
+if CLOSURES:
+    json.dump({"survey_area": NAME,
+               "source": os.path.basename(CLOSURES),
+               "generated_at": datetime.datetime.now().astimezone().isoformat(),
+               "closures": [{k: c[k] for k in
+                             ("id", "street", "reason", "source",
+                              "valid_from", "valid_to")}
+                            | {"ring": [[round(x, 2), round(y, 2)]
+                                        for x, y in c["ring"]]}
+                            for c in closures],
+               "bays": {str(b["id"]): b["closed"]
+                        for b in bays if b.get("closed")}},
+              open(os.path.join(WORLDS, f"{NAME}.closures.json"), "w"), indent=1)
+
 occ = sum(1 for b in bays if b["occupied"])
-nstreets = len({b["street"] for b in bays})
+# streets the route actually COVERS - a closed street's bays are still in `bays`
+# (they keep their ground truth; they are only excluded from coverage and from
+# scoring), so counting them here would overstate what was flown.
+nstreets = len({b["street"] for b in bays if not b.get("closed")})
 print(f"window: {2*WINDOW:.0f}x{2*WINDOW:.0f} m   bays: {len(bays)}   "
       f"parked cars: {occ}   free public: {sum(1 for b in bays if b['public'] and not b['occupied'])}")
 print(f"route: {len(route)} waypoints along {nstreets} street(s)")

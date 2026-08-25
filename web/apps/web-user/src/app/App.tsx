@@ -113,11 +113,14 @@ export default function App() {
   }, [live]);
 
   const counts = useMemo(() => {
-    const c = { free: 0, occupied: 0, unknown: 0 };
+    // Every BayStatus needs a slot here: the accumulator is indexed by the
+    // status itself, so a missing key increments `undefined` and the tile shows
+    // NaN rather than failing loudly.
+    const c = { free: 0, occupied: 0, unknown: 0, closed: 0 };
     if (fc) for (const f of fc.features) c[statusOf(f.properties)]++;
     return c;
   }, [fc, statusOf]);
-  const surveyTotal = counts.free + counts.occupied + counts.unknown;
+  const surveyTotal = counts.free + counts.occupied + counts.unknown + counts.closed;
 
   const airspaceCounts = useMemo(() => {
     if (!nofly) return null;

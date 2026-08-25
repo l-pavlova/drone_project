@@ -351,6 +351,65 @@ if _cams is not None:
         print(f"  ok  at 30.1 m: {fw:.2f} m wide, {gsd_mm:.2f} mm/px "
               f"(record: 45.0 m, 11.7 mm/px)")
 
+# --- 8. street closures: the generator's rule vs the SQL the server runs -------
+# A closure decides which bays are excluded from the flight (point-in-polygon in
+# sim/generate_world.py) AND which bays the map publishes as closed
+# (ST_Intersects in web_db._CLOSED). Same question, two implementations, two
+# languages - the duplication class this script exists for. They cannot be run
+# against each other without a database, so what is checked here is the property
+# that makes them equivalent: both must test the bay CENTROID against the
+# polygon, and both must treat a missing validity bound as open.
+print()
+print("closures: generator vs server (TODO #13)")
+gen = read(os.path.join(ROOT, "sim", "generate_world.py"))
+webdb = read(os.path.join(ROOT, "web", "apps", "vision-worker",
+                          "parkdrone_vision", "db", "web_db.py"))
+if not webdb:
+    skips.append("closures: web_db.py not found")
+else:
+    checks += 1
+    # the generator tests the bay's projected centre; the server tests
+    # bay.centroid. A bay is a rectangle, so testing its ring or a corner
+    # instead would disagree at the polygon edge.
+    gen_centroid = 'point_in_poly((b["x"], b["y"]), c["ring"])' in gen
+    sql_centroid = "ST_Intersects(c.geom, b.centroid)" in webdb
+    if not (gen_centroid and sql_centroid):
+        failures.append(
+            "closures: the two implementations must both test the bay CENTROID "
+            f"(generator point_in_poly on (x,y): {gen_centroid}; "
+            f"web_db ST_Intersects on b.centroid: {sql_centroid})")
+    else:
+        print("  ok  both match a closure against the bay centroid")
+
+    checks += 1
+    # NULL/absent bound = open, at both ends, in both places.
+    gen_open = 'if not v:' in gen and 'continue' in gen
+    sql_open = ("c.valid_from IS NULL OR c.valid_from <= now()" in webdb
+                and "c.valid_to   IS NULL OR c.valid_to   >  now()" in webdb)
+    if not (gen_open and sql_open):
+        failures.append(
+            "closures: a missing validity bound must mean OPEN in both places "
+            f"(generator skips absent bounds: {gen_open}; "
+            f"web_db NULL-checks both bounds: {sql_open})")
+    else:
+        print("  ok  a missing valid_from/valid_to reads as open in both")
+
+    checks += 1
+    # The source file both consumers read. If the sim reads one file and the
+    # loader another, they can disagree about what is closed without erroring.
+    cl = os.path.join(ROOT, "data", "closures.geojson")
+    loader = read(os.path.join(ROOT, "web", "apps", "vision-worker",
+                               "parkdrone_vision", "closures.py"))
+    if not os.path.exists(cl):
+        skips.append("closures: data/closures.geojson not present")
+        checks -= 1
+    elif "closures.geojson" not in gen or "closures.geojson" not in loader:
+        failures.append("closures: generate_world.py and closures.py must both "
+                        "default to data/closures.geojson")
+    else:
+        n = len(json.load(open(cl, encoding="utf-8"))["features"])
+        print(f"  ok  one source file, two consumers ({n} closure(s) on file)")
+
 # --- report -------------------------------------------------------------------
 print()
 for s in skips:

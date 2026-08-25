@@ -14,8 +14,14 @@ export function CoverageBar({ c }: { c: CoverageMetrics }) {
   const segments = [
     { key: "occupied", label: "Occupied", n: c.bays_occupied },
     { key: "free", label: "Free", n: c.bays_free },
+    // Closed sits between the surveyed pair and the gap, because that is what
+    // it is: the bay's answer IS known, it just did not come from the camera.
+    // Filtered out below when zero so the legend stays quiet on a normal day.
+    { key: "closed", label: "Closed", n: c.bays_closed ?? 0 },
     { key: "unknown", label: "Unsurveyed", n: c.bays_unknown },
-  ] as const;
+  ].filter((s) => s.key !== "closed" || s.n > 0) as readonly {
+    key: string; label: string; n: number;
+  }[];
 
   return (
     <div>

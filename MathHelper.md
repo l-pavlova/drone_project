@@ -115,3 +115,44 @@ y = (lat − lat₀) · 111320
 - **NED** (North-East-Down) is the same idea with axes permuted and z flipped —
   it is what ArduPilot/MAVLink use, so altitudes there are *negative* upwards.
   Watch the sign when crossing between flight logs and the sim.
+
+## Gradient descent & the learning rate
+
+Training moves each weight downhill on the loss surface:
+
+```
+w ← w − lr · ∂L/∂w
+```
+
+The gradient gives only the **direction**; `lr` (the learning rate, the step size)
+gives **how far** to go. The direction is a *local* slope, valid only near the
+current point — so too large a step overshoots the valley and lands higher on the
+far side, and repeating that diverges. Too small a step descends correctly but
+takes forever.
+
+Two things make the step especially delicate when fine-tuning the car detector:
+
+- **We start from good weights, not random ones.** `yolov8s.pt` already knows what
+  a car is; a big step from near the solution destroys that knowledge rather than
+  improving it (catastrophic forgetting).
+- **An epoch is 11 optimizer steps** (22 train images, batch 2). Ultralytics'
+  defaults assume thousands of steps per epoch, where one bad step is averaged away
+  by the next thousand. Here one bad step *is* 1/11 of the epoch.
+
+Measured in `vision/runs/probe1` (`docs/training.md` §3.1): `optimizer="auto"`
+ignores `lr0` and picked `AdamW(lr=0.002)`. The 3-epoch warmup ramps the rate from
+0.0002, so epoch 4 peaks at mAP50 **0.714** — then epoch 5, the first at ~0.001,
+collapses to **0.005** and never beats the peak again. `probe2`/`merged1` fix it
+with an explicit `lr0=0.0005`, a quarter of what auto chose, and climb smoothly.
+
+How each failure looks on the curve:
+
+| symptom | cause |
+|---|---|
+| train loss *rises*, metrics drop to ~0 in one epoch, then crawl back | step too large |
+| everything falls, but far too slowly, no plateau | step too small |
+
+**Warmup** exists for this: start at a fraction of `lr0` and ramp up over the first
+few epochs, so the first (worst-informed) gradients cannot wreck the initial
+weights. **Decay** is the mirror image — shrink the step toward the end so the model
+settles into the minimum instead of bouncing around it.

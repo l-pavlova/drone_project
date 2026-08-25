@@ -102,9 +102,16 @@ export const bayDeltaSchema = z.object({
   // the hub's bounded replay buffer. Optional for older senders.
   cursor: z.string().optional(),
   bay_id: z.string(),
-  occupied: z.boolean(),
-  confidence: z.number(),
-  updated_at: z.string(),
+  // Nullable since a closure delta reports whatever the camera last said, which
+  // may be nothing at all (no state row, or one older than the freshness
+  // window). A vision delta always carries a real verdict.
+  occupied: z.boolean().nullable(),
+  confidence: z.number().nullable(),
+  updated_at: z.string().nullable(),
+  // Street closure (migration 0012): an authoritative override on the published
+  // answer, not an observation. Optional so a delta from a pre-0012 sender - or
+  // a replayed one from before the migration - still validates.
+  closed: z.boolean().optional(),
 });
 export type BayDelta = z.infer<typeof bayDeltaSchema>;
 

@@ -25,6 +25,7 @@ python get_areas.py                        # OSM building footprints + green are
 ### 2. Webots simulation (run from `sim/`)
 ```bash
 python generate_world.py [half_m] [occ_frac]   # default 75 0.5 -> worlds/fmi_block.wbt + worlds/ground_truth.json
+python generate_world.py 75 0.5 fmi_block_closed --closures   # drop closed streets from the route
 ```
 This reads `../data/block_bays.geojson` (plus `block_roads.geojson` and `block_areas.geojson` if present), projects to local metres, and emits the world (ground, OSM streets as Webots `Road` protos, painted bays, real car models — 7 vehicle Simple protos — on a known-occupancy subset, scenery, follow-drone viewpoint) plus `ground_truth.json` (bay_id -> occupied). Car/model randoms come from a separate `random.Random(7)` stream and scenery cosmetics from a third (`random.Random(11)`) so `ground_truth.json` stays stable — after any change here, regenerate all three worlds and check `ground_truth.json`/`route.json` are byte-identical.
 
@@ -73,6 +74,35 @@ pixels, road 50, pad 85) so a local ring reference is bimodal and a frame-wide o
 composition-dependent. **Conclusion: there is no fair form of this heuristic that survives a lighting
 change** — see TODO #6. That is evidence FOR the learned detector, and it says what to train it on:
 varied illumination, which `--sun`/`--shadows` now generates cheaply with exact labels.
+
+**`--closures [path]` — a street that is CLOSED (TODO #13, built 2026-08-25).** Opt-in like every
+other world flag; without it the three survey worlds regenerate byte-identical. A closure is the
+first authoritative fact in this project that is **not derived from the camera** — roadworks, a
+market, an accident — and it overrides the answer: an empty bay on a closed street is not available
+parking, however clearly the detector saw that it was empty.
+**Matched by GEOMETRY, never by street name.** The obvious key is the name and it is the wrong one:
+bays carry only `mestopoloz`, roads carry OSM `name`, and `norm_street()`'s substring reconciliation
+already fails on 2 of the 49 streets in the 1 km cut (TODO #9) — and the web tier would need a third
+copy of that rule, in SQL. A polygon needs no reconciliation, is the same test in the generator
+(`point_in_poly` on the bay centre) and in the server (`ST_Intersects` on `bay.centroid`), and can
+cover half a street or a square. `tools/check_consistency.py` asserts the two agree (checks 8a–c).
+`data/closures.geojson` is **one source file with two consumers** — this flag and
+`python -m parkdrone_vision.closures load` — so the sim and the map cannot disagree about what is
+closed, which is the exact failure the feature exists to prevent.
+Closed bays are dropped from the coverage set but their **road runs stay in the `full` graph**: the
+street is closed to *ground traffic*, not to a drone at 30 m, so it must remain available as a
+transit/deadhead or the MST fallback starts making straight hops. Closed bays keep their
+`ground_truth.json` entry and their RNG draw — nothing about car placement moves — so a closure
+world's `ground_truth.json` is exactly the same file it would otherwise be. Output is a sidecar,
+`worlds/<name>.closures.json` (active closures + the `bay_id -> closure_id` map), written only when
+the flag is passed; a sidecar rather than a field on `route.json` because that file is a bare
+`[[x, y], ...]` array and the controller's loader, its resume path and the 1:1 frame↔waypoint
+numbering all depend on that shape.
+**The controller is deliberately untouched.** A skipped street's waypoints never enter `route.json`,
+so there is nothing for it to skip; and `coverage.json` means *flight-time* unreachability (a
+waypoint inside an obstacle disc), so folding a plan-time exclusion into `unreachable` would destroy
+the distinction the scorer prints it to preserve. Measured on `fmi_block`'s window: 34 → **20
+waypoints**, 2 → 1 covered streets, deadhead still 0 m.
 
 **Scenery** (from `block_areas.geojson`): OSM green areas triangulated by ear clipping and painted at **z = 0.005** — above the ground, *below* the roads (0.01+), so they can never cover a bay pad (0.04–0.06); OSM building footprints as `SimpleBuilding` protos at real heights (`building:levels`, else `height`, else 4 floors), kept/dropped **whole** by centroid (clipping a footprint can break the proto's roof triangulation) while greens are Sutherland-Hodgman **clipped**; `StreetLight` poles walked along the centerlines at adaptive spacing, `on FALSE` (the proto ships a 1000 m-radius SpotLight that would shift the daylight the classifier is calibrated against) and never placed on a bay. Buildings and light poles get **no bounding object** unless you pass `--collide` — the controller flies a fixed 30 m with zero obstacle logic, so collision geometry would crash it; Webots range sensors only see nodes that have one, so that flag is the obstacle-avoidance stage's entry point. Either way the generator warns about structures reaching 30 m within 10 m of the route and writes them to `worlds/<name>.hazards.json`. `--chase` swaps the GUI viewpoint from the trailing "Tracking Shot" to a ride-along "Mounted Shot" (viewing only — it never touches the drone's own camera or any captured frame); it is a flag rather than a hand edit because hand edits to a `.wbt` are silently lost on the next regeneration. `DirectionalLight` has `castShadows FALSE` — shadow mapping paints streak artifacts on the road/ground in the nadir frames. Then run the world (see "Running Webots" below). The route (`worlds/route.json`) is an open-path rural-postman walk of the OSM street centerlines of every street that has bays: disconnected coverage components are joined by shortest road transits (MST), odd-degree nodes are evened out with a minimum-weight matching (exact blossom if `networkx` is installed, stdlib fallback otherwise; two virtual endpoints make it an open path whose start is the endpoint nearest the origin), then a Hierholzer Euler walk flies every coverage edge once with deadheads only along the matched repeats — waypoints every 10 m because the camera footprint at 30 m is only ~25×15 m. The controller `controllers/parkdrone/parkdrone.py` takes off to 30 m, flies that route (square-lawnmower fallback if route.json is missing), and writes `output/<survey_area>/frame_###.png` + `output/<survey_area>/poses.json` at each waypoint (plus timed diagnostic `snap_###.png`). Worlds are per-scale file sets: `generate_world.py [half_m] [occ_frac] [name]` writes `<name>.wbt` + `<name>.route.json` + `<name>.ground_truth.json` (default name `fmi_block` keeps legacy `route.json`/`ground_truth.json`); the `.wbt` passes its route file to the controller via `controllerArgs`, which also keys the output subfolder. E.g. the 1 km world: `python generate_world.py 500 0.5 fmi_block_1km`. The local-metre frame is pinned by `ORIGIN` in `generate_world.py` — do NOT let it drift when re-cutting data at other sizes.
 
@@ -340,6 +370,14 @@ python vision/train_detector.py --epochs 80 --imgsz 1024  # fine-tune probe
   did. `projection_selftest.py` round-trips **every bay corner of both fixtures** — 49,188 of them,
   worst error 0.000000 mm. Note what it does *not* prove: both functions share `camera_axes()`, so an
   error in the axes cancels — `paint_align.py` is what tests the axes against the world.
+- **Closed bays are EXCLUDED from the score, not counted as free.** `score_occupancy.py` reads
+  `worlds/<area>.closures.json` beside `coverage.json` and takes those bays out of the confusion
+  matrix entirely — neither TP/TN/FP/FN nor `uncovered` — because "is a car parked here" is not the
+  question being asked of them. Counting a closed-and-empty bay as a correct FREE call would inflate
+  accuracy with bays the product deliberately hides. Measured on `fmi_block` with the example
+  closure: 42 → 38 classified, 4 excluded, and the golden run with no closure file is unchanged at
+  **42/42, 100%**. (This file now also does `sys.stdout.reconfigure(encoding="utf-8")` — it prints
+  a Bulgarian street name for the first time, and Git Bash defaults to cp1252, which raises.)
 - **`<name>.cars.json`** — the generator now writes every parked car (bay, model, body centre,
   angle, L, W) beside `ground_truth.json`. Sidecar only: the `.wbt`, `ground_truth.json` and
   `route.json` regenerate **byte-identical** (verified on both survey worlds).
@@ -800,6 +838,37 @@ What is worth knowing from here:
   picked up after a restart (or by another replica) would be re-projected as if the camera were
   nadir and could classify differently from the same frame processed live. Nullable: pre-0008 rows and any drone that reports no gimbal fall back
   to nadir, exactly as they did before.
+- **A street CLOSURE overrides the camera at READ time; `bay_state` is never touched** (migration
+  `0012`, 2026-08-25, TODO #13). `street_closure` is a polygon + a real `[valid_from, valid_to)`
+  window (NULL = open at that end), and `web_db._CLOSED` is a second shared SQL fragment applied
+  beside `_FRESH` at all four read paths (`feature_collection`, `summary`, `detail`,
+  `coverage_counts`), emitting `closed` + a `closure` info object. Read-time derivation is the
+  pattern this codebase already chose for freshness, and for the same reason.
+  **`process_frame`, `insert_observations` and `_RECOMPUTE_SQL` are deliberately unchanged**:
+  frames over a closed street are still classified and still write `observation` rows. The closure
+  overrides the published *answer*, not the *record* — which is what keeps it falsifiable and what
+  lets a closure be lifted without re-flying the street. *Verified with teeth: 143 observation rows
+  on the affected bays before, 143 after.* A third state was NOT put in `bay_state`: `occupied` is
+  `NOT NULL` and `source` carries a CHECK, and writing "closed" there would assert into the camera's
+  own record a fact the camera never observed.
+  **It is NOT gated on freshness**, unlike `occupied`/`backend`: a closure is asserted by an
+  authority rather than observed by a drone, so it does not go stale when the flight does — it ends
+  when its own validity window ends. `bayStatus()` on the client therefore checks `closed` *first*,
+  before the freshness test, or a live closure would hide behind an expired observation.
+  Counts: `summary` and `coverage_counts` give `closed` its own bucket taken out of the other three
+  (`bays_unknown` is still derived by subtraction, so it has to be), because folding it into
+  `unknown` would say the survey failed to see the bay and into `free` would advertise parking that
+  does not exist. Manage them with
+  `python -m parkdrone_vision.closures load|list|end|rm` — `load` reads the same
+  `data/closures.geojson` the generator does and publishes a `bay_delta` per affected bay, so the
+  map repaints live on every replica through the existing channel. `GET /api/v1/closures[?all=true]`
+  serves them as GeoJSON.
+  **Known limit, by design:** a closure expiring on its *own clock* pushes no delta — nothing runs
+  at that instant to notice — so such a bay corrects itself on the client's next fetch or reconnect.
+  Same already-accepted limitation as a `bay_state` row crossing `OCCUPANCY_WINDOW_S`.
+  *Verified 2026-08-25:* summary 25/24/0 → 24/20/5 → back on lifting (reversible, idempotent), 5
+  live WS deltas carrying `closed`, golden replay **42/42**, full-stack ingest **49 deltas, 42/42**
+  — i.e. the override is completely inert when no closure is loaded.
 - **Bay ids: int in `block_bays.geojson`, string everywhere in the web tier**.
 - **Frame ingest is idempotent per MISSION, not per survey area** (migration `0009`, 2026-08-21):
   the unique key is `(drone_id, COALESCE(mission_id, 'area:'||survey_area), frame_idx)`. It used to

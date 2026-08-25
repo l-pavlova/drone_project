@@ -24,6 +24,12 @@ import json, math, os, sys, collections, functools
 import numpy as np
 from PIL import Image, ImageDraw
 
+# Street names in this project are Bulgarian, and a closure reports the street
+# it closed. Git Bash / cmd default to cp1252 here, which cannot encode Cyrillic
+# and raises on print - the same reason every script in tools/ does this.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..")
 
@@ -33,6 +39,8 @@ GT_FILE = os.path.join(ROOT, "sim", "worlds",
                        "ground_truth.json" if SURVEY_AREA == "fmi_block"
                        else f"{SURVEY_AREA}.ground_truth.json")
 BAYS = os.path.join(ROOT, "data", "block_bays.geojson")
+# Written by generate_world.py only when --closures was passed (TODO #13).
+CLOSURES_FILE = os.path.join(ROOT, "sim", "worlds", f"{SURVEY_AREA}.closures.json")
 
 # camera intrinsics of the Mavic2Pro proto camera (see parkdrone.py startup log)
 IMG_W, IMG_H = 400, 240
@@ -408,6 +416,26 @@ def main():
                             "views": len(votes), "votes_occupied": n_occ,
                             "center_off_px": round(off, 1), **feat}
 
+    # ---- street closures: an external fact that OVERRIDES what the camera saw
+    # (TODO #13). A bay inside an active closure is excluded from the metrics
+    # entirely - neither correct nor wrong - because "is a car parked here" is
+    # not the question being asked of it: the answer is "you cannot park here"
+    # whatever the pixels say. Excluding rather than scoring is the honest
+    # choice; counting a closed-and-empty bay as a correct FREE call would
+    # inflate the accuracy number with bays the product deliberately hides.
+    # The observations are still made and still reported - only the score drops
+    # them, exactly as the web tier keeps the observation rows and overrides
+    # only the published answer.
+    closed = {}
+    try:
+        cl = json.load(open(CLOSURES_FILE, encoding="utf-8"))
+        closed = {k: v for k, v in cl.get("bays", {}).items() if k in results}
+        reasons = {c["id"]: c for c in cl.get("closures", [])}
+    except (OSError, ValueError):
+        reasons = {}
+    for k in closed:
+        results.pop(k)
+
     # ---- metrics
     tp = sum(1 for r in results.values() if r["pred"] and r["gt"])
     tn = sum(1 for r in results.values() if not r["pred"] and not r["gt"])
@@ -415,6 +443,14 @@ def main():
     fn = sum(1 for r in results.values() if not r["pred"] and r["gt"])
     n = len(results)
     print(f"survey area {SURVEY_AREA}: {len(bays)} bays, {n} classified, {len(uncovered)} uncovered")
+    if closed:
+        by_c = collections.Counter(closed.values())
+        detail = ", ".join(
+            f"{cid} ({reasons.get(cid, {}).get('street') or '?'}: "
+            f"{reasons.get(cid, {}).get('reason') or 'no reason given'}) x{k}"
+            for cid, k in sorted(by_c.items()))
+        print(f"  closed: {len(closed)} bay(s) on a closed street, EXCLUDED from "
+              f"the score - {detail}")
     # An uncovered bay has two very different causes, and the flight is the only
     # thing that knows which: a bad pass (fixable - TODO #7) or an obstacle the
     # patrol could neither reach nor shoot past (a DECLARED gap, and a legitimate
@@ -443,8 +479,10 @@ def main():
                   f"bright={r['core_brightness']:.0f} std={r['core_std']:.0f} "
                   f"vis={r['vis']} frame={r['frame']} off={r['center_off_px']}px")
 
-    json.dump({"survey_area": SURVEY_AREA, "results": results, "uncovered": uncovered},
-              open(os.path.join(OUT, "occupancy_results.json"), "w"), indent=1)
+    out = {"survey_area": SURVEY_AREA, "results": results, "uncovered": uncovered}
+    if closed:                    # absent, not empty, when there are no closures:
+        out["closed"] = closed    # a world with no --closures is unchanged on disk
+    json.dump(out, open(os.path.join(OUT, "occupancy_results.json"), "w"), indent=1)
 
     # ---- debug overlays: frames containing errors (or first 3 if none)
     dbg_dir = os.path.join(OUT, "debug")

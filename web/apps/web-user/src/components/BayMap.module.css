@@ -17,6 +17,16 @@
 .badge.free { background: var(--zelena); }
 .badge.occupied { background: var(--signal); }
 .badge.unknown { background: var(--muted); }
+/* Hazard amber: a closure is neither a verdict nor a gap in the survey, so it
+   gets a colour that is none of the other three. Dark text — amber is too light
+   to carry white at this size. Must match COLOR.closed in BayMap.tsx. */
+.badge.closed { background: #F0A020; color: #241a05; }
+
+.closureNote {
+  margin: 4px 0 6px; padding: 5px 7px; font-size: 11px; line-height: 1.35;
+  border-left: 3px solid #F0A020; background: rgba(240, 160, 32, 0.12);
+  border-radius: 0 3px 3px 0;
+}
 
 /* Google-Maps hand-off from a free bay's popup */
 .dirLink {

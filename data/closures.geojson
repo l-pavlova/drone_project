@@ -1,0 +1,56 @@
+{
+  "type": "FeatureCollection",
+  "_note": "Street closures: an EXTERNAL authoritative fact that overrides what the camera saw. A bay inside an active closure is not available parking, however empty it looks from 30 m. Matched by GEOMETRY, never by street name - `street` here is a human label only. See TODO #13.",
+  "_schema": {
+    "id": "stable string id; the closure's key in the DB and in the sidecar",
+    "street": "display label for humans (Cyrillic, as in the bay data's mestopoloz)",
+    "reason": "why it is closed - shown in the map popup",
+    "valid_from": "ISO 8601, null = already in force",
+    "valid_to": "ISO 8601, null = open-ended (no known end date)",
+    "source": "who says so - the authority this was taken from"
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "svetagora-2026-08",
+        "street": "ул. Света гора",
+        "reason": "Водопроводен ремонт (water main works)",
+        "valid_from": "2026-08-24T06:00:00+03:00",
+        "valid_to": null,
+        "source": "example - hand-authored"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [23.32968, 42.675020],
+          [23.33004, 42.675020],
+          [23.33004, 42.675430],
+          [23.32968, 42.675430],
+          [23.32968, 42.675020]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "baucher-expired-example",
+        "street": "бул. Джеймс Баучер",
+        "reason": "Културно събитие (street festival) - ENDED, kept as a validity-window example",
+        "valid_from": "2026-07-01T08:00:00+03:00",
+        "valid_to": "2026-07-02T22:00:00+03:00",
+        "source": "example - hand-authored"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [23.32930, 42.674560],
+          [23.32990, 42.674560],
+          [23.32990, 42.674780],
+          [23.32930, 42.674780],
+          [23.32930, 42.674560]
+        ]]
+      }
+    }
+  ]
+}

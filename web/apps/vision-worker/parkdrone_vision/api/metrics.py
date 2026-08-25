@@ -120,6 +120,7 @@ _SERIES = [
     ("parkdrone_bays_occupied", "gauge", "Bays currently occupied (fresh state)", ("coverage", "bays_occupied")),
     ("parkdrone_bays_free", "gauge", "Bays currently free (fresh state)", ("coverage", "bays_free")),
     ("parkdrone_bays_unknown", "gauge", "Bays with no fresh state", ("coverage", "bays_unknown")),
+    ("parkdrone_bays_closed", "gauge", "Bays under an active street closure", ("coverage", "bays_closed")),
     # Absent, not zero, where there is no ground truth to score against.
     ("parkdrone_model_state_accuracy", "gauge", "Voted bay state vs ground truth, 0-1", ("model", "state_accuracy")),
     ("parkdrone_model_view_accuracy", "gauge", "Single-view classifications vs ground truth, 0-1", ("model", "view_accuracy")),

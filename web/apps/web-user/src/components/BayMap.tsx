@@ -92,12 +92,26 @@ const COLOR: Record<BayStatus, string> = {
   free: "#35C46E", // zelena — Sofia green zone
   occupied: "#FF5C3E", // signal vermilion
   unknown: "#9AA6AE", // muted / unsurveyed
+  // Amber, and deliberately none of the other three: a closure is not a verdict
+  // the drone reached, so reading as either red or green would be a category
+  // error, and grey would say "we did not see it" when in fact we know exactly
+  // what is going on. Hazard amber is the road-works idiom drivers already read.
+  closed: "#F0A020",
 };
 const TELEMETRY = "#14B8A6"; // drone/user accent
 
 function mergeLive(p: BayProps, live?: LiveState): BayProps {
   if (!live) return p;
-  return { ...p, occupied: live.occupied, confidence: live.confidence, updated_at: live.updated_at };
+  return {
+    ...p,
+    occupied: live.occupied,
+    confidence: live.confidence,
+    updated_at: live.updated_at,
+    // A closure delta carries `closed`; a vision delta does not, and must not
+    // be read as "not closed" — undefined means "unchanged", so fall back to
+    // what the last fetch said rather than clobbering it.
+    closed: live.closed ?? p.closed,
+  };
 }
 
 export function BayMap({
@@ -298,6 +312,18 @@ function BayPopup({
     <div className={styles.popup}>
       <strong>Bay {props.bay_id}</strong>
       <div className={`${styles.badge} ${styles[status]}`}>{status.toUpperCase()}</div>
+      {/* The closure is stated FIRST and in its own block, not as one more row
+          in the list: it is the reason the badge says CLOSED, and it overrides
+          everything below it. The occupancy rows are deliberately still shown —
+          the camera's reading is not hidden, it is simply not the answer. */}
+      {status === "closed" && (
+        <p className={styles.closureNote}>
+          {props.closure?.reason ?? "Street closed"}
+          {props.closure?.valid_to
+            ? ` · until ${new Date(props.closure.valid_to).toLocaleString()}`
+            : " · no end date given"}
+        </p>
+      )}
       <dl>
         <dt>Street</dt><dd>{props.street ?? "—"}</dd>
         <dt>Zone</dt><dd>{props.zona ?? "—"}</dd>

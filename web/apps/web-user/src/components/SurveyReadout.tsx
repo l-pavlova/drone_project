@@ -16,7 +16,7 @@ export function SurveyReadout({
 }: {
   connected: boolean;
   zones: ZoneSummary[];
-  counts: { free: number; occupied: number; unknown: number };
+  counts: { free: number; occupied: number; unknown: number; closed: number };
   surveyTotal: number;
   /** Published UAS airspace overlay: how many zones are in view, and the
    *  on/off switch. Absent while the zone file is still loading. */
@@ -54,10 +54,17 @@ export function SurveyReadout({
         <div
           className={styles.meter}
           role="img"
-          aria-label={`${counts.free} free, ${counts.occupied} occupied`}
+          aria-label={`${counts.free} free, ${counts.occupied} occupied${
+            counts.closed ? `, ${counts.closed} on a closed street` : ""
+          }`}
         >
           <span className={`${styles.seg} ${styles.free}`} style={{ flexGrow: counts.free || 0.001 }} />
           <span className={`${styles.seg} ${styles.occ}`} style={{ flexGrow: counts.occupied || 0.001 }} />
+          {/* Only shown when there IS a closure: an always-present empty
+              segment would imply the map tracks something it usually does not. */}
+          {counts.closed > 0 && (
+            <span className={`${styles.seg} ${styles.closedSeg}`} style={{ flexGrow: counts.closed }} />
+          )}
         </div>
         <div className={styles.meterLegend}>
           <span>
@@ -66,10 +73,18 @@ export function SurveyReadout({
           <span>
             <b>{counts.occupied}</b> occupied
           </span>
+          {counts.closed > 0 && (
+            <span>
+              <b>{counts.closed}</b> closed
+            </span>
+          )}
         </div>
 
+        {/* Closed bays count as COVERED — the survey's job is done for them, the
+            answer just came from an authority instead of the camera. Leaving
+            them out would report a coverage gap that does not exist. */}
         <div className={styles.coverage}>
-          COVERAGE <b>{counts.free + counts.occupied}</b> / {surveyTotal} BAYS
+          COVERAGE <b>{counts.free + counts.occupied + counts.closed}</b> / {surveyTotal} BAYS
         </div>
 
         {airspace && (
