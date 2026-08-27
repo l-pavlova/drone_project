@@ -13,6 +13,7 @@ export function SurveyReadout({
   counts,
   surveyTotal,
   airspace,
+  kerbs,
 }: {
   connected: boolean;
   zones: ZoneSummary[];
@@ -21,6 +22,10 @@ export function SurveyReadout({
   /** Published UAS airspace overlay: how many zones are in view, and the
    *  on/off switch. Absent while the zone file is still loading. */
   airspace: { noFly: number; restricted: number; on: boolean; toggle: () => void } | null;
+  /** Curb-run layer: free spaces counted along kerbs, and its switch. Null
+   *  until the first poll lands, or if the endpoint is unavailable — the map is
+   *  fully usable without it and the row simply stays hidden. */
+  kerbs: { free: number; cars: number; on: boolean; toggle: () => void } | null;
 }) {
   const [open, setOpen] = useState(true);
 
@@ -86,6 +91,21 @@ export function SurveyReadout({
         <div className={styles.coverage}>
           COVERAGE <b>{counts.free + counts.occupied + counts.closed}</b> / {surveyTotal} BAYS
         </div>
+
+        {kerbs && (
+          <button
+            className={`${styles.airspace} ${kerbs.on ? styles.airspaceOn : ""}`}
+            aria-pressed={kerbs.on}
+            onClick={kerbs.toggle}
+            title="Free spaces counted along each kerb (curb-run layer)"
+          >
+            <i className={`${styles.swatch} ${styles.kerb}`} />
+            <span>
+              KERBS <b>{kerbs.free}</b> FREE · {kerbs.cars} CARS
+            </span>
+            <span className={styles.airspaceState}>{kerbs.on ? "ON" : "OFF"}</span>
+          </button>
+        )}
 
         {airspace && (
           <button

@@ -78,6 +78,11 @@ def snapshot(conn, window_s: int = DEFAULT_WINDOW_S, hub=None) -> dict:
         "latency": web_db.classify_latency(conn, window_s),
         "fleet": web_db.fleet_health(conn, window_s),
         "coverage": web_db.coverage_counts(conn),
+        # Cars seen and attributed to no bay (0013). It sits beside coverage
+        # rather than inside it because it measures the opposite gap: coverage
+        # counts bays the survey did not see, this counts cars the survey saw
+        # and had nowhere to put.
+        "unassigned": web_db.unassigned_counts(conn, window_s),
         "model": web_db.model_accuracy(conn),
         "config": {
             "occupancy_window_s": OCCUPANCY_WINDOW_S,
@@ -121,6 +126,9 @@ _SERIES = [
     ("parkdrone_bays_free", "gauge", "Bays currently free (fresh state)", ("coverage", "bays_free")),
     ("parkdrone_bays_unknown", "gauge", "Bays with no fresh state", ("coverage", "bays_unknown")),
     ("parkdrone_bays_closed", "gauge", "Bays under an active street closure", ("coverage", "bays_closed")),
+    ("parkdrone_unassigned_detections", "gauge", "Detections in the window that matched no bay", ("unassigned", "unassigned")),
+    ("parkdrone_unassigned_near", "gauge", "Of those, within 2x the assignment radius of a bay", ("unassigned", "unassigned_near")),
+    ("parkdrone_unassigned_per_frame", "gauge", "Unattributed detections per measured frame", ("unassigned", "unassigned_per_frame")),
     # Absent, not zero, where there is no ground truth to score against.
     ("parkdrone_model_state_accuracy", "gauge", "Voted bay state vs ground truth, 0-1", ("model", "state_accuracy")),
     ("parkdrone_model_view_accuracy", "gauge", "Single-view classifications vs ground truth, 0-1", ("model", "view_accuracy")),

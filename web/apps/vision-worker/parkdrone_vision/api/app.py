@@ -39,7 +39,7 @@ from ..config import (
     CLEANUP_INTERVAL_S,
     ENABLE_DEV_ROUTES,
 )
-from ..db import vision_db, web_db
+from ..db import run_db, vision_db, web_db
 from ..db.pool import borrow, close_pool, init_pool
 from ..processing import deltas, jobs, pipeline
 from ..vision.scoring import pose_idx
@@ -243,6 +243,28 @@ def get_bay(bay_id: str):
     if d is None:
         raise HTTPException(status_code=404, detail="bay not found")
     return d
+
+
+@app.get("/api/v1/runs")
+def get_runs(bbox: str | None = None):
+    """Curb runs as GeoJSON LineStrings with their occupancy (migration 0014).
+
+    Served BESIDE /api/v1/bays, never instead of it. The per-bay answer stays the
+    one the simulator and every golden fixture are scored on; this one is what
+    real footage actually supports -- on flight 0035 the per-bay rule finds 9 of
+    29 hand-counted cars while the run layer recovers significantly more.
+
+    `cars`/`free` are null where the state is older than OCCUPANCY_WINDOW_S, the
+    same read-time freshness gate `occupied` gets.
+    """
+    with borrow() as conn:
+        return run_db.feature_collection(conn, _bbox(bbox))
+
+
+@app.get("/api/v1/runs/summary")
+def get_runs_summary(world: str | None = None):
+    with borrow() as conn:
+        return run_db.summary(conn, world)
 
 
 @app.get("/api/v1/closures")

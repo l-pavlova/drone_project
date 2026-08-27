@@ -97,6 +97,12 @@ def main():
                     help="trial ENU correction DX,DY in metres, to test a "
                          "candidate GPS bias by eye before committing it")
     ap.add_argument("--cam", default="dji")
+    ap.add_argument("--corrections", help="bay_corrections sidecar (align_bays.py or "
+                                          "import_annotations.py); draws the CORRECTED "
+                                          "geometry instead of Sofiaplan's")
+    ap.add_argument("--extra", help="a GeoJSON of additional bays to draw in CYAN -- "
+                                    "e.g. bay_outlines_new.geojson, the bays drawn by "
+                                    "hand that Sofiaplan does not map")
     a = ap.parse_args()
 
     cam = cameras.get(a.cam)
@@ -107,6 +113,25 @@ def main():
     poses = json.load(open(os.path.join(a.stills, "poses.json"),
                            encoding="utf-8"))
     bays = so.load_all_bays()
+    if a.corrections:
+        import bay_corrections
+        corr = bay_corrections.load(a.corrections)
+        print(bay_corrections.summary(corr))
+        bays = bay_corrections.apply_to(bays, corr)
+        # Only the corrected bays are interesting here; the other ~1,600 are
+        # Sofiaplan's untouched geometry and would bury the thing being checked.
+        bays = [b for b in bays if str(b["id"]) in corr]
+    extra = []
+    if a.extra:
+        import json as _json
+        for ft in _json.load(open(a.extra, encoding="utf-8"))["features"]:
+            ring = [so.to_enu(c[0], c[1])
+                    for c in ft["geometry"]["coordinates"][0][:-1]]
+            extra.append({"id": ft["properties"].get("id", "?"), "ring": ring,
+                          "cx": sum(p[0] for p in ring) / len(ring),
+                          "cy": sum(p[1] for p in ring) / len(ring)})
+        print(f"{len(extra)} extra bays from {a.extra}")
+        bays = bays + extra
     print(f"{len(bays)} bays, {len(poses)} poses, {cam!r}"
           + (f", trial shift {shift}" if any(shift) else ""))
 

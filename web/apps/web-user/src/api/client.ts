@@ -1,4 +1,4 @@
-import type { BayFC, NoFlyFC, RouteResult, ZoneSummary } from "../lib/types";
+import type { BayFC, NoFlyFC, RouteResult, ZoneSummary, CurbRunFC } from "../lib/types";
 
 export async function fetchBays(bbox?: string, zona?: string): Promise<BayFC> {
   const q = new URLSearchParams();
@@ -51,5 +51,20 @@ export async function fetchNoFly(bbox?: string): Promise<NoFlyFC> {
   if (bbox) q.set("bbox", bbox);
   const res = await fetch(`/api/v1/nofly?${q.toString()}`);
   if (!res.ok) throw new Error(`GET /nofly -> ${res.status}`);
+  return res.json();
+}
+
+/** Curb runs with their current free-space count (migration 0014).
+ *
+ *  Polled rather than pushed: the WebSocket delta channel carries bay_id
+ *  payloads, and widening it to runs would mean a second delta table plus a
+ *  listener change for a layer that changes at survey speed. A short poll is the
+ *  smaller correct thing here.
+ */
+export async function fetchCurbRuns(bbox?: string): Promise<CurbRunFC> {
+  const q = new URLSearchParams();
+  if (bbox) q.set("bbox", bbox);
+  const res = await fetch(`/api/v1/runs?${q.toString()}`);
+  if (!res.ok) throw new Error(`GET /runs -> ${res.status}`);
   return res.json();
 }

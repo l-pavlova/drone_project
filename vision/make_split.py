@@ -93,10 +93,13 @@ def main():
                          "in SPACE at 1 Hz, so the boundary leaks even though the "
                          "blocks themselves are far apart. 25 (the along-track "
                          "footprint) is the principled value.")
-    ap.add_argument("--exclude",
-                    help="A-B (inclusive) -- drop these frames entirely. Use it "
-                         "for frames that overlap ANOTHER dataset's val set: "
-                         "training on them leaks that benchmark.")
+    ap.add_argument("--exclude", action="append", default=[],
+                    help="A-B (inclusive) -- drop these frames entirely. Repeat "
+                         "for several ranges: a real flight's non-nadir stretches "
+                         "are not one contiguous block (flight 0074 tilts up at "
+                         "81-83 and again from 111). Use it for those, and for "
+                         "frames that overlap ANOTHER dataset's val set: training "
+                         "on them leaks that benchmark.")
     ap.add_argument("--suggest", action="store_true",
                     help="report the separation every candidate split would give, "
                          "and write nothing")
@@ -125,6 +128,16 @@ def main():
     print(f"{len(files)} candidate frames, keeping every {a.every} -> {len(kept)}"
           + (f" (skipping {len(done)} already labelled)" if done else ""))
 
+    def rng(spec):
+        lo, hi = (int(v) for v in spec.split("-"))
+        return lo, hi
+
+    for spec in a.exclude:
+        lo, hi = rng(spec)
+        dropped = [f for f in kept if lo <= frame_no(f) <= hi]
+        kept = [f for f in kept if not (lo <= frame_no(f) <= hi)]
+        print(f"  excluded {len(dropped)} frame(s) in {spec}")
+
     if a.suggest:
         print("\n  split point   train/val   min train-val distance")
         for cut in range(0, frame_no(kept[-1]) + 1, max(1, a.every)):
@@ -145,15 +158,6 @@ def main():
     if not a.out:
         sys.exit("--out is required")
 
-    def rng(spec):
-        lo, hi = (int(v) for v in spec.split("-"))
-        return lo, hi
-
-    if a.exclude:
-        lo, hi = rng(a.exclude)
-        dropped = [f for f in kept if lo <= frame_no(f) <= hi]
-        kept = [f for f in kept if not (lo <= frame_no(f) <= hi)]
-        print(f"  excluded {len(dropped)} frame(s) in {a.exclude}")
 
     if a.val_range:
         lo, hi = rng(a.val_range)
@@ -205,13 +209,26 @@ def main():
         "images/\ncheck/\nreview/\npreview/\npending/\n*.cache\n")
     json.dump({"stills": os.path.abspath(a.stills), "every": a.every,
                "val_from": a.val_from, "val_range": a.val_range,
-               "exclude": a.exclude, "buffer_m": a.buffer_m,
+               "exclude": list(a.exclude), "buffer_m": a.buffer_m,
                "scale": a.scale, "prefix": a.prefix,
                "train": train, "val": val,
                "min_train_val_distance_m": round(sep, 2)},
               open(os.path.join(a.out, "split.json"), "w", encoding="utf-8"), indent=1)
 
     print(f"  train {len(train)} / val {len(val)}  ->  {a.out}")
+    if not val or not train:
+        # An empty side makes `sep` inf, and printing that as ">= 25 m, genuinely
+        # spatial" would claim a separation nothing was measured against. A
+        # train-only flight is a legitimate thing to build (its frames feed
+        # training and it is benchmarked against ANOTHER flight's hand-drawn val
+        # set) -- but it must say so rather than borrow the reassurance.
+        print("  NO val split -- train-only dataset. Benchmark it against a "
+              "hand-drawn val set from a different flight, and check that flight's "
+              "val frames are >= 25 m from these before training on them.")
+        print(f"  split recorded in {a.out}/split.json")
+        print("\n  next: pre-label with vision/prelabel.py, correct by hand, then")
+        print(f"        python vision/check_labels.py {a.out} --split train --overlay 6")
+        return
     print(f"  min train-val distance: {sep:.1f} m", end="")
     if sep < 25:
         print("  ** WARNING: below the ~25 m along-track footprint -- train and "

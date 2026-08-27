@@ -1,0 +1,134 @@
+{
+ "survey_area": "DJI_20260821163108_0035_D",
+ "labelled_at": "2026-08-27T17:27:59.100Z",
+ "seg_m": 18,
+ "band_m": 10,
+ "segments": {
+  "run_0009#0": {
+   "run_id": "run_0009",
+   "s0": 0,
+   "s1": 16.98,
+   "count": 2,
+   "skip": false
+  },
+  "run_0009#1": {
+   "run_id": "run_0009",
+   "s0": 16.98,
+   "s1": 33.96,
+   "count": 2,
+   "skip": false
+  },
+  "run_0009#2": {
+   "run_id": "run_0009",
+   "s0": 33.96,
+   "s1": 50.94,
+   "count": 1,
+   "skip": false
+  },
+  "run_0009#3": {
+   "run_id": "run_0009",
+   "s0": 50.94,
+   "s1": 67.92,
+   "count": 3,
+   "skip": false
+  },
+  "run_0009#4": {
+   "run_id": "run_0009",
+   "s0": 67.92,
+   "s1": 84.9,
+   "count": 3,
+   "skip": false
+  },
+  "run_0009#5": {
+   "run_id": "run_0009",
+   "s0": 84.9,
+   "s1": 101.88,
+   "count": 2,
+   "skip": false
+  },
+  "run_0016#1": {
+   "run_id": "run_0016",
+   "s0": 15.5,
+   "s1": 31,
+   "count": 1,
+   "skip": false
+  },
+  "run_0016#3": {
+   "run_id": "run_0016",
+   "s0": 46.5,
+   "s1": 62,
+   "count": 0,
+   "skip": false
+  },
+  "run_0018#4": {
+   "run_id": "run_0018",
+   "s0": 65.14,
+   "s1": 81.43,
+   "count": 2,
+   "skip": false
+  },
+  "run_0030#0": {
+   "run_id": "run_0030",
+   "s0": 0,
+   "s1": 14.62,
+   "count": 1,
+   "skip": false
+  },
+  "run_0030#1": {
+   "run_id": "run_0030",
+   "s0": 14.62,
+   "s1": 29.24,
+   "count": 3,
+   "skip": false
+  },
+  "run_0030#3": {
+   "run_id": "run_0030",
+   "s0": 43.85,
+   "s1": 58.47,
+   "count": 1,
+   "skip": false
+  },
+  "run_0038#0": {
+   "run_id": "run_0038",
+   "s0": 0,
+   "s1": 13.91,
+   "count": 2,
+   "skip": false
+  },
+  "run_0038#1": {
+   "run_id": "run_0038",
+   "s0": 13.91,
+   "s1": 27.83,
+   "count": 1,
+   "skip": false
+  },
+  "run_0038#2": {
+   "run_id": "run_0038",
+   "s0": 27.83,
+   "s1": 41.74,
+   "count": 1,
+   "skip": false
+  },
+  "run_0038#3": {
+   "run_id": "run_0038",
+   "s0": 41.74,
+   "s1": 55.65,
+   "count": 1,
+   "skip": false
+  },
+  "run_0052#1": {
+   "run_id": "run_0052",
+   "s0": 16.55,
+   "s1": 33.1,
+   "count": 2,
+   "skip": false
+  },
+  "run_0053#2": {
+   "run_id": "run_0053",
+   "s0": 30.54,
+   "s1": 45.8,
+   "count": 1,
+   "skip": false
+  }
+ }
+}

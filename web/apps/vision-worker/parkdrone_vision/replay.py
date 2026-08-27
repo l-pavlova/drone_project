@@ -7,6 +7,15 @@ assert the resulting bay_state matches the committed occupancy_results.json
 This proves the worker's per-frame extraction preserves the offline classifier:
 the same frames + the same thresholds must yield the same per-bay predictions.
 Runs against a live Postgres (it truncates observation/bay_state first).
+
+**It wipes bay_state GLOBALLY, so never run it between a real flight and a demo.**
+`bay_state` has no survey_area column, so this takes the real flight's verdicts
+with it and repopulates them as fmi_block's heuristic ones -- the map then shows a
+street the drone actually surveyed as if the simulator had decided it. Restore by
+recomputing from the surviving observations, which are NOT deleted for other
+areas. Since migration 0014 there is a second half to the same trap: the curb-run
+tables are left ALONE here, so after a replay the two layers disagree about which
+flight they are describing. Run the real flight LAST.
 """
 import json
 import os

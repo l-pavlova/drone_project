@@ -37,6 +37,16 @@ sys.stdout.reconfigure(encoding="utf-8")
 # a nadir car misread as a truck or a bus is a very different result from one
 # not seen at all, so all four are counted and reported separately.
 VEHICLE = {2: "car", 3: "motorcycle", 5: "bus", 7: "truck"}
+# ...but keyed by NAME, because a fine-tuned single-class model numbers its own
+# classes from 0 and `car` there is COCO's `person`. Matching on the index made
+# every per-frame count, size statistic and overlay colour wrong for our own
+# detector while the `--labels` scoring (which already matched on the name) was
+# right -- so the bug was invisible in the reported recall/precision.
+VEHICLE_NAMES = set(VEHICLE.values())
+
+
+def is_vehicle(cls_idx, names):
+    return names[cls_idx] in VEHICLE_NAMES
 
 
 def tiles(w, h, n, overlap=0.2):
@@ -174,7 +184,7 @@ def main():
             c = d[5]
             cls_count[c] += 1
             confs[c].append(d[4])
-            if c in VEHICLE:
+            if is_vehicle(c, names):
                 veh += 1
                 sizes.append((d[2] - d[0], d[3] - d[1]))
         per_frame.append(veh)
@@ -185,7 +195,7 @@ def main():
         if a.overlay and n < a.overlay:
             vis = img.copy()
             for d in dets:
-                col = (0, 220, 0) if d[5] in VEHICLE else (0, 140, 255)
+                col = (0, 220, 0) if is_vehicle(d[5], names) else (0, 140, 255)
                 cv2.rectangle(vis, (int(d[0]), int(d[1])), (int(d[2]), int(d[3])),
                               col, 4)
                 cv2.putText(vis, f"{names[d[5]]} {d[4]:.2f}",
@@ -210,7 +220,7 @@ def main():
     print("\n  class breakdown (all classes, not just vehicles):")
     for c, k in cls_count.most_common(12):
         cs = sorted(confs[c])
-        tag = "  <- vehicle" if c in VEHICLE else ""
+        tag = "  <- vehicle" if is_vehicle(c, names) else ""
         print(f"    {names[c]:16s} {k:5d}   conf med {cs[len(cs) // 2]:.2f} "
               f"max {cs[-1]:.2f}{tag}")
 

@@ -42,6 +42,21 @@ def frames(root):
     return sorted(glob.glob(os.path.join(root, "images", "*", "*.jpg")))
 
 
+def is_oblique(img):
+    """(mean brightness, mean B-R, is_oblique) for one BGR image.
+
+    Split out of main() so the projection consumers can apply the same screen:
+    an oblique frame projected AS IF nadir does not fail, it silently places its
+    cars tens of metres from where they are, and the bay votes that follow are
+    confidently wrong. Flight 0074 is 22% oblique, which is where that stopped
+    being a theoretical concern.
+    """
+    top = img[:int(img.shape[0] * TOP_FRAC)].reshape(-1, 3).astype(float)
+    bright = top.mean()
+    blue = (top[:, 0] - top[:, 2]).mean()          # OpenCV is BGR
+    return bright, blue, bool(bright > T_BRIGHT and blue > T_BLUE)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("root", help="stills dir, or a dataset dir with images/<split>")
@@ -64,10 +79,7 @@ def main():
         img = cv2.imread(p)
         if img is None:
             continue
-        top = img[:int(img.shape[0] * TOP_FRAC)].reshape(-1, 3).astype(float)
-        bright = top.mean()
-        blue = (top[:, 0] - top[:, 2]).mean()      # OpenCV is BGR
-        bad = bright > T_BRIGHT and blue > T_BLUE
+        bright, blue, bad = is_oblique(img)
         if bad:
             oblique.append(os.path.basename(p))
         if a.list:

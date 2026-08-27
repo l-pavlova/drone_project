@@ -20,6 +20,7 @@ import type {
   NoFlyFC,
   Restriction,
   RouteResult,
+  CurbRunFC,
 } from "../lib/types";
 import { bayStatus } from "../lib/types";
 
@@ -33,6 +34,7 @@ const BACKEND_LABEL: Record<string, string> = {
 import { bayCentroid, directionsUrl, type NearestTarget, type UserPos } from "../lib/geo";
 import type { LiveState } from "../hooks/useOccupancySocket";
 import { NoFlyLayer } from "./NoFlyLayer";
+import { CurbRunLayer } from "./CurbRunLayer";
 import styles from "./BayMap.module.css";
 
 const ORIGIN: LatLngExpression = [42.6747105, 23.3298956];
@@ -123,6 +125,8 @@ export function BayMap({
   route,
   nofly,
   showZones,
+  runs,
+  showRuns,
 }: {
   fc: BayFC;
   live: Map<string, LiveState>;
@@ -132,6 +136,8 @@ export function BayMap({
   route: RouteResult | null;
   nofly: NoFlyFC | null;
   showZones: Set<Restriction>;
+  runs: CurbRunFC | null;
+  showRuns: boolean;
 }) {
   // Ring conversion is stable; recompute only when the feature set changes.
   const rings = useMemo(
@@ -167,6 +173,11 @@ export function BayMap({
           resolves clicks by draw order — behind them for hit-testing too.
           See the note in NoFlyLayer. */}
       <NoFlyLayer fc={nofly} show={showZones} />
+
+      {/* Curb runs BEFORE the bays, and for a sharper version of the same
+          reason: a run lies on top of its own bays by construction, so drawn
+          after them it would swallow every one of their clicks. */}
+      <CurbRunLayer fc={runs} show={showRuns} />
 
       {rings.map((r, i) => {
         const props = mergeLive(fc.features[i]!.properties, live.get(r.id));

@@ -1,15 +1,16 @@
 # PARKDRONE — open work
 
-Last revised 2026-08-22. Five tracks. Detail that only matters while a task is
+Last revised 2026-08-26. Five tracks. Detail that only matters while a task is
 being worked lives in the task itself; the *why* lives here so a task can be
 picked up cold.
 
 Order agreed 2026-08-12: **#2 → #3 → obstacle track (#4)**. #2 and #3 are done;
 the vision track (#5, #6, #7) is handled separately.
 
-**Closed:** #1, #2, #3, #6, #5b, #10, #13. **Open:** #5 (learned detector — the main line),
-#4 residue, #7, #8 (P7), #9, #11 (multi-replica — to discuss), **#12 (powertrain mismatch —
-do not fly as built)**, plus the two data defects #1 uncovered.
+**Closed:** #1, #2, #3, #6, #5b, #10, #11, #13. **Open:** **#14 (the bay data is the bottleneck —
+`docs/bay_data_gap.md`, the live question)**, #5 (learned detector — the model itself now works),
+#4 residue, #7, #8 (P7), #9, **#12 (powertrain mismatch — do not fly as built)**, plus the two data
+defects #1 uncovered.
 
 ---
 
@@ -220,6 +221,42 @@ vs server 2 h) -- fixed, the server now publishes the window.
 reports `null`). ~86 bays fall under the flight's footprint; hand-labelling them occupied/free is
 what turns this into a reportable real-world result comparable-but-never-averaged with the sim's
 98.4%.
+
+**2026-08-25 -- two more flights, and the bottleneck is now MEASURED, not inferred.** Flights 0074
+and 0075 (same block, ~30 m nadir, **midday** rather than 16:31) were extracted, yaw-recovered,
+nadir-screened and scored. `merged1` generalises across the light (confidence p10/p50/p90 0.33/0.63/
+0.80 vs 0.33/0.68/0.83 on 0035; 4.3 detections/frame on 0075 vs 3.5) -- but **neither flight yields
+a single occupied bay**, 0 of 49 and 0 of 9 from 273 detections. That is the bay data, and 0035 is
+the positive control that proves it is not the vote: there an occupied bay reads 11/13, 10/12, 7/7,
+6/6 views, while 0074's best bay is 6 of 21 and 0075's nine bays have zero. Not a yaw error, and no
+shared bias to correct (0075 wants (-7,-8), 0074 (+3,-9), three minutes apart). The overlays show
+painted, occupied bays in the photograph where the Sofiaplan rectangles sit on a garden.
+**So "hand-label the ~86 bays under flight 0035" is no longer obviously the next task** -- the more
+informative measurement is how many parked cars on this block are in a mapped bay at all, which is
+now three flights' worth of evidence saying "few".
+
+**CAVEAT ADDED 2026-08-26 — this conclusion is INDICATED, NOT SETTLED, and was first written too
+firmly.** What is solid: the pose is self-consistent to ~1 m (the same car detected in >=3 frames
+unprojects to the same ground point: median scatter 0.94 m on 0075, 1.08 m on 0074, p90 ~2.5 m), OSM
+building footprints project onto their real buildings (`vision/diag/ref_align.py`, flight 0074
+frame 57), and the vote is demonstrably working. What was over-claimed: "there is no shared bias to
+correct". Self-consistency is **blind to a constant per-flight offset**, and the grid search says one
+would take 0075 from 0 to 51 of 100 detections on-bay. The argument that the two flights want
+different shifts does NOT separate a per-flight GPS bias from a per-street data offset, because the
+two flights are on different streets — those two explanations are indistinguishable in that test.
+Settling it needs an **absolute** check against flat ground control (painted bay markings, which
+unlike a roof have no parallax); until that is done, no real-world accuracy number should be quoted
+against these bays.
+
+**One live-path bug fell out and is fixed:** ultralytics reads a numpy array as BGR, and three call
+sites -- including the server's detector backend -- built theirs from PIL RGB, so the live map ran on
+colour-swapped frames (473 -> 599 detections on 0035, +27%). Training labels and every reported
+recall/precision figure are unaffected (`prelabel.py`/`detect_real.py` use cv2). Details in
+CLAUDE.md 2f and `docs/training.md`.
+
+**Ready for the author:** `vision/data/dji_0074` (36 frames / 60 boxes) and `dji_0075` (23 / 100),
+pre-labelled with `merged1` and validated, waiting on hand correction. Both train-only -- 0074 has
+no split point reaching the 25 m footprint because it hovers and doubles back over its own ground.
 
 **Next:** finish the probe and report it honestly against the 26-box val caveat; then either label
 more (if it moved) or diagnose structurally (if it did not). Dataset volume is bounded by flight
@@ -796,6 +833,63 @@ WebSocket deltas on lifting.
 until the shape is proven), and a real per-closure authoring UI — closures are created by CLI today.
 
 ---
+
+### 14. The BAY DATA is the bottleneck, not the detector — **OPEN, full write-up in `docs/bay_data_gap.md`**
+
+Found 2026-08-25/26. Two new flights detected **273 cars** and produced **zero occupied bays**. The
+detector is fine (it generalises across the light, which was the open question about `merged1`); the
+mapped bay geometry is what the cars cannot be matched to.
+
+**Read `docs/bay_data_gap.md` first** — it holds the evidence chain, what it proves, what it
+deliberately does not, and the decision waiting. The short version:
+
+- **The vote works** — 0035 is the positive control, where an occupied bay reads 11/13 or 7/7 views.
+- **The projection is sound** — 1 m pose self-consistency, OSM buildings landing on real buildings,
+  and yaw correction changing almost nothing.
+- **Flat ground control separates the flights** (`vision/diag/paint_ground_control.py`, self-tested):
+  0035's bays already sit on its paint (9.9% headroom, flat peak), 0075's do not (85.7%, sharp).
+- **The gap is systemic.** Once the pipeline stopped discarding unplaced cars (migration `0013`),
+  even flight 0035 — the one that *works* — turns out to attribute **473 of 599 detections (79%) to
+  nothing**.
+
+**Fix 1 is DONE** (migration `0013`): unattributed detections are recorded rather than silently
+dropped, split by whether they are within 2x the assignment radius, since near and far call for
+opposite fixes. **Fix 2** (per-street geometry correction) is blocked on the paint extractor, which
+misses worn lines under dappled midday canopy. **Fix 3 is a product decision and belongs to the
+author** — extend the bay map from our own imagery, score against detected parking rows, or scope
+the product to streets Sofiaplan maps correctly. The trade-offs are tabulated in the doc.
+
+**Next concrete step:** hand-label per-bay ground truth on flight 0035's street, where the paint
+check is flat, for the first defensible real-world accuracy number.
+
+**Verified against outside references 2026-08-26 — `docs/bay_geometry_verification.md`.** Satellite
+imagery (`vision/diag/sat_align.py`, Esri World Imagery at z19 = 0.22 m/px) and an OSM geometric
+audit (`vision/diag/bay_audit.py`) both agree with the drone-side evidence, and settle one thing the
+paint control could not: **the Sofiaplan POINTS are, as a population, correctly placed** — 95% of
+1,698 bays sit 2-7 m from a street centerline, exactly a kerbside offset. The unplaced cars sit in
+that same band (median 3.1-5.6 m by flight against the bays' 4.1 m), so they are neither mis-projected
+nor near-misses; on 0075 they are in a different row. That removes doubt about the dataset as a whole
+and leaves #15 and fix 3 as the real work.
+
+### 15. `data/block_bays.geojson` is STALE — 261 bays (15.4%) are rotated wrong — **OPEN**
+
+Found 2026-08-26, ours not Sofiaplan's. The bay rectangles are **not** source data: `tools/make_bays.py`
+draws a 5.4x2.2 m box on each Sofiaplan point, oriented from the nearest OSM centerline. Regenerating
+from the committed inputs reproduces **every centre exactly** and rotates **261 bays by >5 deg**, whole
+streets at a time (35/111 Кричим, 33/195 Джеймс Баучер, 28/41 Вишнева, 13/13 Хараламби Тачев). On
+Плачковица the committed boxes carry bearing -1.6 deg while the centerline 3.8 m away runs at 89.5 —
+they were oriented from a road 22 m off on another street, and they lie *across* the carriageway.
+All three data files share a 2026-07-04 12:13 mtime, so `get_roads.py` and `make_bays.py` almost
+certainly ran in the wrong order once.
+
+**Real-flight occupancy is unaffected** — assignment is by centroid distance and no centroid moves
+(measured: identical counts on all three DJI flights under both geometries). **The sim is affected**:
+`generate_world.py` paints the rectangle and `classify()` crops it, so 15% of pads are the wrong
+piece of ground and every sim accuracy figure was computed against them.
+
+Fixing it is one command and then a lot of re-measurement: regenerate, re-fly both survey worlds,
+re-score, restate the numbers in `CLAUDE.md`. Do it deliberately, and add a `tools/check_consistency.py`
+check asserting `block_bays.geojson` reproduces from its inputs so it cannot recur silently.
 
 ## Hardware
 

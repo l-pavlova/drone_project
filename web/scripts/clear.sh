@@ -8,6 +8,15 @@
 #   pnpm clear fmi_block --db-only   # keep sim/output/<area>/ on disk
 #   pnpm clear fmi_block --disk-only # keep the database, drop the captures
 #   pnpm clear fmi_block --force     # allow it even for a scored golden fixture
+#   c           # EVERY stored area, then sweep the leftovers
+#
+# --all is what a demo wants, and a per-area clear is not the same thing.
+# `bay_state` has no survey_area column — a bay has one current answer, whoever
+# saw it — and this project's areas deliberately overlap (fmi_block,
+# fmi_block_4st and dji_0035 all cover the FMI block). So clearing one area
+# leaves the others' colours painted on the same block, and a freshly cleared
+# world opens onto the previous flight's map, which looks exactly like the new
+# flight having already finished.
 #
 # Why you need this before re-flying: ingest is idempotent on
 # (drone_id, survey_area, frame_idx), so a second flight of an area already in

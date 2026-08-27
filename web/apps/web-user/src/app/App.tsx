@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fetchBays, fetchNoFly, fetchServerInfo, fetchSummary } from "../api/client";
+import {
+  fetchBays,
+  fetchCurbRuns,
+  fetchNoFly,
+  fetchServerInfo,
+  fetchSummary,
+} from "../api/client";
 import { BayMap } from "../components/BayMap";
 import { CarIcon, LocateIcon, NavigateIcon, Spinner } from "../components/Icons";
 import { SurveyReadout } from "../components/SurveyReadout";
@@ -9,6 +15,7 @@ import {
   type BayFC,
   type BayFeature,
   type BayProps,
+  type CurbRunFC,
   type NoFlyFC,
   type Restriction,
   type ZoneSummary,
@@ -51,6 +58,8 @@ export default function App() {
   const [zones, setZones] = useState<ZoneSummary[]>([]);
   const [nofly, setNofly] = useState<NoFlyFC | null>(null);
   const [zonesOn, setZonesOn] = useState(true);
+  const [runs, setRuns] = useState<CurbRunFC | null>(null);
+  const [runsOn, setRunsOn] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { live, connected, syncVersion } = useOccupancySocket();
 
@@ -78,6 +87,25 @@ export default function App() {
     // Reference data, so a failure here is not worth a toast — the map is still
     // fully usable without the airspace overlay, and the switch stays hidden.
     fetchNoFly(AIRSPACE_BBOX).then(setNofly).catch(() => {});
+  }, []);
+
+  // Curb runs are POLLED, not pushed. The delta socket carries bay_id payloads;
+  // widening it to runs means a second delta table and a listener change, which
+  // is a lot of machinery for a layer that only changes as fast as a drone
+  // flies. A failure is swallowed like the airspace one — the bay map is still
+  // fully usable and the switch simply stays hidden.
+  useEffect(() => {
+    let alive = true;
+    const pull = () =>
+      fetchCurbRuns(AIRSPACE_BBOX)
+        .then((r) => alive && setRuns(r))
+        .catch(() => {});
+    pull();
+    const t = window.setInterval(pull, 3000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
   }, []);
 
   // The initial REST snapshot and opening the socket are separate requests.
@@ -215,6 +243,8 @@ export default function App() {
           route={route}
           nofly={nofly}
           showZones={zonesOn ? ZONES_SHOWN : ZONES_HIDDEN}
+          runs={runs}
+          showRuns={runsOn}
         />
       ) : (
         <div className={styles.loading}>Loading map…</div>
@@ -225,6 +255,16 @@ export default function App() {
         zones={zones}
         counts={counts}
         surveyTotal={surveyTotal}
+        kerbs={
+          runs
+            ? {
+                free: runs.features.reduce((n, f) => n + (f.properties.free ?? 0), 0),
+                cars: runs.features.reduce((n, f) => n + (f.properties.cars ?? 0), 0),
+                on: runsOn,
+                toggle: () => setRunsOn((v) => !v),
+              }
+            : null
+        }
         airspace={
           airspaceCounts
             ? { ...airspaceCounts, on: zonesOn, toggle: () => setZonesOn((v) => !v) }

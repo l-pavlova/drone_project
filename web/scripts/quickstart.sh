@@ -11,11 +11,30 @@
 #                                        # one command for sim -> API -> map
 #   pnpm quickstart --clear --fly fmi_block_4st   # wipe that area first, so the
 #                                        # re-flight actually ingests and repaints
+#   pnpm quickstart --real       # REAL DJI footage instead of the sim: replays
+#                                # flight 0035's stills at 1 Hz through the
+#                                # detector backend, with the kerb layer on
+#   pnpm quickstart --clear --real dji_0074       # a different real flight,
+#                                        # wiped first so it re-ingests
+#   pnpm quickstart --reset --fly fmi_block_4st   # BLANK MAP first: wipes every
+#                                        # survey area, not just the one you fly
 #   pnpm quickstart --stop       # stop the app processes AND the docker infra
+#
+# --real is the honest demo. The per-bay rule finds 9 of 29 hand-counted cars on
+# flight 0035 and paints a half-full street as ~11% occupied; the curb-run layer
+# (migration 0014) reads ~64% against a hand-measured 57%. Both are served, and
+# the map's KERBS switch toggles between them.
 #
 # Re-flying an area already in the database ingests nothing (idempotent on
 # frame_idx) — '--clear' wipes it first (bare '--clear' takes the area from
 # --fly/--uplink). Standalone: 'pnpm clear <area>'. See scripts/clear.sh.
+#
+# '--clear' is ONE area; '--reset' is all of them, and for a demo you usually
+# want --reset. `bay_state` has no survey_area column (a bay has one current
+# answer, whoever saw it) and this project's areas overlap on the same block —
+# fmi_block, fmi_block_4st and dji_0035 are all the FMI block — so clearing only
+# the area you are about to fly leaves the previous flight's colours painted
+# under the new one, which looks exactly like the flight having already finished.
 #
 # What it starts, in dependency order:
 #   1. docker compose: PostGIS (:5432) + MinIO (:9000/:9001)
@@ -36,6 +55,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SIM_DIR="$(cd "$ROOT/../sim" && pwd)"
+REPO="$(cd "$ROOT/.." && pwd)"
 RUN_DIR="$ROOT/.quickstart"          # logs + pids, gitignored
 WEBOTS="${WEBOTS:-/c/Program Files/Webots/msys64/mingw64/bin/webots.exe}"
 SERVER_LOG="$RUN_DIR/server.log"
@@ -46,6 +66,7 @@ REPLAY_AREA="${REPLAY_AREA:-fmi_block}"
 COMPOSE=(docker compose --env-file "$ROOT/.env" -f "$ROOT/infra/docker-compose.yml")
 
 WITH_WEB=1; WITH_ADMIN=1; WITH_SEED=1; DO_REPLAY=0; DO_STOP=0; UPLINK_AREA=""; FLY_WORLD=""
+REAL_AREA=""; REAL_STILLS="${REAL_STILLS:-}"; RESET_ALL=0
 CLEAR_AREA=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -61,8 +82,20 @@ while [ $# -gt 0 ]; do
     # watch", which is the case you actually want it in.
     --clear)    if [ $# -gt 1 ] && [ "${2#-}" = "$2" ]; then shift; CLEAR_AREA="$1"
                 else CLEAR_AREA="@implied"; fi ;;
+    # A REAL DJI flight instead of a simulated one. Implies the detector
+    # backend and the curb-run layer: the heuristic reads bay crops calibrated
+    # on Webots tones and is meaningless on a photograph, and the run layer has
+    # no whole-frame detections to place without it.
+    --real)     if [ $# -gt 1 ] && [ "${2#-}" = "$2" ]; then shift; REAL_AREA="$1"
+                else REAL_AREA="dji_0035"; fi ;;
+    # --clear wipes ONE area; --reset wipes them all. They are different jobs:
+    # `bay_state` has no survey_area column, and this project's areas overlap on
+    # the same block, so clearing the area you are about to fly still leaves the
+    # OTHER areas' colours on the map -- which reads as the new flight having
+    # already finished before it starts.
+    --reset)    RESET_ALL=1 ;;
     --stop)     DO_STOP=1 ;;
-    -h|--help)  sed -n '2,31p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help)  sed -n '2,53p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown flag: $1 (try --help)" >&2; exit 2 ;;
   esac
   shift
@@ -70,6 +103,40 @@ done
 # The controller keys its output folder off the route file, so a world's survey
 # area IS its name — flying implies watching that area unless told otherwise.
 [ -n "$FLY_WORLD" ] && [ -z "$UPLINK_AREA" ] && UPLINK_AREA="$FLY_WORLD"
+
+# --real posts stills from disk rather than watching sim/output, so it needs a
+# directory, not a world. The flight NUMBER is the stable part of both names
+# (dji_0035 -> DJI_20260821163108_0035_D), so it is matched on that rather than
+# on the timestamp nobody can remember. REAL_STILLS overrides for a flight that
+# does not follow the convention.
+# `die` is defined further down, so this block reports the plain way its
+# neighbours do. The `|| true` on the glob is load-bearing under `set -o
+# pipefail`: with no matching directory `ls` fails, the pipeline fails, and the
+# assignment would abort the script before the readable error below can run.
+if [ -n "$REAL_AREA" ]; then
+  if [ -n "$UPLINK_AREA" ]; then
+    echo "--real and --uplink/--fly are two sources for one uplink; pick one" >&2
+    exit 2
+  fi
+  if [ -z "$REAL_STILLS" ]; then
+    _num="${REAL_AREA##*_}"
+    REAL_STILLS="$(ls -d "$REPO"/pics/dji/stills/*_"${_num}"_D 2>/dev/null | head -1 || true)"
+  fi
+  if [ -z "$REAL_STILLS" ] || [ ! -d "$REAL_STILLS" ]; then
+    echo "no stills for '$REAL_AREA' under $REPO/pics/dji/stills" >&2
+    echo "  cut them with tools/dji_stills.py, or set REAL_STILLS=<dir>" >&2
+    exit 2
+  fi
+  # A frame with no yaw cannot be projected at all, and the SRT for these
+  # flights carries none -- it is recovered from the imagery. Catching it here
+  # costs a second; catching it after the stack is up costs the whole run.
+  if [ ! -f "$REAL_STILLS/poses.json" ]; then
+    echo "$REAL_STILLS has no poses.json" >&2
+    echo "  run: python tools/dji_yaw.py $REAL_STILLS --self-test && python tools/dji_yaw.py $REAL_STILLS --write" >&2
+    exit 2
+  fi
+  UPLINK_AREA="$REAL_AREA"
+fi
 if [ "$CLEAR_AREA" = "@implied" ] && [ "$DO_STOP" = 0 ]; then
   CLEAR_AREA="${UPLINK_AREA:-}"
   [ -n "$CLEAR_AREA" ] || { echo "--clear needs an area (or use it with --fly/--uplink)" >&2; exit 2; }
@@ -239,6 +306,16 @@ say "applying migrations"
 if [ "$WITH_SEED" = 1 ]; then
   say "seeding bays"
   (cd "$ROOT" && $PNPM db:seed)
+  # Curb runs (migration 0014) are derived reference data, so they are seeded
+  # beside the bays rather than instead of them — both layers are served. A
+  # missing file is not an error: re-derive it with tools/make_runs.py, and
+  # until then the run layer simply stays dark.
+  if [ -f "$REPO/data/curb_runs.geojson" ]; then
+    say "seeding curb runs"
+    (cd "$ROOT" && $PNPM db:seed-runs)
+  else
+    echo "  note: no data/curb_runs.geojson — run 'python tools/make_runs.py' for the kerb layer"
+  fi
 fi
 
 # ---- 4b. optional clear ----------------------------------------------------
@@ -248,6 +325,11 @@ fi
 # re-flight count. It runs AFTER the migrations (the tables must exist) and
 # BEFORE the server starts, so startup recovery cannot re-enqueue jobs whose
 # frames are about to be deleted.
+if [ "$RESET_ALL" = 1 ]; then
+  say "resetting EVERY survey area"
+  (cd "$ROOT/apps/vision-worker" && "$PY" -m parkdrone_vision.clear_area --all --yes) ||
+    die "reset failed"
+fi
 if [ -n "$CLEAR_AREA" ]; then
   say "clearing survey area '$CLEAR_AREA'"
   (cd "$ROOT/apps/vision-worker" && "$PY" -m parkdrone_vision.clear_area "$CLEAR_AREA" --yes) ||
@@ -257,7 +339,16 @@ fi
 # ---- 5. server -------------------------------------------------------------
 stop_service server
 free_port 4000
-say "starting server on :4000"
+# Real footage needs the learned detector: `classify()`'s five thresholds are
+# calibrated on Webots tones and find 0 of 52 cars on a photograph. The curb-run
+# layer rides on the same single detector pass, so it comes with it.
+if [ -n "$REAL_AREA" ]; then
+  export OCCUPANCY_BACKEND=detector
+  export RUN_LAYER=true
+  say "starting server on :4000 (detector backend + kerb layer)"
+else
+  say "starting server on :4000"
+fi
 start_service server "$ROOT/apps/vision-worker" "$SERVER_LOG" "$PY" -m parkdrone_vision.server
 wait_for 60 "server /health" curl -fsS http://localhost:4000/health
 
@@ -299,11 +390,24 @@ if [ -n "$UPLINK_AREA" ]; then
   # the frames stop coming; a bare --uplink waits indefinitely instead.
   idle_args=()
   [ -n "$FLY_WORLD" ] && idle_args=(--idle-exit 120)
+  # --real posts a finished directory of DJI stills instead of tailing a live
+  # sim output folder. `--rate 1.0` replays at the 1 Hz the stills were cut at,
+  # so the map fills in at the speed the drone actually flew -- which is what
+  # makes it watchable beside pics/dji/demo_*.mp4. `--once` because the flight
+  # has already landed; there is nothing more coming.
+  if [ -n "$REAL_AREA" ]; then
+    idle_args=(--root "$REAL_STILLS" --pattern 'frame_%04d.jpg'
+               --rate 1.0 --once --idle-exit 30)
+  fi
   ( cd "$ROOT/apps/vision-worker" &&
     API_KEY="$API_KEY" exec "$PY" -m parkdrone_vision.sim_uplink "$UPLINK_AREA" \
       "${idle_args[@]}" >"$RUN_DIR/uplink.log" 2>&1 ) &
   echo $! >"$RUN_DIR/uplink.pid"
-  ok "uplink running — tail .quickstart/uplink.log (waits for the flight to start)"
+  if [ -n "$REAL_AREA" ]; then
+    ok "replaying $(basename "$REAL_STILLS") at 1 Hz — tail .quickstart/uplink.log"
+  else
+    ok "uplink running — tail .quickstart/uplink.log (waits for the flight to start)"
+  fi
 fi
 
 # ---- 8. optional Webots flight ---------------------------------------------

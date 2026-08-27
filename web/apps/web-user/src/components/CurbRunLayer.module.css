@@ -1,0 +1,48 @@
+.popup {
+  min-width: 190px;
+  font-variant-numeric: tabular-nums;
+}
+
+.street {
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  margin-bottom: 6px;
+}
+
+.headline {
+  margin-bottom: 8px;
+}
+
+.big {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  margin-right: 4px;
+}
+
+.of {
+  color: var(--muted, #6b7280);
+  margin-left: 4px;
+}
+
+.unknown {
+  color: var(--muted, #6b7280);
+  font-style: italic;
+}
+
+.rows {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.rows dt {
+  color: var(--muted, #6b7280);
+}
+
+.rows dd {
+  margin: 0;
+  text-align: right;
+}

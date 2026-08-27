@@ -17,7 +17,7 @@ if _VISION_DIR not in sys.path:
 
 import cameras  # noqa: E402
 import score_occupancy as so  # noqa: E402
-from detect_occupancy import bay_votes_from_dets  # noqa: E402
+from detect_occupancy import ASSIGN_MAX_M, bay_votes_from_dets  # noqa: E402
 
 # Re-export the calibrated pieces so the rest of the worker never re-implements them.
 IMG_W, IMG_H = so.IMG_W, so.IMG_H
@@ -125,7 +125,8 @@ def load_detector(weights):
 
 
 def score_frame_detector(img_arr, bays, pose, index=None, model=None,
-                         cam=None, conf=0.25, imgsz=1024):
+                         cam=None, conf=0.25, imgsz=1024, unassigned=None,
+                         dets_out=None):
     """Detector counterpart of score_frame, returning the same contract.
 
     Runs the detector ONCE on the whole frame, then hands the boxes to the
@@ -142,6 +143,21 @@ def score_frame_detector(img_arr, bays, pose, index=None, model=None,
     not exist here and are left ABSENT rather than zero-filled, because a zero
     in `core_chroma` would be indistinguishable from a measured zero when those
     columns are read back for analysis.
+
+    Pass a list as `dets_out` to receive the RAW boxes as well. The curb-run
+    layer needs every detection, not the per-bay verdicts, and the detector must
+    only run once per frame -- inference dominates the cost, so a second pass for
+    the second layer would halve throughput for no new information. An
+    out-parameter for the same reason `unassigned` is one: the return value is a
+    contract shared with `score_frame`, which has no boxes to give.
+
+    Pass a list as `unassigned` to collect the detections that matched no bay
+    (migration `0013`). It is an out-parameter for the same reason it is one in
+    `bay_votes_from_dets`: the return shape is a contract shared with
+    `score_frame`, and `process_frame` picks between the two backends blind.
+    The heuristic has no counterpart -- it works from bay crops and cannot have
+    a detection that belongs to nothing -- which is why the stored count is
+    NULL rather than 0 on that path.
     """
     import numpy as np
 
@@ -151,10 +167,16 @@ def score_frame_detector(img_arr, bays, pose, index=None, model=None,
     if index is not None:
         bays = index.visible(bays, pose["x"], pose["y"],
                              footprint_reach(pose["alt"], cam))
-    res = model.predict(np.asarray(img_arr), conf=conf, imgsz=imgsz,
+    # `img_arr` is RGB -- that is the contract the heuristic's crops rely on and
+    # it must not change. But ultralytics reads a numpy array as BGR, so the
+    # DETECTOR needs a reversed view; without it the live backend classified
+    # every real frame with red and blue swapped, losing detections outright.
+    res = model.predict(np.asarray(img_arr)[:, :, ::-1], conf=conf, imgsz=imgsz,
                         verbose=False)[0]
     dets = list(zip(res.boxes.xyxy.tolist(), res.boxes.conf.tolist()))
-    out = bay_votes_from_dets(dets, bays, pose, cam=cam)
+    if dets_out is not None:
+        dets_out.extend(dets)
+    out = bay_votes_from_dets(dets, bays, pose, cam=cam, unassigned=unassigned)
     for s in out:
         s["off"] = round(s["off"], 1)
         score = s.pop("det_score")

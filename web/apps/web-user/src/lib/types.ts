@@ -139,3 +139,40 @@ export interface NoFlyFC {
 export function blocksSurvey(p: NoFlyProps): boolean {
   return p.restriction === "PROHIBITED";
 }
+
+// ---- curb runs (migration 0014) --------------------------------------------
+// Parking as a length of kerb rather than a grid of boxes. Served beside the
+// bays, never instead of them: the bay layer is what the simulator and every
+// golden fixture are scored on, while this is what real footage supports.
+// `cars`/`free` are null when no fresh survey covers the run — the same
+// read-time freshness gate `occupied` gets, so "not surveyed" never renders as
+// "empty".
+export interface CurbRunProps {
+  run_id: string;
+  street: string | null;
+  capacity: number;
+  pitch_m: number | null;
+  length_m: number | null;
+  park_txt: string | null;
+  zona: string | null;
+  cars: number | null;
+  free: number | null;
+  /** capacity scaled to the stretch actually seen — `free` derives from this,
+   *  never from `capacity`, or a flight that saw a third of a kerb would invent
+   *  free spaces out of the two thirds it did not. */
+  capacity_observed: number | null;
+  observed_fraction: number | null;
+  backend: string | null;
+  updated_at: string | null;
+}
+
+export interface CurbRunFeature {
+  type: "Feature";
+  properties: CurbRunProps;
+  geometry: { type: "LineString"; coordinates: [number, number][] };
+}
+
+export interface CurbRunFC {
+  type: "FeatureCollection";
+  features: CurbRunFeature[];
+}

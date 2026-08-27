@@ -32,7 +32,6 @@ the cheapest way to find out whether resolution or domain is the binding
 constraint.
 """
 import json
-import math
 import os
 import sys
 
@@ -42,7 +41,7 @@ import numpy as np
 from PIL import Image
 
 import score_occupancy as so
-from detect_occupancy import ASSIGN_MAX_M, bay_votes_from_dets
+from detect_occupancy import bay_votes_from_dets
 
 CAR_CLASS = 2           # COCO 'car', the class the supervisor's pipeline filters to
 #   ASSIGN_MAX_M and the detections->bays rule now live in detect_occupancy.py,

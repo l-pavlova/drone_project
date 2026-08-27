@@ -186,6 +186,14 @@ DETECTOR_IMGSZ = int(os.environ.get("DETECTOR_IMGSZ", "1024"))
 # this is not a detail -- see vision/cameras.py.
 DETECTOR_CAMERA = os.environ.get("DETECTOR_CAMERA", "dji")
 
+# The curb-run layer (migration 0014) runs BESIDE the per-bay path, never instead
+# of it, and only on the detector backend -- the heuristic reads bay crops and has
+# no whole-frame detections to place on a kerb. On by default because the per-bay
+# answer it sits beside is measurably wrong on real footage (9 of 29 hand-counted
+# cars on flight 0035); set RUN_LAYER=false to serve bays alone. With no
+# data/curb_runs.geojson present it switches itself off regardless.
+RUN_LAYER = os.environ.get("RUN_LAYER", "true").lower() not in ("0", "false", "no")
+
 # ---- occupancy freshness ---------------------------------------------------
 # How far back an observation counts toward a bay's occupancy vote, and how old
 # a bay_state row may be before reads report it as unknown.

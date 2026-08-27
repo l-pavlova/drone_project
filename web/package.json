@@ -12,6 +12,7 @@
     "typecheck": "pnpm -r typecheck",
     "db:migrate": "pnpm --filter @parkdrone/db migrate",
     "db:seed": "pnpm --filter @parkdrone/db seed",
+    "db:seed-runs": "pnpm --filter @parkdrone/db seed-runs",
     "quickstart": "node scripts/quickstart.mjs",
     "clear": "node scripts/clear.mjs",
     "infra:up": "docker compose --env-file .env -f infra/docker-compose.yml up -d",

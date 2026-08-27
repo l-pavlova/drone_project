@@ -1,0 +1,29 @@
+-- The cars a frame SAW but could not attribute to any bay.
+--
+-- `bay_votes_from_dets` loops over bays, so a detection matching no bay within
+-- ASSIGN_MAX_M was silently discarded and left no trace anywhere. That made the
+-- pipeline capable of a confident half-truth: flight 0075 (2026-08-25) reported
+-- "9 bays, all free" when what happened was "9 bays free, and 91 cars we saw and
+-- could not place". Zero occupied bays is a quiet signal; 91 unplaced cars is a
+-- loud one, and the loud one was the one being dropped.
+--
+-- It goes on `frame_job` rather than `frame`, deliberately. `frame` is the
+-- append-only ingest ledger -- what the drone sent -- and is never UPDATEd;
+-- this is a RESULT of classifying, produced at the same moment as `status` and
+-- `finished_at`, so it belongs with the work state. It also means clearing a
+-- survey area's frames drops these counts with them, via the existing CASCADE.
+--
+-- Two columns and not one: the count alone cannot separate the two reasons a
+-- car goes unplaced, and they call for opposite fixes. A detection a few metres
+-- outside the radius means the bay geometry is slightly off (fixable by
+-- alignment); one nowhere near any bay means the street's parking is not in the
+-- dataset at all (fixable only by extending the map). `unassigned_near` counts
+-- the first kind, within 2x ASSIGN_MAX_M of some bay.
+--
+-- NULL means "not recorded" and is the honest value for every row written before
+-- this migration, and for every heuristic row: the colour classifier works from
+-- bay crops and has no notion of a detection that belongs to nothing. Nothing is
+-- backfilled -- a 0 would assert that those frames had no unplaced cars, which
+-- this migration has no way to know.
+ALTER TABLE frame_job ADD COLUMN IF NOT EXISTS unassigned_dets int;
+ALTER TABLE frame_job ADD COLUMN IF NOT EXISTS unassigned_near int;

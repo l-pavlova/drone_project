@@ -23,3 +23,11 @@ images/
 # label file and create two places for the same truth to drift apart.
 dji_merged/
 *_merged/
+
+# Generated tool PAGES (label_bays.py / align_bays.py): a few MB each of frames
+# embedded as base64, rebuilt from the stills in seconds. The labels a human
+# produces IN them are the irreplaceable part, and those are the exported
+# gt_*.json / align_*.json / bay_outlines.json, which stay tracked.
+gt_*.html
+align_*.html
+*.dets.json

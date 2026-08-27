@@ -35,3 +35,6 @@ vision/diag/.ablation_cache/
 vision/runs/
 docs/final_doc_draft.md
 docs/final_doc_review.md
+
+# Diagnostic renders (vision/diag/*.py --out): large PNGs, all regenerable.
+vision/diag/out/

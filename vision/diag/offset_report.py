@@ -29,7 +29,6 @@ correlation peak is a measurement, not evidence, and averaging it in hides the
 signal.
 """
 import argparse
-import json
 import math
 import os
 import sys

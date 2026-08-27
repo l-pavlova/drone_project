@@ -16,7 +16,6 @@ Drop the .bin in D:\\drone_project\\logs\\ first (Mission Planner ->
 DataFlash Logs -> Download via Mavlink).
 """
 import sys
-from collections import defaultdict
 
 try:
     from pymavlink import mavutil

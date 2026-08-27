@@ -308,6 +308,41 @@ def job_counts(conn):
     }
 
 
+def unassigned_counts(conn, window_s):
+    """Detections that matched no bay, over recently finished frames (0013).
+
+    This is the coverage signal the pipeline previously had no way to raise. A
+    survey whose bays all read "free" looks identical, in every other metric, to
+    a survey of an empty street -- the difference is entirely in how many cars
+    were seen and discarded, and until this column existed that number was
+    computed and thrown away frame by frame.
+
+    `near` (within 2x the assignment radius of some bay) versus the rest is the
+    split that points at the fix: near means the bay geometry is a few metres
+    out, far means the street's parking is not in the dataset at all.
+
+    Frames whose count is NULL are excluded rather than read as 0 -- those are
+    heuristic frames and pre-0013 rows, which measured nothing.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """SELECT COUNT(*), COALESCE(SUM(unassigned_dets), 0),
+                      COALESCE(SUM(unassigned_near), 0)
+                 FROM frame_job
+                WHERE unassigned_dets IS NOT NULL
+                  AND finished_at > now() - (%s || ' seconds')::interval""",
+            (window_s,),
+        )
+        frames, total, near = cur.fetchone()
+    frames = int(frames)
+    return {
+        "frames_measured": frames,
+        "unassigned": int(total),
+        "unassigned_near": int(near),
+        "unassigned_per_frame": round(int(total) / frames, 2) if frames else None,
+    }
+
+
 def ingest_rates(conn, window_s):
     """Frames ingested in the last minute / hour / window, and the newest one."""
     with conn.cursor() as cur:
@@ -563,6 +598,26 @@ def insert_frame(conn, frame_id, drone_id, mission_id, survey_area, pose, image_
             (drone_id, mission_id or f"area:{survey_area}", pose["frame_idx"]),
         )
         return cur.fetchone()[0], True
+
+
+def record_unassigned(conn, frame_id, total, near):
+    """Store how many of this frame's detections matched no bay (0013).
+
+    Deliberately NOT committed here: it is part of the same unit of work as the
+    observations `process_frame` is about to commit, and a count that survived a
+    rolled-back classification would describe a frame nobody scored.
+
+    Only the detector path calls this, so a heuristic frame keeps NULL -- which
+    is the truth, not a missing zero: a bay-crop classifier has no notion of a
+    detection belonging to nothing.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """UPDATE frame_job
+                  SET unassigned_dets = %s, unassigned_near = %s
+                WHERE frame_id = %s""",
+            (total, near, frame_id),
+        )
 
 
 def mark_frame_processed(conn, frame_id):

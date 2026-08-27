@@ -84,7 +84,9 @@ def detections(stills, poses, model_name, conf, imgsz, cache, refresh):
         img = cv2.imread(os.path.join(stills, pose["file"]))
         if img is None:
             continue
-        res = model.predict(img[:, :, ::-1], conf=conf, imgsz=imgsz,
+        # `img` is already BGR from cv2, which is what ultralytics expects of a
+        # numpy array -- reversing it to RGB fed the model swapped channels.
+        res = model.predict(img, conf=conf, imgsz=imgsz,
                             verbose=False)[0]
         frames[pose["file"]] = [
             {"box": [round(c, 1) for c in b], "conf": round(c, 3)}

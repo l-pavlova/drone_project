@@ -530,3 +530,135 @@ a mapped bay at all.
 carrying a `det_score` (avg 0.641), zero heuristic colour statistics. Sim and real results can
 therefore never be silently averaged, which was the standing rule and is now enforced by the
 schema rather than by discipline.
+
+---
+
+## 2026-08-25 — two more flights, a colour-channel bug, and the bay data answering back
+
+Two new DJI clips over the same block, both ~30 m nadir but flown at **12:53 midday** where flight
+0035 was 16:31: `DJI_20260825125321_0074_D` (138 s, 139 stills) and `DJI_20260825125614_0075_D`
+(22 s, 23 stills). Extracted, yaw-recovered, screened and scored end to end.
+
+**The detector generalises across the light.** On 0074's nadir frames `merged1` gives confidence
+p10 0.33 / p50 0.63 / p90 0.80, against 0.33 / 0.68 / 0.83 recorded on 0035 — the same distribution
+under a different sun. 0075, which flies a street of parked cars, gives **4.3 detections per frame**
+against 0035's 3.5. Inspected by eye: on the 0075 frames every parked car carries a box and the one
+skip is a loaded truck; on 0074 the low density (1.6/frame) is scene content, since that flight
+hovers over canopy, gardens and rooftops for much of its length. No hand labels exist for either
+flight, so these are *distributions and eye checks*, not a recall number.
+
+**A colour-channel bug, found by two paths disagreeing on the same frames.** `detect_occupancy.py`
+and `detect_real.py` returned 108 and 173 detections over the identical 108 nadir frames of 0074 at
+identical settings. Cause: **ultralytics reads a numpy array as BGR** — the cv2 convention it trains
+with — and `detect_occupancy` built its array from PIL `.convert("RGB")`, so the model saw every
+real frame with red and blue swapped. Three call sites were affected and are fixed:
+
+| file | input | was |
+|---|---|---|
+| `vision/detect_occupancy.py` | PIL RGB array | swapped |
+| `vision/render_demo.py` | cv2 BGR, then reversed to RGB | swapped |
+| `.../vision_worker/vision/scoring.py` (**the live backend**) | PIL RGB from S3/replay | swapped |
+
+`prelabel.py` and `detect_real.py` use `cv2.imread` and were always right, which is why the
+*training* labels and every reported recall/precision figure are unaffected. The live map, however,
+was running the detector on colour-swapped frames. **Measured cost on flight 0035: 473 -> 599
+detections (+27%)**, and `detect_occupancy` now agrees with `detect_real` to the exact count on both
+new flights (100 and 173) — that agreement is the check that the fix is right. In `scoring.py` the
+reversal is applied only to what the detector is handed; `img_arr` stays RGB, because that is the
+contract the heuristic's crops depend on.
+
+**The nadir screen now runs inside the occupancy pass.** 22% of flight 0074 is oblique (the gimbal
+tilts to the horizon at frames 81-83 and from 111 to the end, confirmed by eye). An oblique frame
+does not fail to project — it silently places its cars tens of metres away, with full confidence.
+`check_nadir.is_oblique()` was split out of that script's `main()` and `detect_occupancy.run()` drops
+flagged frames (`--no-screen` opts out). On 0035 this removes exactly one frame and reproduces the
+88 bays already on record.
+
+**And the bay data answers the standing question, harder than 0035 did.** Neither new flight
+produces a single occupied bay — **0 of 49 on 0074, 0 of 9 on 0075, from 273 detections**. That is
+not the vote failing, and 0035 is the positive control that proves it: there, an occupied bay reads
+**11/13, 10/12, 7/7, 6/6** views — a car in a mapped bay is seen in nearly every look at it. On 0074
+the best bay in the flight manages **6 of 21**, then 2/5, 2/7, 2/22; on 0075 all nine bays have
+**zero** occupied views. That is the signature of cars parked *beside* the mapped geometry rather
+than in it.
+
+Distances agree: detection-to-nearest-bay median **8.95 m on 0075** (p10 5.90 — not one of 91
+detections inside the 3 m assignment radius) and **4.81 m on 0074** (34 of 173 inside), against
+4.35 m and 30% on 0035. **It is not a yaw error**: correcting yaw alone moves the 0075 median only
+9.01 -> 8.19 m and 0074's 4.81 -> 4.68. A pure translation does help 0075 a lot (-7, -8 m -> median
+2.69 m, 51 of 100 within 3 m), but 0074's best is a different direction (+3, -9) for much less, and
+the two flights are three minutes apart — so there is no shared bias to correct, and a per-street
+offset is a statement about how that street was drawn, not about our georeferencing.
+The `real_align.py` overlay for 0075 shows it directly and is the picture to put in the thesis:
+**painted, occupied parking bays are plainly visible in the photograph** along the kerb, and the
+Sofiaplan rectangles for that frame sit on a garden and under tree canopy instead.
+
+**CAVEAT ADDED 2026-08-26 — this conclusion is INDICATED, NOT SETTLED, and was first written too
+firmly.** What is solid: the pose is self-consistent to ~1 m (the same car detected in >=3 frames
+unprojects to the same ground point: median scatter 0.94 m on 0075, 1.08 m on 0074, p90 ~2.5 m), OSM
+building footprints project onto their real buildings (`vision/diag/ref_align.py`, flight 0074
+frame 57), and the vote is demonstrably working. What was over-claimed: "there is no shared bias to
+correct". Self-consistency is **blind to a constant per-flight offset**, and the grid search says one
+would take 0075 from 0 to 51 of 100 detections on-bay. The argument that the two flights want
+different shifts does NOT separate a per-flight GPS bias from a per-street data offset, because the
+two flights are on different streets — those two explanations are indistinguishable in that test.
+Settling it needs an **absolute** check against flat ground control (painted bay markings, which
+unlike a roof have no parallax); until that is done, no real-world accuracy number should be quoted
+against these bays.
+
+**Datasets built, pre-labelled, waiting on correction.** `vision/data/dji_0074` (36 frames, 60
+boxes) and `vision/data/dji_0075` (23 frames, 100 boxes) — pre-labelled with `merged1` at conf 0.25,
+`check_labels.py` clean, 8 deliberately-empty label files on 0074. Both are **train-only**, and that
+is forced by the geometry rather than chosen: `make_split --suggest` finds **no** split point on
+0074 reaching the 25 m along-track footprint, because the flight hovers and doubles back over its
+own ground throughout. They are benchmarked against `dji_merged`'s hand-drawn val set, whose frames
+are **68 m (0074) and 238 m (0075)** away — checked before building, since training on frames that
+overlap a benchmark leaks it.
+
+Three tool fixes fell out and are worth knowing:
+- `detect_real.py` decided "is this a vehicle" by **COCO class index**, but a fine-tuned single-class
+  model calls `car` index 0, which is COCO's `person`. Every per-frame count, size statistic and
+  overlay colour was wrong for our own detector while `--labels` scoring (already matching on the
+  name) was right — so the bug was invisible in every reported recall/precision figure. Now matched
+  by name.
+- `make_split.py --exclude` is repeatable: a real flight's non-nadir stretches are not one
+  contiguous block. And `--suggest` ran *before* exclusions were applied, so it reported split
+  points among frames that were about to be dropped.
+- `make_split.py` printed "min train-val distance: inf m (>= the ~25 m footprint: the split is
+  genuinely spatial)" for a train-only dataset. A vacuous `inf` must not borrow that reassurance; it
+  now says there is no val split and what to benchmark against instead.
+
+**2026-08-26 — ground control run, and the control flight settles the method.**
+`vision/diag/paint_ground_control.py` unprojects painted road markings (paint is ON the ground
+plane, so unlike a roof it has no parallax) into an ENU paint map, rasters the Sofiaplan bay
+outlines on the same grid, and slides one over the other. `--self-test` recovers injected shifts
+exactly (0.00 m on four vectors) and gates the result.
+
+Run on both flights through the **identical** mask, so the extractor's own imperfections cancel and
+the comparison carries the argument:
+
+| flight | overlap at (0,0) | peak | headroom | peak/median | occupancy result |
+|---|---|---|---|---|---|
+| **0035** (control) | 1204 | 1337 @ 4.03 m | **9.9%** | 1.55x — flat | 11 bays occupied, 11/13 views |
+| **0075** | 19 | 133 @ 4.51 m | **85.7%** | 3.98x — sharp | 0 bays occupied |
+
+**The georeferencing method is sound.** On 0035 the bays already sit on the paint: the best
+available shift buys 9.9% over doing nothing, on a peak barely above the search median. That is what
+"no offset" looks like, and it is the positive control the earlier argument lacked — a systematic
+error in the pose chain would have shown here too.
+**On 0075 there IS a real disagreement**, ~4.5 m, and the bays plainly do not sit on that street's
+paint. But 4.5 m does **not** explain the occupancy result: the detections' median distance to the
+nearest bay there is 8.95 m, so correcting it would still leave most cars unassigned. So the honest
+reading of that street is BOTH — a few metres of geometry disagreement, and cars genuinely parked
+away from the mapped bays.
+
+**What the paint extractor cost, and its limit.** A brightness-and-saturation threshold is useless
+here: it marked 2.9% of the frame, because a white car roof is bright and grey exactly like paint,
+and produced a map that was a solid blob (peak 1.43x = meaningless). Removing blobs by erosion, then
+masking the detector's own car boxes (a car OUTLINE survives erosion and is a bay-sized rectangle
+lying exactly where the question is — left in, the method would have been assuming its answer), then
+keeping only elongated components, got the peak to 3.98x. The adversary specific to this footage is
+**midday sun through summer canopy**, which scatters dappled highlights that are bright, grey and
+thin — paint by every test except length. The mask now finds the strong markings (it picks the zebra
+crossing cleanly) but **misses worn bay lines**, so the absolute offsets above are indicative; the
+0035-vs-0075 CONTRAST is the load-bearing result, not the metre values.
