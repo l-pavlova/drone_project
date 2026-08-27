@@ -128,7 +128,17 @@ def main() -> None:
     args = [a for a in args if a != "--once"]
 
     survey_area = args[0] if args else "fmi_block"
-    api_base = args[1] if len(args) > 1 else "http://localhost:4000"
+    # **127.0.0.1, NOT localhost.** uvicorn binds IPv4 only, and on Windows
+    # `localhost` resolves to ::1 first, so every request pays a connect stall
+    # waiting for that to fail before falling back. Measured against this
+    # server: `GET /health` takes **2.050 s** via localhost and **0.005 s** via
+    # 127.0.0.1 -- a 400x difference, and a FIXED cost per request, independent
+    # of payload size (a 2.78 MB frame and a 0.24 MB one both took 2.15 s).
+    # That is what made the 1 Hz demo replay take 301.5 s for 137 frames and
+    # left the map minutes behind `demo_0035.mp4`; no amount of pacing can
+    # absorb a 2 s stall inside a 1 s frame period. Pass an explicit base as
+    # argv[2] to override.
+    api_base = args[1] if len(args) > 1 else "http://127.0.0.1:4000"
     api_key = os.environ.get("API_KEY")
     if not api_key:
         raise SystemExit("set API_KEY (from register_drone)")
@@ -151,6 +161,13 @@ def main() -> None:
     mission_id = None
     posted = duplicates = errors = 0
     warned_duplicate = False
+    warned_slow = False
+    # Replay pacing is against a WALL CLOCK, not a per-frame sleep -- see the
+    # comment at the sleep itself. `replay_t0` is set on the first paced send and
+    # `replay_n` counts the frames paced since, so the schedule survives the
+    # enclosing poll loop.
+    replay_t0 = None
+    replay_n = 0
     last_progress = time.monotonic()
 
     try:
@@ -234,7 +251,37 @@ def main() -> None:
                     # flown, so the map advances in step with the rendered
                     # video beside it. It is a REPLAY, not a live feed, and the
                     # flag name says so.
-                    time.sleep(1.0 / rate)
+                    #
+                    # **Sleep to a DEADLINE, never for a fixed interval.** A bare
+                    # `sleep(1/rate)` here makes the period `read + POST + 1/rate`,
+                    # because the send has already happened by the time it runs --
+                    # and these are 2.61 MB stills, so that overhead is a real
+                    # fraction of a second which ACCUMULATES. Measured against
+                    # `demo_0035.mp4`, which is exactly 137.0 s of video for 137
+                    # frames: the map finished tens of seconds after the video and
+                    # the drift grew all the way through, which is what "the video
+                    # is way ahead of the map" looks like. Pacing to
+                    # `t0 + n/rate` absorbs the send cost instead of adding to it,
+                    # and it self-corrects rather than compounding, so a slow
+                    # frame is caught up on the next one instead of shifting every
+                    # frame after it.
+                    if replay_t0 is None:
+                        replay_t0 = time.monotonic()
+                    replay_n += 1
+                    behind = (replay_t0 + replay_n / rate) - time.monotonic()
+                    if behind > 0:
+                        time.sleep(behind)
+                    elif behind < -1.0 / rate and not warned_slow:
+                        # The deadline can only absorb a send that costs LESS
+                        # than one frame period; past that the replay genuinely
+                        # cannot hold real time and the video will pull ahead
+                        # however the sleep is written. Say so once -- a demo
+                        # that quietly desyncs in front of an audience is the
+                        # failure this whole block exists to prevent.
+                        warned_slow = True
+                        print(f"! replay cannot hold {rate} frame/s — "
+                              f"{-behind:.1f}s behind schedule at frame {idx}; "
+                              f"the video will pull ahead")
                 last_progress = time.monotonic()
                 if status == 202:
                     posted += 1

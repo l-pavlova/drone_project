@@ -14,6 +14,7 @@ export function SurveyReadout({
   surveyTotal,
   airspace,
   kerbs,
+  bays,
 }: {
   connected: boolean;
   zones: ZoneSummary[];
@@ -26,6 +27,10 @@ export function SurveyReadout({
    *  until the first poll lands, or if the endpoint is unavailable — the map is
    *  fully usable without it and the row simply stays hidden. */
   kerbs: { free: number; cars: number; on: boolean; toggle: () => void } | null;
+  /** The published per-bay rectangles and their switch. Switching them off
+   *  leaves the kerb answer alone on the map; it is a VIEWING choice, so the
+   *  COVERAGE line above is unaffected either way. */
+  bays: { on: boolean; toggle: () => void } | null;
 }) {
   const [open, setOpen] = useState(true);
 
@@ -91,6 +96,21 @@ export function SurveyReadout({
         <div className={styles.coverage}>
           COVERAGE <b>{counts.free + counts.occupied + counts.closed}</b> / {surveyTotal} BAYS
         </div>
+
+        {bays && (
+          <button
+            className={`${styles.airspace} ${bays.on ? styles.airspaceOn : ""}`}
+            aria-pressed={bays.on}
+            onClick={bays.toggle}
+            title="Published parking-bay rectangles (Sofiaplan). Switch off to read the kerb layer alone"
+          >
+            <i className={`${styles.swatch} ${styles.bay}`} />
+            <span>
+              BAYS <b>{counts.free}</b> FREE · {counts.occupied} TAKEN
+            </span>
+            <span className={styles.airspaceState}>{bays.on ? "ON" : "OFF"}</span>
+          </button>
+        )}
 
         {kerbs && (
           <button

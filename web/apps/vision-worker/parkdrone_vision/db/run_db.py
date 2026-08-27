@@ -115,17 +115,21 @@ def recompute_run_states(conn, world, run_ids, backend=None):
             cur.execute(
                 """INSERT INTO run_state
                      (run_id, world, mission_id, cars, free, capacity_observed,
-                      observed_fraction, backend, updated_at)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s, now())
+                      observed_fraction, backend, gaps, free_by_subtraction,
+                      updated_at)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now())
                    ON CONFLICT (run_id) DO UPDATE SET
                      world = EXCLUDED.world, mission_id = EXCLUDED.mission_id,
                      cars = EXCLUDED.cars, free = EXCLUDED.free,
                      capacity_observed = EXCLUDED.capacity_observed,
                      observed_fraction = EXCLUDED.observed_fraction,
-                     backend = EXCLUDED.backend, updated_at = now()""",
+                     backend = EXCLUDED.backend, gaps = EXCLUDED.gaps,
+                     free_by_subtraction = EXCLUDED.free_by_subtraction,
+                     updated_at = now()""",
                 (run_id, world, mission, summary["cars"], summary["free"],
                  summary["capacity_observed"], summary["observed_fraction"],
-                 backend))
+                 backend, json.dumps(summary["gaps"]),
+                 summary["free_by_subtraction"]))
             out.append(dict(summary, run_id=run_id))
     return out
 
@@ -153,6 +157,7 @@ def feature_collection(conn, bbox=None):
              CASE WHEN {_FRESH} THEN rs.capacity_observed END AS capacity_observed,
              CASE WHEN {_FRESH} THEN rs.observed_fraction END AS observed_fraction,
              CASE WHEN {_FRESH} THEN rs.backend END           AS backend,
+             CASE WHEN {_FRESH} THEN rs.gaps END               AS gaps,
              rs.updated_at,
              ST_AsGeoJSON(cr.geom) AS gj
         FROM curb_run cr
@@ -160,7 +165,7 @@ def feature_collection(conn, bbox=None):
        WHERE {' AND '.join(where)}
     """
     # _FRESH is repeated once per gated column, and each copy takes the window
-    params = [window] * 5 + extra
+    params = [window] * 6 + extra
     with conn.cursor() as cur:
         cur.execute(sql, params)
         rows = _rows(cur)

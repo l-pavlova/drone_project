@@ -138,4 +138,14 @@
   border-radius: 3px;
 }
 
+/* A filled rectangle with a crisp outline — the painted-bay look the map draws,
+   so the swatch reads as the same object. Deliberately unlike .kerb's bar: the
+   whole point of having both switches is that the two layers are different
+   geometry answering the same question. */
+.bay {
+  background: rgba(46, 158, 91, 0.55);
+  border: 1px solid #2e9e5b;
+  border-radius: 1px;
+}
+
 .airspaceState { margin-left: auto; opacity: 0.75; }

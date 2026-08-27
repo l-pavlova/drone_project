@@ -162,8 +162,27 @@ export interface CurbRunProps {
    *  free spaces out of the two thirds it did not. */
   capacity_observed: number | null;
   observed_fraction: number | null;
+  /** Measured free stretches along the run, in arclength metres. `free` is the
+   *  sum of their `spaces`, so this is WHERE the free kerb is rather than only
+   *  how much of it there is — which the old `capacity_observed - cars`
+   *  subtraction could not express. Null on a stale or pre-0015 row. */
+  gaps: CurbRunGap[] | null;
+  /** The pre-0015 estimate, kept beside the measured `free` so the two stay
+   *  comparable. It over-reports: a subtraction cannot tell that four
+   *  badly-spaced cars leave gaps too short to park in. */
+  free_by_subtraction: number | null;
   backend: string | null;
   updated_at: string | null;
+}
+
+export interface CurbRunGap {
+  /** start along the run, metres from its first point */
+  s0: number;
+  s1: number;
+  len_m: number;
+  /** how many cars fit, charged manoeuvring clearance when the gap is bounded
+   *  by a car at both ends */
+  spaces: number;
 }
 
 export interface CurbRunFeature {

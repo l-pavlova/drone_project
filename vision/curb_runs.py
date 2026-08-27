@@ -37,6 +37,13 @@ RUNS = os.path.join(DATA, "curb_runs.geojson")
 CELL_M = 0.5         # evidence raster resolution along the curb
 JOIN_BELOW_M = 1.5   # occupied stretches closer than this are one car row, not a gap
 CLEARANCE_M = 0.5    # manoeuvring room a driver needs on top of the car length
+CAR_LEN_M = 4.4      # median unprojected car length on this footage
+
+# One definition, two consumers: `run_summary` turns a counted car instance back
+# into the stretch of kerb it occupies, and `vision/score_runs.py` divides voted
+# occupied length by it for the comparison prediction. Duplicated constants are
+# this project's standing hazard (ORIGIN, DS_*, the four copies of the camera
+# intrinsics), so it lives here and is imported.
 
 
 def _enu():
@@ -369,8 +376,52 @@ def cluster_points(pts, cluster_m=2.0, min_views=2):
     return out
 
 
-def run_summary(run, car_s, observed, space_m=None):
-    """The product answer for one run: how many cars, how many spaces free.
+def _on_observed(s, obs, length):
+    """Is arclength `s` inside a span anything looked at?
+
+    The spans are half-open so that adjacent ones do not double-count a cell, but
+    the END of the run is a real position a car can occupy and the last span
+    closes exactly on it. Testing `a <= s < b` therefore dropped every car at
+    `s == length` -- and `locate` CLAMPS anything past the end to exactly that
+    value, so those are precisely the cars sitting at the tail of a kerb. Measured
+    on flight 0035 it silently lost 3 of 49 placed instances (6%), which is the
+    class of loss the whole run layer exists to stop doing.
+
+    A car still outside every span is a genuine contradiction -- a detection on
+    kerb the geometry says was never in frame -- and stays dropped, but the caller
+    is told how many via `cars_off_observed` rather than left to infer it.
+    """
+    s = min(s, length - 1e-9)
+    return any(a <= s < b for a, b in obs)
+
+
+def car_intervals(car_s, car_m=CAR_LEN_M, join_below=JOIN_BELOW_M):
+    """Counted car instances -> the stretches of kerb they occupy.
+
+    Each car's arclength becomes an interval `car_m` long centred on it, then the
+    set is merged. This is the ONLY route from occupancy to intervals on the
+    published path, and it deliberately does not go through `vote_cells`.
+
+    **Why not the cell vote.** The voted-occupied-length route loses cars twice --
+    once when a cell fails the strict majority, again when two adjacent cars merge
+    into one interval that divides to fewer than two -- and measured on flight
+    0035's 18 hand-counted segments it recovers 19 of 29 cars with certainty of
+    under-counting (bias -0.53, 95% CI [-0.91, -0.15]), against 34 and an unbiased
+    +0.28 for instance counting. So the count comes from the instances and the
+    geometry is reconstructed from the count, not the other way round.
+
+    The reconstruction is approximate by construction -- a car's true extent along
+    the kerb is not measured, only its centre -- which is exactly why it is used
+    for GAPS and never for the car count. A gap length is what a driver needs and
+    it survives every car being a few decimetres off; a count derived from length
+    does not.
+    """
+    return merge_intervals([(s - car_m / 2.0, s + car_m / 2.0) for s in car_s],
+                           join_below)
+
+
+def run_summary(run, car_s, observed, space_m=None, car_m=CAR_LEN_M):
+    """The product answer for one run: how many cars, and WHERE the free kerb is.
 
     `car_s` are arclengths of DISTINCT cars on this run (from
     `detect_occupancy.cluster_instances`, not raw detections); `observed` are the
@@ -378,35 +429,58 @@ def run_summary(run, car_s, observed, space_m=None):
 
     **Cars are counted as INSTANCES, not derived from occupied length.** Dividing
     the voted occupied length by a car length was the first version and it is
-    measurably worse: on flight 0035's 18 hand-counted segments the length route
-    recovers 19 of 29 cars and under-counts with certainty (bias -0.53, 95% CI
-    [-0.91, -0.15]), while counting instances recovers 34 and is statistically
-    unbiased (+0.28, CI [-0.22, +0.83]). The length route loses cars twice over --
-    once when a cell fails the strict majority, again when two adjacent cars merge
-    into one interval that divides to less than two.
+    measurably worse -- see `car_intervals` for the numbers.
+
+    **`free` is a MEASUREMENT, not a subtraction.** It used to be
+    `capacity_observed - cars`, which can advertise a space that does not
+    physically exist: four badly-spaced cars on a 30 m run leave the subtraction
+    reporting 2 free while the actual gaps are 1.5 m each and nothing fits. A
+    driver feels that error directly. So the cars are turned back into intervals
+    and `free_gaps` counts what fits between them, which also yields `gaps` --
+    where on the kerb to go, which the subtraction cannot express at all.
+    The old number is kept beside it as `free_by_subtraction` rather than being
+    replaced in silence, so the two stay comparable in the record.
 
     Capacity is scaled to the OBSERVED stretch. A flight that saw a third of a run
     cannot speak for the other two thirds, and reporting the run's full capacity as
     though it had would invent free spaces out of curb nobody looked at.
+
+    Note the observed mask here is the raw merged spans, with no `MIN_VIEWS` gate
+    (`vote_cells` applies one to its own observed output). Tightening it would move
+    `observed_fraction` and `capacity_observed` at the same time as `free`, so it
+    is deliberately left as a separate, single-variable question.
     """
     length = run["length_m"]
     space = space_m or run.get("pitch_m") or 5.5
     obs = merge_intervals(observed, 0.0) if observed else [(0.0, length)]
     obs_len = sum(b - a for a, b in obs)
 
-    cars = sum(1 for s in car_s if any(a <= s < b for a, b in obs))
+    on_obs = [s for s in car_s if _on_observed(s, obs, length)]
+    cars = len(on_obs)
     cap_obs = int(round(obs_len / space)) if space else 0
     # Sofiaplan's count is authoritative for the whole run, so the observed slice
     # can never imply more spaces than the run has.
     cap_obs = min(cap_obs, run.get("capacity") or cap_obs)
-    free = max(0, cap_obs - cars)
+
+    occupied = car_intervals(on_obs, car_m)
+    measured = free_gaps(run, occupied, obs, space_m=space)
+    # `free_gaps` clamps to the run's FULL capacity; the published answer may only
+    # speak for the stretch that was observed, so it is clamped again. A run whose
+    # observed slice is too short to hold one space reports 0 free, not a space
+    # measured off kerb nobody looked at.
+    free = min(measured["free"], cap_obs)
+
     return {
         "run_id": run.get("run_id"),
         "street": run.get("street"),
         "capacity": run.get("capacity"),
         "capacity_observed": cap_obs,
         "cars": cars,
+        "cars_off_observed": len(car_s) - cars,
         "free": free,
+        "free_by_subtraction": max(0, cap_obs - cars),
+        "gaps": measured["gaps"],
+        "occupied_len_m": measured["occupied_len_m"],
         "observed_len_m": round(obs_len, 2),
         "observed_fraction": round(obs_len / length, 3) if length else 0.0,
         "length_m": round(length, 2),

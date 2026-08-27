@@ -602,6 +602,39 @@ inference pass on the critical path, where a slow frame is a stall in front of a
   and produces nothing usable. mp4v plays in VLC and Windows Media Player but **not reliably in
   Chrome**. At 1920x1080/10 fps the file is ~159 MB; `--width 1280 --fps 6` brings it to ~45 MB
   at the same real-time speed.
+- **`localhost` COSTS 2 SECONDS PER REQUEST ON THIS MACHINE — always use `127.0.0.1`
+  (found 2026-08-28).** This was the real cause of the demo desync, and it is worth internalising
+  because it is invisible and it is everywhere. uvicorn binds **IPv4 only** while vite binds
+  **`[::1]`, IPv6 only** — the two dev servers sit on opposite sides of an ambiguous name — so any
+  client resolving `localhost` to `::1` first must wait for that connection to fail before falling
+  back. Measured on this box:
+
+  | path | via `localhost` | via `127.0.0.1` |
+  |---|---|---|
+  | `GET /health`, Python urllib | **2.050 s** | **0.005 s** |
+  | ingest POST of one still | **2.13 s** | **0.24 s** |
+  | `/api/v1/summary` through vite's proxy | **2.032 s** | **0.043 s** |
+
+  **The cost is FIXED, not proportional** — a 2.78 MB frame and a 0.24 MB frame both took 2.15 s,
+  which is the fingerprint to recognise it by. It made the 1 Hz demo replay take **301.5 s for 137
+  frames** against a video that is exactly 137.0 s, and it added 2 s to every fetch the map itself
+  made. Fixed in `sim_uplink.py`'s default `api_base`, both `vite.config.ts` proxy targets, and
+  quickstart's `/health` probe. **Anything new that talks to :4000 must use `127.0.0.1`.**
+- **The replay also paces to a WALL CLOCK, not a per-frame sleep.** `--rate` used to
+  `time.sleep(1.0 / rate)` *after* reading and POSTing the still, making the real period
+  `send + 1/rate` with an error that **accumulates**. That is a genuine defect and is fixed (sleep
+  until `t0 + n/rate`, which absorbs the send cost and self-corrects) — but on its own it was **not**
+  the cause above: no pacing scheme can absorb a 2 s stall inside a 1 s frame period. Both are
+  needed, and they compose: 127.0.0.1 brings the send to 0.24 s, under the frame period, and the
+  deadline then holds real time exactly (with the old fixed sleep it would still run 1.24 s/frame,
+  finishing 24% behind the video). If the replay ever genuinely cannot hold the rate it now says so
+  once instead of drifting in silence.
+- **It was never a throughput problem, and more replicas would NOT have helped.** Measured, the
+  whole classify path is ~0.41 s/frame against 1 frame/s arriving (detector inference 0.36 s,
+  `observed_spans` over all 141 runs 0.034 s, `bay_votes_from_dets` over 1698 bays 0.012 s), and
+  torch already saturates all 12 cores, so extra threads or replicas contend rather than add
+  capacity. Note CLAUDE.md's "~103 frames/s per classify thread" is the *heuristic* figure; the
+  detector is ~2.8 frames/s. Scaling out remains about availability, not speed.
 - **Watch out for two survey areas owning the same bays.** `bay_state` is keyed per bay, and
   `recompute_states` resolves the newest mission *within one survey_area* — so `fmi_block` (sim)
   and `dji_0035` (real) cover the same physical block and whichever ingested last owns the
@@ -797,7 +830,136 @@ place) and three Prometheus gauges.
 
 *Verified 2026-08-26:* migration applied to the live DB, columns nullable ints; writer round-trip
 (91, 12) and `unassigned_counts` aggregating them, both inside a transaction that was rolled back
-clean. Golden replay **42/42 at 100%**, `detect_baseline` unchanged, 40 consistency checks pass.
+clean. Golden replay **42/42 at 100%**, `detect_baseline` unchanged, **39** consistency checks pass
+(the "40" once quoted here is wrong; note the count is FIXTURE-DEPENDENT — one check reads a frame from `sim/output/fmi_block/`, so a tree whose golden fixture has been cleared reports 38 and nothing is actually broken).
+
+### 2h. Curb runs — parking as a 1-D resource (migration `0014`; gaps, `0015`, 2026-08-28)
+```bash
+python tools/make_runs.py                          # bays -> data/curb_runs.geojson
+python vision/label_runs.py <stills>               # hand-count cars per stretch
+python vision/score_runs.py <stills> --gt-runs vision/data/gt_runs_0035.json \
+       --dets pics/dji/demo_0035.mp4.dets.json     # the real accuracy number
+cd web && pnpm quickstart --real                   # the demo, KERBS layer on
+```
+**The bay RECTANGLE was abandoned as the primitive.** Sofiaplan's geometry is wrong by more than a
+bay width and no rigid correction fixes it (global shift 3.99 -> 3.59 m, per-street -> 3.35 m,
+per-row-side -> 2.84 m, on the 56 hand-corrected bays of flight 0035). But the error is
+**anisotropic** — cross-street 3.14 m against along-street 1.64 m — and the two axes behave
+oppositely once parking is a line: the cross-street component decides *which run* a car is on and is
+largely common-mode within a run (one robust scalar absorbs it, `estimate_lateral`), while the
+along-street component merely slides a car along the kerb, and a **gap LENGTH is invariant** to
+sliding every car by the same amount. A per-bay boolean is not — 3 m of along-street error flips it.
+The representation does not fix the geometry; it puts the irreducible error on the axis where it
+costs nothing.
+
+**The measured result** (`vision/score_runs.py`, flight 0035, 18 hand-counted segments / ~280 m /
+29 cars). Paired, the run layer recovers **+0.58 cars/segment more than the incumbent, CI
+[+0.21, +0.96]** — significant. **The MAE differences (0.83/0.81/1.11) are NOT significant at n=18**
+— every CI crosses zero, so the advantage is in *bias*, not per-segment precision. Do not quote the
+MAEs as an improvement.
+
+| prediction | cars found | bias/segment | 95% CI |
+|---|---|---|---|
+| instances (detector + cross-frame clustering) | 34 (117%) | +0.28 | [-0.22, +0.83] **unbiased** |
+| run layer via occupied length / 4.4 m | 19 (66%) | -0.53 | [-0.91, -0.15] |
+| **per-bay `bay_votes_from_dets` (the incumbent)** | **9 (31%)** | **-1.11** | **[-1.50, -0.78]** |
+
+**Cars are counted as INSTANCES; intervals are for GAPS only.** Dividing voted occupied length by a
+car length was the first version and it loses cars twice — once when a cell fails the strict
+majority, again when two adjacent cars merge into one interval that divides to fewer than two. So
+`run_summary` counts distinct cars (`cluster_points`, single-link at `CLUSTER_M` 2.0 m over
+**frame-distinct** views) and then reconstructs intervals *from that count* (`car_intervals`) purely
+to measure the gaps. The reconstruction is approximate by construction — a car's true extent is not
+measured, only its centre — which is exactly why it is never allowed back into the count.
+
+**`free` is a MEASUREMENT, not a subtraction (2026-08-28, migration `0015`).** It used to be
+`capacity_observed - cars`, which can advertise a space that does not physically exist: four
+badly-spaced cars on a 30 m run leave the subtraction reporting 2 free while the real gaps are 1.5 m
+each and nothing fits. A driver feels that error directly, and the subtraction cannot say *where* to
+go at all. `free_gaps` now measures what fits between the reconstructed intervals. **Measured on
+flight 0035: 1102 spaces from gaps against 1164 by subtraction — 62 advertised spaces that do not
+fit.** The old number is kept beside it as `free_by_subtraction` rather than replaced in silence.
+`run_state.gaps` is **jsonb, not a child table**: a gap has no identity, no history and no
+independent lifetime — it is derived wholesale on every recompute and only ever read with its run.
+Both new columns are nullable with **no backfill**, the same posture as `0010`/`0013`.
+
+**A half-open interval dropped every car at the END of a kerb.** `locate` CLAMPS anything past a
+run's end to exactly `s == length`, and the observed-span test was `a <= s < b` — so cars at the
+tail of a run failed it and vanished. Measured on flight 0035, **3 of 49 placed instances (6%)**,
+silently. `_on_observed` closes the interval at the run end, and anything still outside every span
+(a genuine contradiction — a detection on kerb the geometry says was never in frame) is now
+*reported* as `cars_off_observed` rather than dropped without trace. It was found by the invariant
+`score_runs.py` now asserts: **what `run_summary` publishes must equal what the scorer measured.**
+Keep that check — the scored `inst` column and the shipped path are different code, and the reported
+bias means nothing if they disagree.
+
+**Four earlier bugs, each of which produced a confident wrong answer:**
+- **Gate on distance to the POLYLINE, never on `lateral`.** `lateral` is measured against the
+  segment's *infinite* line, so a car 20 m past a run's end but collinear reads ~0 and clamps to
+  `s = length`. That assigned 50 detections to one 45 m run as degenerate zero-length intervals,
+  reporting it empty while claiming 42 cars seen on it.
+- **A union of intervals across frames inflates occupancy.** ~1 m projection scatter means one car's
+  interval grows with every view — worst exactly where the evidence is best. A strict-majority
+  per-cell vote (deliberately the same rule as `detect_occupancy.vote()` and `_RECOMPUTE_SQL`, so
+  the two layers stay comparable) moved occupancy **83% -> 60%**.
+- `observed_fraction` read 1.01 — the cell grid overran the run's end.
+- Runs reporting "all free" while detections landed on them were silent; now counted, the same
+  posture as the `unassigned` counters in §2g.
+
+**Capacity comes from Sofiaplan's point COUNT and must never be recomputed as length/pitch.** Every
+individual coordinate in that dataset is distrusted, but the number of spaces on a stretch is what
+the city actually knows and the drone cannot see. Published pitch 5.41 m vs real 4.48 m would
+undercount a 35 m run by about one space. Capacity is then **scaled to the observed stretch**: a
+flight that saw a third of a run cannot speak for the rest.
+
+**Runs are clustered by GEOMETRY, never by street name** — the same rule as the street closures
+(see the web tier below). A name also cannot express the unit that matters: one street's two sides
+need opposite-signed corrections (the two published rows on бул. Джеймс Баучер are 12.1 m apart), so
+the row-side is the minimum honest unit. 141 verified runs of >=4 bays cover 1252 of 1698 bays,
+6.84 km of kerb, every bay in exactly one run.
+
+**The observed mask is GEOMETRIC and OVERSTATES observation** — it says the kerb was in frame, not
+that it was visible. Flight 0074's `frame_0050.jpg` is a street entirely under canopy and passes.
+Treat `observed_fraction` as an upper bound until a radiometric occlusion test exists. Note also
+that `run_summary` applies **no `MIN_VIEWS` gate** to its observed spans while `vote_cells` applies
+one (3) to its own — tightening it would move `observed_fraction` and `capacity_observed` at the
+same time as `free`, so it is deliberately left as a separate, single-variable question.
+
+**Thresholds are knobs and must be tuned against ground truth, never against the layer's own
+output** — that circularity is what this redesign exists to escape.
+
+**Separation from the sim is by construction.** `process_frame` runs the run layer only when
+`backend == "detector"` **and** `config.RUN_LAYER`, so the heuristic sim never writes
+`run_detection`/`run_observation`/`run_state`, and `bay_votes_from_dets` is untouched by all of the
+above. *Verified 2026-08-28:* golden replay **42/42 at 100%**, `detect_baseline fmi_block`
+**TP=0 FP=0 FN=30 / 58.8%**, 39 consistency checks, projection self-test 0.000000 mm.
+**`replay.py` still does `DELETE FROM bay_state` GLOBALLY and leaves the run tables alone**, so
+running it between a real flight and a demo leaves the two layers describing different flights.
+**Running it BEFORE the real flight is not enough either** — measured 2026-08-28, the golden-replay
+gate left 24 `fmi_block` heuristic verdicts in `bay_state`, the real flight reclaimed only the bays
+it could see, and 19 sim bays were still painted under the real kerbs at the end. The bay layer then
+showed two worlds at once while the kerb layer showed one. Ordering does not help, because nothing
+overwrites a bay the real flight never covers.
+**And `pnpm clear fmi_block` is the WRONG tool for that cleanup:** `clear_area.py` resolves which
+`bay_state` rows to drop as "bays this area observed", which is right when one area owns the block
+and over-deletes when two overlap and the *other* one won — on this data it would have blanked the
+25 bays both flights cover, all of them legitimately the detector's. The narrow fix is to delete the
+stale rows by `backend` while excluding bays the winning area observed; they recompute from the
+surviving observations, so it is reversible. Better still, **run the golden regressions against a
+separate database from the demo** — they are a sim gate and it is a real deployment, and they should
+never have shared `bay_state` in the first place.
+
+**Web tier:** migration `0014` (`curb_run`, `run_detection`, `run_observation`, `run_state`) +
+`0015`; `db/run_db.py`, `vision/runs.py`, `GET /api/v1/runs`, `CurbRunLayer.tsx` with a KERBS
+toggle — and the **bays are a switchable layer too** (`showBays` on `BayMap`, a BAYS row in
+`SurveyReadout` beside KERBS/AIRSPACE), because the two layers answer the same question from
+incompatible geometry and disagree by design, so reading either alone is what makes the comparison
+legible. Both switches are **viewing choices only**: `fc` still feeds the COVERAGE line and
+`nearestFree` whether the bays are drawn or not, or hiding a layer would change what the survey
+reports. The gap segments are drawn **`interactive: false`** — with `preferCanvas` every vector
+shares one canvas and Leaflet's `Canvas._onClick` keeps the *last* interactive layer under the
+cursor, and a gap lies exactly on its own run's bays by construction, which makes it the worst
+possible case of that trap.
 
 ### 3. Flight-log analysis (real-flight debugging, separate from sim)
 ```bash
@@ -881,6 +1043,12 @@ Hard-won controller invariants — **do not regress these** (they are why the si
 - Working gains live at the top of the loop: `K_YAW=1.0 K_YAWD=0.8 K_POS=0.6 K_VEL=0.4 TILT_MAX=1.0 V_MAX=2.5` (plus the Webots-sample stabilizer gains `K_VT/K_VP/K_ROLL/K_PITCH`).
 
 ## Windows / Git Bash conventions
+
+- **Use `127.0.0.1`, never `localhost`, for anything talking to the dev server.** uvicorn binds IPv4
+  only and vite binds `[::1]` only, so `localhost` is ambiguous here and a client that tries `::1`
+  first eats a ~2 s connect stall on **every request** before falling back. Measured 2.050 s vs
+  0.005 s on `GET /health`. The cost is fixed rather than proportional to payload, which is how to
+  recognise it. Full record and the numbers in the demo section (§2d).
 
 - The shell is Git Bash. **Windows backslash paths break** in commands — use forward slashes (`/c/Users/...`) or quote carefully.
 - The data scripts deliberately use Python `urllib` + UTF-8 (`sys.stdout.reconfigure(encoding="utf-8")`) instead of shelling out, because **Git Bash mangles Cyrillic** (street names, zone types are in Bulgarian). For manual downloads use `curl --ssl-no-revoke` (Windows cert revocation is flaky); the scripts already disable cert verification for these public read-only GETs.

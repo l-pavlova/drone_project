@@ -60,6 +60,7 @@ export default function App() {
   const [zonesOn, setZonesOn] = useState(true);
   const [runs, setRuns] = useState<CurbRunFC | null>(null);
   const [runsOn, setRunsOn] = useState(true);
+  const [baysOn, setBaysOn] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { live, connected, syncVersion } = useOccupancySocket();
 
@@ -245,6 +246,7 @@ export default function App() {
           showZones={zonesOn ? ZONES_SHOWN : ZONES_HIDDEN}
           runs={runs}
           showRuns={runsOn}
+          showBays={baysOn}
         />
       ) : (
         <div className={styles.loading}>Loading map…</div>
@@ -255,6 +257,7 @@ export default function App() {
         zones={zones}
         counts={counts}
         surveyTotal={surveyTotal}
+        bays={{ on: baysOn, toggle: () => setBaysOn((v) => !v) }}
         kerbs={
           runs
             ? {

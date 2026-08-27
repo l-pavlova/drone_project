@@ -46,3 +46,15 @@
   margin: 0;
   text-align: right;
 }
+
+/* The measured free stretches, listed under the popup's rows. Deliberately
+   quiet — the headline is the count; this is the working behind it. */
+.gaps {
+  margin: 0.5rem 0 0;
+  padding: 0.4rem 0 0;
+  border-top: 1px solid var(--rule, rgba(128, 140, 148, 0.3));
+  list-style: none;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--muted, #6b757c);
+}

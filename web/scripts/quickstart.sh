@@ -350,7 +350,10 @@ else
   say "starting server on :4000"
 fi
 start_service server "$ROOT/apps/vision-worker" "$SERVER_LOG" "$PY" -m parkdrone_vision.server
-wait_for 60 "server /health" curl -fsS http://localhost:4000/health
+# 127.0.0.1, not localhost: uvicorn binds IPv4 only and Windows resolves
+# localhost to ::1 first, costing a connect stall on every probe (and, far
+# worse, on every uplink POST and proxied API call -- see sim_uplink.py).
+wait_for 60 "server /health" curl -fsS http://127.0.0.1:4000/health
 
 # An API key is needed for ingest (replay, or a real drone). Registering is an
 # upsert, so this rotates the key on every run — fine for a dev stack, and it

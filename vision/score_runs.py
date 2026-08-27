@@ -47,7 +47,7 @@ import score_occupancy as so                                     # noqa: E402
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-CAR_M = 4.4          # median unprojected car length on this footage
+CAR_M = cr.CAR_LEN_M     # median unprojected car length; owned by curb_runs
 
 
 def load_dets(stills, path, cam, model, conf, imgsz):
@@ -239,6 +239,33 @@ def main():
         print(f"{tag:12s} {sum(p):7.0f} {mae:7.2f} {bias:+7.2f} "
               f"{w1:5d}/{len(err):<3d}")
     print(f"{'(truth)':12s} {sum(g):7d}")
+    # ---- what SHIPS is what was scored -------------------------------------
+    # The `inst` column above clusters and locates directly; `curb_runs.run_summary`
+    # is what the server actually publishes, and it applies an observed-span gate
+    # and a capacity clamp on top. If those silently drop cars, the bias reported
+    # here is a number the product does not produce -- so assert they agree before
+    # any of it is believed.
+    spans_by_run = collections.defaultdict(list)
+    for rid, fr in rl.items():
+        for rec in fr:
+            spans_by_run[rid].extend(rec["observed"])
+    published = off_obs = 0
+    gap_free = subtraction_free = 0
+    for rid, r in runs.items():
+        summ = cr.run_summary(r, car_s.get(rid, []), spans_by_run.get(rid, []))
+        published += summ["cars"]
+        off_obs += summ["cars_off_observed"]
+        gap_free += summ["free"]
+        subtraction_free += summ["free_by_subtraction"]
+    placed = sum(len(v) for v in car_s.values())
+    print()
+    print(f"published vs scored: run_summary counts {published} car(s), "
+          f"{placed} instance(s) placed on a run"
+          f"{' -- MISMATCH' if published != placed else ' -- agree'}"
+          f"{f'; {off_obs} on kerb no frame observed' if off_obs else ''}")
+    print(f"free spaces over all runs: {gap_free} measured from gaps, "
+          f"{subtraction_free} by capacity_observed - cars")
+
     print()
     print("MAE is cars per 18 m segment; bias>0 means over-counting. `total` is the "
           "flight-wide\ncar count, where over- and under-counts cancel -- so read MAE "

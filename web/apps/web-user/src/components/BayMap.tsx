@@ -127,6 +127,7 @@ export function BayMap({
   showZones,
   runs,
   showRuns,
+  showBays,
 }: {
   fc: BayFC;
   live: Map<string, LiveState>;
@@ -138,6 +139,7 @@ export function BayMap({
   showZones: Set<Restriction>;
   runs: CurbRunFC | null;
   showRuns: boolean;
+  showBays: boolean;
 }) {
   // Ring conversion is stable; recompute only when the feature set changes.
   const rings = useMemo(
@@ -179,32 +181,43 @@ export function BayMap({
           after them it would swallow every one of their clicks. */}
       <CurbRunLayer fc={runs} show={showRuns} />
 
-      {rings.map((r, i) => {
-        const props = mergeLive(fc.features[i]!.properties, live.get(r.id));
-        const status = bayStatus(props);
-        return (
-          <Polygon
-            key={r.id}
-            positions={r.positions}
-            pathOptions={{
-              // painted-bay look: crisp outline, status-filled interior
-              color: status === "unknown" ? "#C6CED2" : COLOR[status],
-              weight: status === "unknown" ? 0.5 : 1.2,
-              fillColor: COLOR[status],
-              fillOpacity: status === "unknown" ? 0.12 : 0.55,
-            }}
-          >
-            <Popup>
-              <BayPopup
-                feature={fc.features[i]!}
-                props={props}
-                status={status}
-                userPos={userPos}
-              />
-            </Popup>
-          </Polygon>
-        );
-      })}
+      {/* The bays are a LAYER, switchable like the kerbs and the airspace. The
+          two answer the same question from incompatible geometry — a rectangle
+          per published space against a count along a kerb — and on this data
+          they disagree by design (the per-bay rule finds 9 of 29 hand-counted
+          cars where the run layer finds 19), so being able to see either one
+          alone is what makes the comparison readable instead of a thicket.
+          Switching bays off leaves the kerb answer on its own.
+          Note this only stops them being DRAWN: `fc` still feeds the counts in
+          SurveyReadout and `nearestFree`, because hiding a layer is a viewing
+          choice and must not change what the survey reports. */}
+      {showBays &&
+        rings.map((r, i) => {
+          const props = mergeLive(fc.features[i]!.properties, live.get(r.id));
+          const status = bayStatus(props);
+          return (
+            <Polygon
+              key={r.id}
+              positions={r.positions}
+              pathOptions={{
+                // painted-bay look: crisp outline, status-filled interior
+                color: status === "unknown" ? "#C6CED2" : COLOR[status],
+                weight: status === "unknown" ? 0.5 : 1.2,
+                fillColor: COLOR[status],
+                fillOpacity: status === "unknown" ? 0.12 : 0.55,
+              }}
+            >
+              <Popup>
+                <BayPopup
+                  feature={fc.features[i]!}
+                  props={props}
+                  status={status}
+                  userPos={userPos}
+                />
+              </Popup>
+            </Polygon>
+          );
+        })}
 
       {/* Everything below the bays in intent but ABOVE them in draw order is
           marked `interactive: false`. With preferCanvas all vectors share one
