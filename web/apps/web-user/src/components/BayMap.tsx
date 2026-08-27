@@ -166,10 +166,10 @@ export function BayMap({
     <MapContainer center={ORIGIN} zoom={17} className={styles.map} preferCanvas zoomControl={false}>
       <ZoomControl position="bottomleft" />
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-        subdomains="abcd"
-        maxZoom={20}
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        subdomains="abc"
+        maxZoom={19}
       />
       {/* Airspace first: under the bays visually, and — because preferCanvas
           resolves clicks by draw order — behind them for hit-testing too.
