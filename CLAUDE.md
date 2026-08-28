@@ -1128,6 +1128,20 @@ What is worth knowing from here:
   per-component classes in `styles/global.css` — that file is trimmed to CSS variables/reset/base
   sizing only). Use `:global(...)` only for classes owned by a third party we don't render
   ourselves (e.g. Leaflet's injected `.leaflet-popup-content`).
+  **The basemap is SELF-HOSTED vector tiles** (2026-08-28): `public/sofia.pmtiles`, a 14 MB ~20 km
+  bbox cut from the ODbL Protomaps planet build and committed, drawn by `protomaps-leaflet`'s
+  `leafletLayer` through the `ProtomapsLayer` wrapper in `BayMap.tsx`. Every *hosted* raster
+  basemap tried was withdrawn or unusable — CARTO's `light_all` now watermarks `API KEY REQUIRED`
+  without an account, plain OSM raster is a general-purpose map competing with the data drawn over
+  it, and Esri's `World_Light_Gray_Base` stops at z16 and was visibly pixelated at the z17–19 this
+  map runs at. **Vector is what makes a z15 archive legal at z19:** the geometry is re-rasterized
+  at display resolution, so detail thins above z15 (correct) but sharpness does not (which is
+  precisely what the raster attempt could not do). Regenerate with the `pmtiles extract` command in
+  `web/README.md`; build dates rotate weekly. Two things to keep right: `maxZoom={19}` lives on
+  `MapContainer` because it used to come from the deleted `TileLayer` and its loss un-clamps zoom
+  silently, and the layer's default `Protomaps © OpenStreetMap` attribution is an **ODbL
+  requirement**. It is an `L.GridLayer` in the *tile* pane, so unlike every vector overlay here it
+  never joins the shared `preferCanvas` canvas and cannot swallow a bay click.
 - `apps/web-admin` (React, no map) — the **ops dashboard** on :5174: pipeline health, ingest rate,
   fleet/mission progress, coverage. Same visual identity and CSS-Modules convention as `web-user`;
   no shared component package yet (the two apps overlap only in CSS variables — copy, don't

@@ -6,12 +6,12 @@ import {
   Polygon,
   Polyline,
   Popup,
-  TileLayer,
   Tooltip,
   ZoomControl,
   useMap,
 } from "react-leaflet";
-import { latLngBounds, type LatLngExpression } from "leaflet";
+import { latLngBounds, type LatLngExpression, type Layer } from "leaflet";
+import { leafletLayer } from "protomaps-leaflet";
 import type {
   BayFC,
   BayFeature,
@@ -38,6 +38,59 @@ import { CurbRunLayer } from "./CurbRunLayer";
 import styles from "./BayMap.module.css";
 
 const ORIGIN: LatLngExpression = [42.6747105, 23.3298956];
+
+/** The basemap: self-hosted Protomaps vector tiles (`public/sofia.pmtiles`, a
+ *  ~20 km bbox cut from the ODbL planet build — see web/README.md to regenerate).
+ *
+ *  Self-hosted because every hosted raster basemap tried here was withdrawn or
+ *  unusable: CARTO's light_all now demands an API key and watermarks the tiles
+ *  without one, and plain OSM raster is a general-purpose map that competes with
+ *  the bay/kerb/airspace data drawn over it. A file we own cannot be revoked.
+ *
+ *  `protomaps-leaflet` is a plain L.GridLayer, not a react-leaflet component, so
+ *  this uses the same escape hatch MapView does — useMap + an imperative effect
+ *  — rather than adding @react-leaflet/core for one layer.
+ *
+ *  It renders canvas TILES into the tile pane (z-index 200), NOT paths into the
+ *  shared `preferCanvas` overlay renderer (z-index 400), so it sits outside the
+ *  draw-order hit-testing invariant documented below and cannot swallow a bay
+ *  click — the same slot the TileLayer it replaced occupied.
+ *
+ *  The archive stops at z15 while we display to z19, and that is fine: it is the
+ *  whole reason this is vector. protomaps-leaflet keeps serving the z15 tile past
+ *  `maxDataZoom` and re-rasterizes the GEOMETRY at display resolution, so lines
+ *  and labels stay crisp. The raster attempt at the same trick (Esri
+ *  World_Light_Gray_Base, data to z16) upscaled a finished bitmap and looked it. */
+function ProtomapsLayer() {
+  const map = useMap();
+
+  useEffect(() => {
+    const layer = leafletLayer({
+      url: "/sofia.pmtiles",
+      flavor: "white", // deliberately plain: a substrate, not a map
+      lang: "bg", // Sofia street names as they are actually signed
+      maxDataZoom: 15, // matches the extract's --maxzoom
+      // Outside the extract there is no data; without this Leaflet would keep
+      // asking for tiles that cannot exist.
+      bounds: [
+        [42.5847, 23.2077],
+        [42.7647, 23.4521],
+      ],
+      // attribution defaults to Protomaps (c) OpenStreetMap, which the ODbL
+      // Produced Work terms require; Leaflet's attribution control reads it off
+      // the layer options on addLayer.
+      // The cast is expected: leafletLayer() is declared as an object literal
+      // with an index signature rather than as L.Layer, though it is a real
+      // L.GridLayer at runtime.
+    }) as unknown as Layer;
+    map.addLayer(layer);
+    return () => {
+      map.removeLayer(layer);
+    };
+  }, [map]);
+
+  return null;
+}
 
 /** Imperatively drives the map: recenters on locate, frames the journey once a
  *  target (and then its road route) arrives. */
@@ -162,15 +215,20 @@ export function BayMap({
     [route],
   );
 
+  // maxZoom lives on the map, not on the basemap: it used to come from the
+  // TileLayer's own maxZoom, so removing that layer would have silently
+  // un-clamped zoom and let you scroll forever into empty overzoom.
   return (
-    <MapContainer center={ORIGIN} zoom={17} className={styles.map} preferCanvas zoomControl={false}>
+    <MapContainer
+      center={ORIGIN}
+      zoom={17}
+      maxZoom={19}
+      className={styles.map}
+      preferCanvas
+      zoomControl={false}
+    >
       <ZoomControl position="bottomleft" />
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        subdomains="abc"
-        maxZoom={19}
-      />
+      <ProtomapsLayer />
       {/* Airspace first: under the bays visually, and — because preferCanvas
           resolves clicks by draw order — behind them for hit-testing too.
           See the note in NoFlyLayer. */}

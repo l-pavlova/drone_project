@@ -31,6 +31,40 @@ pnpm db:migrate        # create schema (enables PostGIS, GiST index on bay.geom)
 pnpm db:seed           # load data/block_bays.geojson into the bay table
 ```
 
+### The basemap (`apps/web-user/public/sofia.pmtiles`)
+
+The driver map draws on **self-hosted Protomaps vector tiles**, committed to the repo (14 MB) so a
+fresh clone just works. It is a ~20 km bbox around the block, cut from the ODbL planet build.
+
+Self-hosted because every hosted raster basemap tried here was withdrawn or unusable: CARTO's
+`light_all` now watermarks `API KEY REQUIRED` over the tiles without an account, plain OSM raster is
+a general-purpose map that competes with the bay/kerb/airspace data drawn over it, and Esri's
+`World_Light_Gray_Base` has the right muted look but only ships data to z16 — this map runs at
+z17–19, so it was visibly pixelated. A file we own cannot be revoked.
+
+**Vector is what makes z15 data legal at z19.** The archive stops at z15, and `protomaps-leaflet`
+keeps serving that tile past `maxDataZoom`, re-rasterizing the *geometry* at display resolution —
+so lines and labels stay crisp. Detail thins out above z15, which is correct; sharpness does not.
+That is exactly what the Esri raster attempt could not do, since it upscaled a finished bitmap.
+
+To regenerate (e.g. to refresh OSM data or widen the area) — grab `pmtiles.exe` from
+[go-pmtiles releases](https://github.com/protomaps/go-pmtiles/releases):
+
+```bash
+# Build dates ROTATE — roughly a week is kept, older ones 404. Pick a recent one:
+#   curl -s https://build-metadata.protomaps.dev/builds.json | tail
+pmtiles extract https://build.protomaps.com/20260827.pmtiles \
+  apps/web-user/public/sofia.pmtiles \
+  --bbox=23.2077,42.5847,23.4521,42.7647 --maxzoom=15
+```
+
+It streams over HTTP range requests — the 137 GB planet is never downloaded (measured: 14 MB
+transferred, 28 requests, 8 s). **Whatever serves `dist/` in production must honour `Range`**, or
+every pan re-downloads the whole archive. Vite's dev server does.
+
+Attribution (`Protomaps © OpenStreetMap`) is supplied by the layer's own default and is an **ODbL
+Produced Work requirement, not decoration** — don't remove it.
+
 ### Re-flying a survey area
 
 ```bash
