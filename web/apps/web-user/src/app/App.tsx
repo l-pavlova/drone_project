@@ -15,6 +15,7 @@ import {
   type BayFC,
   type BayFeature,
   type BayProps,
+  type CountSource,
   type CurbRunFC,
   type NoFlyFC,
   type Restriction,
@@ -25,8 +26,10 @@ import {
   FMI_DEFAULT,
   formatDistance,
   formatDuration,
+  gapStillFree,
   getPosition,
   nearestFree,
+  nearestFreeGap,
   watchPosition,
   type NearestTarget,
   type UserPos,
@@ -61,6 +64,9 @@ export default function App() {
   const [runs, setRuns] = useState<CurbRunFC | null>(null);
   const [runsOn, setRunsOn] = useState(true);
   const [baysOn, setBaysOn] = useState(true);
+  // Which geometry the readout REPORTS from — a different axis from the two
+  // layer switches above, which only decide what is drawn. See CountSource.
+  const [source, setSource] = useState<CountSource>("bays");
   const [error, setError] = useState<string | null>(null);
   const { live, connected, syncVersion } = useOccupancySocket();
 
@@ -151,6 +157,27 @@ export default function App() {
   }, [fc, statusOf]);
   const surveyTotal = counts.free + counts.occupied + counts.unknown + counts.closed;
 
+  // The kerb layer's totals over the runs in view, the counterpart of `counts`.
+  // A run with no fresh state contributes its city `capacity` (that parking
+  // exists) but none of its occupancy: `free == null` is the read-time
+  // freshness gate, and adding its zeros would report unsurveyed kerb as full.
+  const kerbCounts = useMemo(() => {
+    if (!runs) return null;
+    let free = 0;
+    let cars = 0;
+    let capacityObserved = 0;
+    let capacityTotal = 0;
+    for (const f of runs.features) {
+      const p = f.properties;
+      capacityTotal += p.capacity ?? 0;
+      if (p.free == null) continue;
+      free += p.free;
+      cars += p.cars ?? 0;
+      capacityObserved += p.capacity_observed ?? 0;
+    }
+    return { free, cars, capacityObserved, capacityTotal };
+  }, [runs]);
+
   const airspaceCounts = useMemo(() => {
     if (!nofly) return null;
     let noFly = 0;
@@ -163,6 +190,25 @@ export default function App() {
     if (fc) for (const f of fc.features) m.set(f.properties.bay_id, f);
     return m;
   }, [fc]);
+
+  // Where to send the driver, from whichever source the readout is reporting.
+  // The FAB and the re-target effect must agree, or losing a spot would hop the
+  // driver to the other layer's answer mid-drive.
+  const pickNearest = useCallback(
+    (pos: UserPos): NearestTarget | null =>
+      source === "kerbs"
+        ? nearestFreeGap(runs, pos)
+        : fc
+          ? nearestFree(fc.features, statusOf, pos)
+          : null,
+    [source, runs, fc, statusOf],
+  );
+
+  // A source switch changes what the panel is counting, so an outstanding route
+  // belongs to the old reading. Cancel it rather than silently re-pointing it.
+  useEffect(() => {
+    setTarget(null);
+  }, [source]);
 
   // Follow the driver while navigating, so the route redraws as they move. The
   // watch is intentionally scoped to an active target — no background GPS.
@@ -185,23 +231,34 @@ export default function App() {
     };
   }, [navigating]);
 
-  // If the bay we're driving to gets taken, hop to the next nearest free one.
-  // This is what the live occupancy push is for: the deltas arrive on the same
-  // socket that colours the map, so a spot lost mid-drive re-routes by itself.
+  // If the spot we're driving to gets taken, hop to the next nearest free one.
+  // For a bay that is what the live occupancy push is for: the deltas arrive on
+  // the same socket that colours the map. A kerb gap has no delta channel — the
+  // run layer is polled every 3 s — so it is re-checked against each poll
+  // instead, but the promise to the driver is the same either way.
   useEffect(() => {
-    if (!target || !fc) return;
-    const f = featureById.get(target.bayId);
-    if (f && statusOf(f.properties) === "free") return;
+    if (!target) return;
+    if (target.kind === "bay") {
+      if (!fc) return;
+      const f = featureById.get(target.id);
+      if (f && statusOf(f.properties) === "free") return;
+    } else if (gapStillFree(runs, target)) {
+      return;
+    }
 
-    const next = nearestFree(fc.features, statusOf, userPos ?? FMI_DEFAULT);
-    if (next && next.bayId !== target.bayId) {
+    const next = pickNearest(userPos ?? FMI_DEFAULT);
+    if (next && next.id !== target.id) {
       setTarget(next);
-      flash(`Bay ${target.bayId} taken — rerouting to ${next.bayId}.`);
+      flash(
+        target.kind === "bay"
+          ? `Bay ${target.id} taken — rerouting to ${next.id}.`
+          : `That stretch filled up — rerouting to ${next.label}.`,
+      );
     } else if (!next) {
       setTarget(null);
-      flash("That spot was taken and there are no free bays left nearby.");
+      flash("That spot was taken and there is nothing free left nearby.");
     }
-  }, [live, fc, target, featureById, statusOf, userPos, flash]);
+  }, [live, runs, fc, target, featureById, statusOf, userPos, pickNearest, flash]);
 
   async function locateMe(): Promise<UserPos | null> {
     try {
@@ -219,12 +276,11 @@ export default function App() {
   }
 
   async function findNearest(): Promise<void> {
-    if (!fc) return;
     setBusy(true);
     try {
       const pos = userPos ?? (await locateMe());
       if (!pos) return;
-      const t = nearestFree(fc.features, statusOf, pos);
+      const t = pickNearest(pos);
       if (!t) flash("No free spaces found nearby.");
       setTarget(t);
     } finally {
@@ -257,12 +313,15 @@ export default function App() {
         zones={zones}
         counts={counts}
         surveyTotal={surveyTotal}
+        kerbCounts={kerbCounts}
+        source={source}
+        onSource={setSource}
         bays={{ on: baysOn, toggle: () => setBaysOn((v) => !v) }}
         kerbs={
-          runs
+          kerbCounts
             ? {
-                free: runs.features.reduce((n, f) => n + (f.properties.free ?? 0), 0),
-                cars: runs.features.reduce((n, f) => n + (f.properties.cars ?? 0), 0),
+                free: kerbCounts.free,
+                cars: kerbCounts.cars,
                 on: runsOn,
                 toggle: () => setRunsOn((v) => !v),
               }
@@ -288,12 +347,12 @@ export default function App() {
                 <span className={styles.sep}>·</span>
                 <span>{formatDuration(route.duration_s)}</span>
                 <span className={styles.sep}>·</span>
-                <span>bay {target.bayId}</span>
+                <span>{target.label}</span>
               </>
             ) : routeStatus === "loading" ? (
               <>
                 <Spinner />
-                <span>routing to bay {target.bayId}…</span>
+                <span>routing to {target.label}…</span>
               </>
             ) : (
               <>
@@ -301,7 +360,7 @@ export default function App() {
                 <span className={`${styles.tag} ${styles.tagDim}`}>DIRECT</span>
                 <b>{formatDistance(target.distance)}</b>
                 <span className={styles.sep}>·</span>
-                <span>bay {target.bayId}</span>
+                <span>{target.label}</span>
               </>
             )}
             {following && <span className={styles.liveDot} title="following your location" />}
@@ -329,7 +388,7 @@ export default function App() {
         <button
           className={`${styles.fab} ${styles.car}`}
           title="Find nearest free spot"
-          disabled={busy || !fc}
+          disabled={busy || (source === "kerbs" ? !runs : !fc)}
           onClick={() => void findNearest()}
         >
           {busy ? <Spinner /> : <CarIcon />}

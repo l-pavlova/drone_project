@@ -11,7 +11,7 @@ const REROUTE_MOVE_M = 25;
 export type RouteStatus = "idle" | "loading" | "ready" | "error";
 
 /**
- * Keeps a road route from the driver to the chosen bay, refetched as they move.
+ * Keeps a road route from the driver to the chosen spot, refetched as they move.
  *
  * `userPos` changes identity on every GPS fix, so this effect runs constantly
  * and bails out early unless the target changed or the driver actually travelled
@@ -24,8 +24,9 @@ export function useLiveRoute(
 ): { route: RouteResult | null; status: RouteStatus } {
   const [route, setRoute] = useState<RouteResult | null>(null);
   const [status, setStatus] = useState<RouteStatus>("idle");
-  // position + bay the current (or in-flight) route was computed for
-  const anchor = useRef<{ lat: number; lon: number; bayId: string } | null>(null);
+  // position + target the current (or in-flight) route was computed for. Keyed
+  // on the target ID rather than a bay id: the destination can be a kerb gap.
+  const anchor = useRef<{ lat: number; lon: number; id: string } | null>(null);
   const inflight = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -39,17 +40,17 @@ export function useLiveRoute(
     }
 
     const a = anchor.current;
-    const sameBay = a?.bayId === target.bayId;
-    if (sameBay && haversine(a!.lat, a!.lon, userPos.lat, userPos.lon) < REROUTE_MOVE_M) {
+    const sameTarget = a?.id === target.id;
+    if (sameTarget && haversine(a!.lat, a!.lon, userPos.lat, userPos.lon) < REROUTE_MOVE_M) {
       return;
     }
 
-    anchor.current = { lat: userPos.lat, lon: userPos.lon, bayId: target.bayId };
+    anchor.current = { lat: userPos.lat, lon: userPos.lon, id: target.id };
     inflight.current?.abort();
     const ctl = new AbortController();
     inflight.current = ctl;
 
-    if (!sameBay) setRoute(null);
+    if (!sameTarget) setRoute(null);
     setStatus("loading");
 
     fetchRoute(userPos, target, ctl.signal)

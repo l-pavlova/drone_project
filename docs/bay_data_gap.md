@@ -54,10 +54,17 @@ imperfections cancel and the comparison carries the argument:
 | **0035** (control) | 1204 | 1337 @ 4.03 m | **9.9%** | 1.55× — flat | 11 bays occupied |
 | **0075** | 19 | 133 @ 4.51 m | **85.7%** | 3.98× — sharp | 0 bays occupied |
 
-Flight 0035's bays **already sit on its paint**: the best available shift buys 9.9% over doing
-nothing, on a peak barely above the search median. That is what "no offset" looks like, and it is
-the control the earlier argument lacked — a systematic error in our pose chain would have shown up
-here too. Flight 0075's bays do **not** sit on its paint.
+~~Flight 0035's bays **already sit on its paint**~~ — **RETRACTED**, see
+`bay_geometry_verification.md` Finding 2a. The 9.9% headroom on a peak barely above the search
+median was read as "no offset"; it means the mask carried too little signal to localise anything,
+i.e. **uninformative, not confirmatory**. Direct inspection settles it the other way: on бул.
+„Джеймс Баучер" (61 of that flight's 88 bays) the rows land on the tram rails and the pavement
+while the cars sit on the cobbles between them. A control that cannot fail is not a control.
+**What survives is the CONTRAST**: 0035's surface is flat and 0075's is sharp at 4.51 m with 85.7%
+headroom, so 0075 has a real, localisable disagreement and 0035 does not have one this mask can
+find. And the pose chain is still cleared, by references that do not depend on this mask — the OSM
+road centerlines land on the roads in 0035's own frames (`ref_align.py`, `out/ref0035/`), and the
+best global shift over all 599 detections buys only 29% -> 38% at an implausible 4.03 m.
 
 ---
 

@@ -535,7 +535,10 @@ carry a `detector` verdict on the live map.**
   the street and the right size. **No GPS-bias correction was applied, and that was a measurement,
   not an oversight** -- the best global ENU shift over 115 detections only moves the median
   detection-to-bay distance 4.35 -> 3.47 m and the within-3 m count 34 -> 42, at an implausible
-  4.5 m (about a car length). A real bias would show as a tight cluster at a small offset. What
+  4.5 m (about a car length). *Re-measured 2026-08-29 on all 599 detections: 4.47 -> 3.60 m,
+  175 -> 230 of 599 (29% -> 38%) at (-4.0, +0.5) m -- same conclusion, 5x the sample. Run this over
+  EVERY detection: the same search over the 473 UNASSIGNED ones alone reports a spurious 10% -> 37%
+  at 6.5 m, because that set is defined as the detections that already missed.* A real bias would show as a tight cluster at a small offset. What
   the spread actually says is a DATA fact: **most cars on this street are not in a Sofiaplan-mapped
   bay** -- visible directly in the overlays, where a whole column of bays sits over a pavement
   strip while the cars are parked on the cobbles beside it.
@@ -668,7 +671,8 @@ no accuracy claim means anything before the projection has been looked at.
 - detection-to-nearest-bay distance over 115 detections: **median 4.35 m**, p10 1.68, p90 11.16;
   only 30% within the 3 m assignment radius. Best global ENU shift (grid search +/-6 m) reaches
   median 3.47 m / 42 of 115 at an implausible **4.5 m** — so there is **no GPS bias worth
-  correcting**, and the spread is the data instead.
+  correcting**, and the spread is the data instead. *(Reproduced 2026-08-29 on all 599 detections:
+  4.47 -> 3.60 m, 29% -> 38% at 4.03 m.)*
 - 674 detector observations recorded, **102 carrying a `det_score`** (avg 0.641), zero heuristic
   colour statistics — the intended shape for migration `0010`.
 
@@ -758,10 +762,15 @@ the comparison carries the argument:
 | **0035** (control) | 1204 | 1337 @ 4.03 m | **9.9%** | 1.55x — flat | 11 bays occupied, 11/13 views |
 | **0075** | 19 | 133 @ 4.51 m | **85.7%** | 3.98x — sharp | 0 bays occupied |
 
-**The georeferencing method is sound.** On 0035 the bays already sit on the paint: the best
-available shift buys 9.9% over doing nothing, on a peak barely above the search median. That is what
-"no offset" looks like, and it is the positive control the earlier argument lacked — a systematic
-error in the pose chain would have shown here too.
+**The georeferencing method is sound** — but note the 0035 row was over-read at the time and is
+**RETRACTED** (`docs/bay_geometry_verification.md` Finding 2a): a flat surface buying 9.9% means the
+paint mask carried too little signal to localise anything, which is *uninformative*, not a positive
+control saying the bays sit on the paint. On бул. Джеймс Баучер (61 of that flight's 88 bays) the
+rows in fact land on the tram rails and the pavement while the cars are on the cobbles. **The
+0035-vs-0075 CONTRAST is what survives** (flat vs sharp), and the pose chain is cleared instead by
+references this mask does not touch: OSM road centerlines land on the roads in 0035's own frames
+(`vision/diag/ref_align.py`, `out/ref0035/`, 2026-08-29), and the best global ENU shift over all
+599 detections moves within-3 m only 29% -> 38%, at an implausible 4.03 m.
 **On 0075 there IS a real disagreement**, ~4.5 m, and the bays plainly do not sit on that street's
 paint. But 4.5 m does **not** explain the occupancy result: the detections' median distance to the
 nearest bay there is 8.95 m, so correcting it would still leave most cars unassigned. So the honest

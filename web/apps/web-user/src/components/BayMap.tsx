@@ -121,7 +121,7 @@ function MapView({
       framedFor.current = null;
       return;
     }
-    const key = `${target.bayId}:${routePositions ? "route" : "direct"}`;
+    const key = `${target.id}:${routePositions ? "route" : "direct"}`;
     if (framedFor.current === key) return;
     framedFor.current = key;
 

@@ -194,9 +194,26 @@ tests:
   is (−1.18, +1.81) m on 0035, (+0.45, −2.68) m on 0074 and (−5.35, −4.80) m on 0075. 0074 and 0075
   were flown minutes apart with the same aircraft and the same GNSS state; a position bias would be
   essentially identical between them, and these differ in both size and direction.
-* **The paint control already said so.** On 0035 the bays sit on that street's own painted markings
-  with 9.9% headroom (`paint_ground_control.py`) — paint is on the ground plane, so if the pose
-  chain carried a bias it would show there too.
+* **~~The paint control already said so.~~** RETRACTED 2026-08-29 — this bullet cited the 9.9%
+  headroom that **Finding 2a above overturns**, and it should not have survived that correction. A
+  flat correlation surface was uninformative, not confirmatory. Two replacements, both measured:
+* **The road centerlines land on the roads, in flight 0035's own frames.** `ref_align.py` on this
+  flight (`out/ref0035/`, run 2026-08-29) draws the OSM centerline down the street in
+  `ref_frame_0000.jpg` and `ref_frame_0025.jpg` while the bays sit on the tram rails and in the
+  bushes and the cars are on the cobbles between them. A centerline is on the ground plane, comes
+  from a source unrelated to Sofiaplan, and rides the same pose — a 6 m position error would carry
+  it along. **Buildings are the weaker control at the frame edge** (footprint on the ground, roof at
+  10–15 m, so at 30 m altitude it is displaced outward by parallax); the centerline has no such
+  term, which makes it the one to reach for. In `ref_frame_0100.jpg` two bays contain exactly one
+  car each — **the offset is not constant across the flight**, which no single pose error produces.
+* **The best global shift buys ~9 points and sits at an implausible 4 m.** Re-measured 2026-08-29
+  over **all 599 detections** (grid +/-8 m at 0.5 m): no shift **median 4.47 m, 175/599 (29%)
+  within 3 m**; best **(-4.0, +0.5) m** -> **3.60 m, 230/599 (38%)**. That reproduces the original
+  115-detection result on 5x the sample. ⚠ **Search over every detection, never over the unassigned
+  alone** — that set is *defined* as the detections that already missed a bay, so its baseline is
+  artificially low and the optimum is dragged outward: the same search over the 473 unassigned
+  reports a spurious **10% -> 37% at 6.5 m**, which reads like a real bias and is an artefact of the
+  sample.
 
 What *is* true in the hypothesis: the cars are indeed parked sensibly along the street. Both
 populations sit a normal kerbside distance from a centerline (Finding 3). They are simply not in the

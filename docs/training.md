@@ -518,6 +518,14 @@ offset; this is a broad spread. The overlays say the same thing visually: whole 
 bays sit on the tram median and the pavement while the cars are parked in rows the dataset does not
 cover.
 
+**Re-measured 2026-08-29 on ALL 599 detections** (the figures above are 115 detections from before
+the BGR fix), grid search +/-8 m at 0.5 m: no shift **median 4.47 m, 175/599 (29%) within 3 m**;
+best shift **(-4.0, +0.5) m = 4.03 m** -> **median 3.60 m, 230/599 (38%)**. Five times the sample,
+the same conclusion and the same implausible ~4 m optimum. **Measure this on EVERY detection, never
+on the unassigned ones alone**: the unassigned set is by construction the detections that already
+missed a bay, so its baseline is depressed and the optimum is pulled outward -- the same search over
+the 473 unassigned reports a spurious "10% -> 37%" at 6.5 m.
+
 **So the honest reading of the real-world occupancy result is: the detector works, the
 georeferencing works, and the BAY DATA is what limits how much of a real street this can score.**
 That is a different bottleneck from the sim (where every car is in a bay by construction) and it is

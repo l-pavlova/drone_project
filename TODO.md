@@ -210,7 +210,9 @@ verdict on the map.** Full write-up in CLAUDE.md 2c. The three things it needed:
   heuristic still the default so `replay fmi_block` stays 42/42 at 100%.
 
 **Two findings worth carrying.** There is **no GPS bias worth correcting** -- the best global ENU
-shift moves the median detection-to-bay distance only 4.35 -> 3.47 m, at an implausible 4.5 m. The
+shift moves the median detection-to-bay distance only 4.35 -> 3.47 m, at an implausible 4.5 m
+(re-measured 2026-08-29 on all 599 detections: 4.47 -> 3.60 m, 29% -> 38% within 3 m, optimum
+4.03 m -- same answer on 5x the sample). The
 spread is instead a DATA fact: **most cars on this street are not in a Sofiaplan-mapped bay**,
 visible directly in the `real_align.py` overlays where a column of bays sits over a pavement strip
 while the cars are on the cobbles. And the map's freshness TTL was **wrong by 12x** (client 10 min

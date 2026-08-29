@@ -60,6 +60,18 @@ export interface RouteResult {
 
 export type BayStatus = "free" | "occupied" | "unknown" | "closed";
 
+/** Which of the two geometries the readout REPORTS from.
+ *
+ *  Not the same axis as the layer ON/OFF switches, and deliberately so. Those
+ *  are viewing choices — hiding a layer never changes a published number. This
+ *  one changes what the panel counts, what COVERAGE means, and what the
+ *  nearest-free button drives to, because the bay rectangles and the curb runs
+ *  are incompatible geometry answering the same question and disagree by design
+ *  (on flight 0035 the per-bay rule finds 9 of 29 hand-counted cars). Being able
+ *  to flip between them is what makes that disagreement legible instead of
+ *  hidden behind whichever one happens to be wired up. */
+export type CountSource = "bays" | "kerbs";
+
 /** Occupancy TTL: a bay not re-surveyed within this window is "unknown", not free.
  *
  *  **The SERVER owns this window** (`OCCUPANCY_WINDOW_S`, default 2 h): it is
