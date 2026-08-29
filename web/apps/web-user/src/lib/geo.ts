@@ -239,19 +239,46 @@ export function pointAtArclength(
   return { lat: last[0], lon: last[1] };
 }
 
-/** Nearest measured free GAP along a kerb — the run layer's answer to
- *  `nearestFree`.
+/** Total arclength of a polyline, in metres. */
+function polylineLength(positions: LatLon[]): number {
+  let total = 0;
+  for (let i = 0; i < positions.length - 1; i++) {
+    const a = positions[i];
+    const b = positions[i + 1];
+    if (!a || !b) continue;
+    total += haversine(a[0], a[1], b[0], b[1]);
+  }
+  return total;
+}
+
+function runLabel(street: string | null): string {
+  return street ? `kerb on ${street}` : "kerb space";
+}
+
+/** Nearest free kerb — the run layer's answer to `nearestFree`.
  *
  *  A gap is a stretch the survey measured as both observed and unoccupied, and
  *  `spaces` is how many cars fit in it after manoeuvring clearance. Only gaps
  *  that actually hold a car are offered: a 3 m gap is real kerb and is worth
- *  drawing, but sending someone to it is worse than saying nothing.
- *
- *  Aims at the gap's MIDPOINT rather than its start, so the driver arrives in
+ *  drawing, but sending someone to it is worse than saying nothing. The aim
+ *  point is the gap's MIDPOINT rather than its start, so the driver arrives in
  *  the middle of the free stretch rather than at the bumper of the car bounding
- *  it. */
+ *  it.
+ *
+ *  **A measured gap always wins, and the fallback below is strictly second
+ *  choice** — hence two passes rather than one ranking. `run_state.gaps` is
+ *  nullable with no backfill (migration 0015), so a row written before it can
+ *  report `free > 0` and publish no gaps at all. Those spaces are counted in the
+ *  readout's headline, so refusing to route to them would leave the panel
+ *  advertising parking the Navigate button silently declines — the one failure
+ *  worse than a vague answer. Such a run is offered at its own midpoint, which
+ *  says "free space somewhere along here" and is exactly as much as that row
+ *  knows. A single ranking would let a nearby gapless run beat a slightly
+ *  farther gap whose position was actually measured, which is the wrong trade.
+ */
 export function nearestFreeGap(runs: CurbRunFC | null, from: UserPos): NearestTarget | null {
   if (!runs) return null;
+
   let best: NearestTarget | null = null;
   for (const f of runs.features) {
     const p = f.properties;
@@ -268,7 +295,7 @@ export function nearestFreeGap(runs: CurbRunFC | null, from: UserPos): NearestTa
         best = {
           kind: "gap",
           id: `${p.run_id}@${g.s0}`,
-          label: p.street ? `kerb on ${p.street}` : "kerb space",
+          label: runLabel(p.street),
           runId: p.run_id,
           s,
           lat: pt.lat,
@@ -278,7 +305,42 @@ export function nearestFreeGap(runs: CurbRunFC | null, from: UserPos): NearestTa
       }
     }
   }
+  if (best) return best;
+
+  // No measured gap anywhere: fall back to runs that report free spaces without
+  // saying where they are.
+  for (const f of runs.features) {
+    const p = f.properties;
+    if (!p.free || p.free <= 0) continue;
+    if (p.gaps && p.gaps.length > 0) continue;
+    const positions = f.geometry.coordinates.map(([lon, lat]) => [lat, lon] as LatLon);
+    if (positions.length < 2) continue;
+    const s = polylineLength(positions) / 2;
+    const pt = pointAtArclength(positions, s);
+    if (!pt) continue;
+    const d = haversine(from.lat, from.lon, pt.lat, pt.lon);
+    if (!best || d < best.distance) {
+      best = {
+        kind: "gap",
+        id: `${p.run_id}@run`,
+        label: runLabel(p.street),
+        runId: p.run_id,
+        s,
+        lat: pt.lat,
+        lon: pt.lon,
+        distance: d,
+      };
+    }
+  }
   return best;
+}
+
+/** Is any kerb currently reporting free space? Distinguishes "nothing free" from
+ *  "nothing surveyed recently" — the run layer goes quiet the same way the bays
+ *  do, and telling a driver the street is full when nobody has looked at it is a
+ *  different and worse statement. */
+export function kerbSurveyed(runs: CurbRunFC | null): boolean {
+  return !!runs && runs.features.some((f) => f.properties.free != null);
 }
 
 /** Is the stretch this target sits on still published as free?
@@ -294,6 +356,13 @@ export function gapStillFree(runs: CurbRunFC | null, target: NearestTarget): boo
   if (!runs) return true;
   const f = runs.features.find((x) => x.properties.run_id === target.runId);
   if (!f) return true;
+  const p = f.properties;
+  const gaps = p.gaps ?? [];
+  // A gapless run (a pre-0015 row `nearestFreeGap` fell back to) has no interval
+  // to test, so it is judged on its own count instead. Without this arm such a
+  // target would fail the containment test on the very next poll and re-route
+  // the driver every 3 s.
+  if (gaps.length === 0) return (p.free ?? 0) > 0;
   const s = target.s;
-  return (f.properties.gaps ?? []).some((g) => g.spaces > 0 && g.s0 <= s && s <= g.s1);
+  return gaps.some((g) => g.spaces > 0 && g.s0 <= s && s <= g.s1);
 }

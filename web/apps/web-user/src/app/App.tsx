@@ -28,6 +28,7 @@ import {
   formatDuration,
   gapStillFree,
   getPosition,
+  kerbSurveyed,
   nearestFree,
   nearestFreeGap,
   watchPosition,
@@ -281,7 +282,17 @@ export default function App() {
       const pos = userPos ?? (await locateMe());
       if (!pos) return;
       const t = pickNearest(pos);
-      if (!t) flash("No free spaces found nearby.");
+      if (!t) {
+        // "Nothing free" and "nobody has looked" are different answers, and the
+        // kerb layer goes quiet past OCCUPANCY_WINDOW_S the same way the bays
+        // do. Reporting a full street when the truth is a stale survey is the
+        // more misleading of the two, so it is called out separately.
+        flash(
+          source === "kerbs" && !kerbSurveyed(runs)
+            ? "No recent kerb survey — nothing to route to yet."
+            : "No free spaces found nearby.",
+        );
+      }
       setTarget(t);
     } finally {
       setBusy(false);
