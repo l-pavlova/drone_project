@@ -1,5 +1,8 @@
 .popup {
   min-width: 190px;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
 }
 
@@ -32,7 +35,7 @@
 
 .rows {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 2px 12px;
   margin: 0;
   font-size: 12.5px;
@@ -57,4 +60,42 @@
   font-size: 0.78rem;
   line-height: 1.5;
   color: var(--muted, #6b757c);
+}
+
+/* THE KERB HANDLE — a labelled pill at each run's midpoint carrying its free
+   count. It is what makes the two layers separable by a driver: the bays are
+   painted rectangles on the ground, the kerbs are numbered tags floating over
+   them, and clicking one can never be mistaken for clicking the other.
+   It lives in Leaflet's MARKER pane (a real DOM element), not in the shared
+   `preferCanvas` overlay canvas, so it has its own pointer-events and takes
+   nothing away from the bay underneath it. `--kerb` is set inline per run from
+   the same `colour()` the line uses, so tag and line always agree. */
+.handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--kerb, #2e9e5b);
+  color: #fff;
+  border: 1.5px solid #fff;
+  box-shadow: 0 1px 3px rgba(11, 58, 53, 0.45);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.handle:hover {
+  filter: brightness(1.08);
+}
+
+/* An unsurveyed run keeps its handle — "nobody has looked here" is a statement
+   the layer exists to make — but recedes so it cannot be read as a count. */
+.handleUnknown {
+  opacity: 0.55;
+  box-shadow: none;
 }

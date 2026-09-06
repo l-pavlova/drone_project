@@ -240,7 +240,7 @@ export function pointAtArclength(
 }
 
 /** Total arclength of a polyline, in metres. */
-function polylineLength(positions: LatLon[]): number {
+export function polylineLength(positions: LatLon[]): number {
   let total = 0;
   for (let i = 0; i < positions.length - 1; i++) {
     const a = positions[i];

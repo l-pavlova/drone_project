@@ -4,7 +4,24 @@
   font-family: var(--sans);
   color: var(--asphalt);
   min-width: 15rem;
-  max-width: 20rem;
+  /* Leaflet sizes .leaflet-popup-content to its own maxWidth (300px) and this
+     box must stay inside it — 20rem exceeds that on a default root font size,
+     which is what let the content push past the popup's border. */
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* CAA zone text is not editorial prose: names, authority names and identifiers
+   are long, Bulgarian, and frequently single unbreakable tokens
+   (`BULGARIA_UAS_ZONE_...`, an email address, a URL). The default
+   `overflow-wrap: normal` refuses to break inside a word, so one such token
+   sets the box wider than the popup and everything spills over the border.
+   Breaking anywhere is the right trade here — a wrapped identifier is still
+   readable, an escaped one is not. */
+.popup,
+.popup * {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .popup strong {
@@ -29,7 +46,10 @@
 
 .popup dl {
   display: grid;
-  grid-template-columns: auto 1fr;
+  /* minmax(0, 1fr), never a bare 1fr: a grid track's automatic minimum is its
+     content's min-content width, so a long value would widen the whole grid
+     past the popup instead of wrapping inside its column. */
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 0.15rem 0.6rem;
   margin: 0;
   font-size: 0.78rem;
@@ -42,7 +62,7 @@
   color: #6b7780;
   align-self: center;
 }
-.popup dd { margin: 0; }
+.popup dd { margin: 0; min-width: 0; }
 
 .msg {
   margin: 0.55rem 0 0;

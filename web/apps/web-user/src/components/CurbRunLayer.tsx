@@ -1,7 +1,13 @@
 import { Fragment, useMemo } from "react";
-import { Polyline, Popup } from "react-leaflet";
+import { Marker, Polyline, Popup } from "react-leaflet";
+import { divIcon } from "leaflet";
 import type { CurbRunFC, CurbRunGap, CurbRunProps } from "../lib/types";
-import { sliceByArclength, type LatLon } from "../lib/geo";
+import {
+  pointAtArclength,
+  polylineLength,
+  sliceByArclength,
+  type LatLon,
+} from "../lib/geo";
 import styles from "./CurbRunLayer.module.css";
 
 /** Free-space hues. Deliberately the bay palette's logic (green = space for you,
@@ -47,11 +53,24 @@ export function CurbRunLayer({
 }) {
   const lines = useMemo(
     () =>
-      (fc?.features ?? []).map((f) => ({
-        id: f.properties.run_id,
-        props: f.properties,
-        positions: f.geometry.coordinates.map(([lon, lat]) => [lat, lon] as LatLon),
-      })),
+      (fc?.features ?? []).map((f) => {
+        const positions = f.geometry.coordinates.map(
+          ([lon, lat]) => [lat, lon] as LatLon,
+        );
+        // The handle sits at the run's arclength midpoint — the point furthest
+        // from either end, so on a run that is only partly under bays it is the
+        // most likely to land on open ground anyway.
+        const mid = pointAtArclength(positions, polylineLength(positions) / 2);
+        return {
+          id: f.properties.run_id,
+          props: f.properties,
+          positions,
+          mid,
+          // Built here, not in render: a fresh divIcon on every render makes
+          // Leaflet tear down and re-create 141 DOM nodes on each state tick.
+          icon: handleIcon(f.properties),
+        };
+      }),
     [fc],
   );
 
@@ -102,11 +121,59 @@ export function CurbRunLayer({
                 />
               );
             })}
+            {/* THE KERB HANDLE — the run's real click target.
+                Drawing runs before the bays is what keeps bay clicks working,
+                but it has the mirror cost: a run lies under its own bays by
+                construction, so on the canvas the bay is always the last
+                interactive layer under the cursor and the kerb could not be
+                clicked at all where it matters. Widening the line or reordering
+                the layers only trades one layer's clicks for the other's.
+                A Marker escapes the trade entirely: it is a DOM element in
+                Leaflet's marker pane, ABOVE the shared `preferCanvas` overlay
+                canvas and outside its hit-testing, so it takes clicks on its own
+                26x20 px without stealing anything from the bay beneath it. It
+                doubles as the visual distinction the two layers needed — a
+                labelled pill carrying the free count is unmistakably not a
+                painted rectangle, and it reads at a glance from driving
+                distance. */}
+            {l.mid && (
+              <Marker
+                position={[l.mid.lat, l.mid.lon]}
+                icon={l.icon}
+                // `title` gives the handle a native tooltip and, with the
+                // marker's default keyboard focusability, a way to reach a kerb
+                // without a mouse.
+                title={`${l.props.street ?? "Kerb"} — ${
+                  known ? `${l.props.free} free` : "not surveyed"
+                }`}
+              >
+                <Popup>
+                  <RunPopup props={l.props} />
+                </Popup>
+              </Marker>
+            )}
           </Fragment>
         );
       })}
     </>
   );
+}
+
+/** The pill drawn at a run's midpoint. Built as a divIcon rather than a
+ *  CircleMarker because a CircleMarker is a canvas path and would land back in
+ *  the same shared-canvas hit-test order the handle exists to escape. */
+function handleIcon(p: CurbRunProps) {
+  const known = p.free != null;
+  const label = known ? String(p.free) : "?";
+  return divIcon({
+    className: "", // suppress Leaflet's default .leaflet-div-icon chrome
+    html:
+      `<span class="${styles.handle}${known ? "" : ` ${styles.handleUnknown}`}" ` +
+      `style="--kerb: ${colour(p)}">${label}</span>`,
+    iconSize: [28, 20],
+    iconAnchor: [14, 10],
+    popupAnchor: [0, -8],
+  });
 }
 
 function RunPopup({ props: p }: { props: CurbRunProps }) {
